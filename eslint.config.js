@@ -65,6 +65,9 @@ export default [
         global: 'writable',
       },
     },
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off', // Allow require() in tests for jest.mock() patterns
+    },
   },
   {
     ignores: [
