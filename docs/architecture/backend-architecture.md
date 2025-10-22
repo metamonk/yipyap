@@ -232,9 +232,9 @@ sequenceDiagram
     participant FirebaseAuth
     participant Firestore
 
-    User->>App: Enter credentials
-    App->>FirebaseAuth: signInWithEmailAndPassword()
-    FirebaseAuth-->>App: Return auth token
+    User->>App: Enter email and password
+    App->>FirebaseAuth: signInWithEmailAndPassword(email, password)
+    FirebaseAuth-->>App: Return auth token & user info
     App->>App: Store auth state
     App->>Firestore: Fetch user profile
     Firestore-->>App: Return user data

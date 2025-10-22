@@ -18,7 +18,8 @@
 
 - Token Storage: Secure storage using expo-secure-store
 - Session Management: Firebase Auth handles token refresh automatically
-- Password Policy: Minimum 8 characters, enforced by Firebase Auth
+- Password Requirements: Minimum 8 characters, uppercase, lowercase, and numbers
+- Password Reset: Secure email-based password reset via Firebase Auth
 
 ## Performance Optimization
 

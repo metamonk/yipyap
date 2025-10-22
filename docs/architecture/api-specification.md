@@ -6,10 +6,13 @@ Since yipyap uses Firebase Client SDK for direct database access, there is no tr
 
 ### Authentication Operations
 
-- `firebase.auth().createUserWithEmailAndPassword()` - User registration
-- `firebase.auth().signInWithEmailAndPassword()` - User login
-- `firebase.auth().signOut()` - User logout
-- `firebase.auth().sendPasswordResetEmail()` - Password reset
+**Email/Password Authentication (MVP):**
+
+- `firebase.auth().createUserWithEmailAndPassword(email, password)` - Create new user account
+- `firebase.auth().signInWithEmailAndPassword(email, password)` - Sign in existing user
+- `firebase.auth().sendPasswordResetEmail(email)` - Send password reset email
+- `firebase.auth().updateProfile({ displayName })` - Update user profile information
+- `firebase.auth().signOut()` - User logout (clears Firebase session)
 
 ### User Operations
 

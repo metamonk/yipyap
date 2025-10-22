@@ -27,6 +27,7 @@ An encrypted, real-time messaging application built with React Native, Expo, and
 - Expo CLI
 - Firebase account
 - iOS Simulator (macOS) or Android Emulator
+- Java 17+ (required for Firebase Emulator Suite)
 
 ## Setup Instructions
 
@@ -113,6 +114,8 @@ This will start the Expo development server. You can then:
 - `npm run format:check` - Check code formatting
 - `npm run type-check` - Run TypeScript type checking
 - `npm test` - Run Jest tests
+- `npm run test:rules` - Run Firebase security rules tests
+- `npm run emulator` - Start Firebase Emulator Suite
 
 ## Project Structure
 
@@ -152,8 +155,37 @@ Security rules are located in the `firebase/` directory:
 - `firestore.rules` - Firestore database security rules
 - `storage.rules` - Firebase Storage security rules
 - `firestore.indexes.json` - Firestore composite indexes
+- `SECURITY_RULES.md` - Comprehensive security rules documentation
 
-Deploy changes with: `firebase deploy --only firestore:rules,storage`
+**Deploy changes:**
+
+```bash
+firebase deploy --only firestore:rules
+firebase deploy --only storage
+```
+
+**Test security rules locally:**
+
+See [firebase/SECURITY_RULES.md](firebase/SECURITY_RULES.md) for detailed testing instructions.
+
+Quick start:
+
+```bash
+# Install Java 17+ if not already installed (macOS)
+brew install openjdk@17
+
+# Add Java to PATH
+export PATH="/opt/homebrew/opt/openjdk@17/bin:$PATH"
+
+# Run security rules tests (auto-starts/stops emulators)
+npm run test:rules
+```
+
+**Security rules test coverage:**
+
+- ✅ 35 automated tests validating all Firestore and Storage security rules
+- ✅ Tests run against Firebase Emulator Suite locally
+- ✅ 100% coverage of access control rules and edge cases
 
 ## Development Workflow
 
@@ -207,17 +239,40 @@ For CI/CD builds, ensure `EXPO_TOKEN` is set in GitHub secrets.
 
 ## Testing
 
-Run tests with:
+### Application Tests
+
+Run application tests with:
 
 ```bash
-npm test
+npm test                  # Run all tests
+npm run test:watch        # Run tests in watch mode
+npm run test:coverage     # Run tests with coverage report
 ```
 
 Test files should be placed in the `tests/` directory with the following structure:
 
-- `tests/unit/` - Unit tests
-- `tests/integration/` - Integration tests
-- `tests/e2e/` - End-to-end tests
+- `tests/unit/` - Unit tests (components, services, hooks)
+- `tests/integration/` - Integration tests (workflows, API interactions)
+- `tests/rules/` - Firebase security rules tests
+
+### Security Rules Tests
+
+Security rules tests validate Firestore and Storage access control rules:
+
+```bash
+# Requires Java 17+ to be installed and in PATH
+export PATH="/opt/homebrew/opt/openjdk@17/bin:$PATH"
+
+# Run security rules tests (auto-starts Firebase Emulator)
+npm run test:rules
+```
+
+**Test coverage:**
+
+- ✅ **Firestore rules**: 20 tests (Users collection, Usernames collection, Default deny)
+- ✅ **Storage rules**: 15 tests (Profile photos, Default deny)
+
+See [firebase/SECURITY_RULES.md](firebase/SECURITY_RULES.md) for detailed documentation.
 
 ## Troubleshooting
 

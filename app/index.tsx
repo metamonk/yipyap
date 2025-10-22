@@ -1,16 +1,31 @@
 /**
- * Root index screen that redirects to the appropriate screen
+ * Root index screen
  * @component
  * @remarks
- * Redirects to login screen by default
- * Will be enhanced with auth state checking in Story 1.5
+ * Initial landing screen - root layout handles auth-based routing
+ * This screen shows briefly while the root layout checks auth state
+ * and redirects to appropriate route (login or main app)
  */
 
-import { Redirect } from 'expo-router';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
 
 /**
- * Index screen that redirects to login
+ * Index screen - minimal loading screen
+ * Root layout (_layout.tsx) handles all authentication routing
  */
 export default function Index() {
-  return <Redirect href="/(auth)/login" />;
+  return (
+    <View style={styles.container}>
+      <ActivityIndicator size="large" color="#4285F4" />
+    </View>
+  );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+});

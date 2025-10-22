@@ -19,14 +19,16 @@
 
 ### Authentication Module
 
-**Responsibility:** Handle user registration, login, password reset, and session management
+**Responsibility:** Handle user authentication via Email/Password and session management
 
 **Key Interfaces:**
 
-- Login screen component
-- Registration screen component
-- Password reset flow
+- Registration form component
+- Login form component
+- Password reset component
+- Username setup screen
 - Auth context provider
+- Auth state management
 
 **Dependencies:** Firebase Auth SDK, App Shell
 
@@ -85,14 +87,15 @@
 
 **Key Interfaces:**
 
-- User registration/login
-- Token generation
+- Email/password credential verification
+- User account creation and management
+- Password reset email functionality
+- Token generation and refresh
 - Session persistence
-- Password reset emails
 
 **Dependencies:** None (managed service)
 
-**Technology Stack:** Firebase Authentication (managed)
+**Technology Stack:** Firebase Authentication (managed), Email/Password provider
 
 ### Firestore Database Service
 

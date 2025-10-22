@@ -9,9 +9,10 @@ yipyap/
 ├── app/                        # Expo Router app directory
 │   ├── (auth)/                # Authentication screens
 │   │   ├── _layout.tsx
-│   │   ├── login.tsx
-│   │   ├── register.tsx
-│   │   └── forgot-password.tsx
+│   │   ├── login.tsx          # Email/Password Sign-In
+│   │   ├── register.tsx       # Email/Password Registration
+│   │   ├── forgot-password.tsx # Password Reset
+│   │   └── username-setup.tsx # First-time username entry
 │   ├── (tabs)/                # Main app tabs
 │   │   ├── _layout.tsx
 │   │   ├── conversations/

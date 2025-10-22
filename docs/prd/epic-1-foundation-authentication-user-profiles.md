@@ -28,20 +28,22 @@ so that I have a solid foundation to build features on with quality tooling in p
 
 **User Story:**
 As a new user,
-I want to register for an account using email and password,
-so that I can create my yipyap identity and access the app.
+I want to register for an account using my email and password,
+so that I can create my yipyap identity and access the app securely.
 
 **Acceptance Criteria:**
 
-1. Registration screen displays input fields for email, password, and confirm password
-2. Email validation ensures proper email format before submission
-3. Password validation enforces minimum 8 characters with clear error messaging
-4. Confirm password field validates password match before submission
-5. Firebase Auth createUserWithEmailAndPassword successfully creates user account
-6. Registration errors (email already exists, weak password, network errors) display user-friendly error messages
-7. Successful registration automatically logs user in and navigates to profile setup
-8. Loading state displayed during registration API call
-9. TypeScript types defined for registration form data and error states
+1. Registration screen displays email and password input fields with appropriate keyboard types
+2. Email field validates proper email format (using regex pattern validation)
+3. Password field requires minimum 8 characters, with at least one uppercase, one lowercase, and one number
+4. Password field includes show/hide toggle for visibility
+5. Confirm password field validates matching with password field
+6. "Create Account" button triggers Firebase Auth createUserWithEmailAndPassword
+7. Registration errors (weak password, email already in use, invalid email) display user-friendly error messages
+8. Successful registration automatically logs user in and navigates to username setup
+9. Loading state displayed during account creation
+10. TypeScript types defined for auth state, form data, and error states
+11. Display name can be set during registration (optional field)
 
 ---
 
@@ -54,16 +56,18 @@ so that I can access my yipyap account and conversations.
 
 **Acceptance Criteria:**
 
-1. Login screen displays input fields for email and password
-2. Firebase Auth signInWithEmailAndPassword authenticates user credentials
-3. Invalid credentials display clear "Invalid email or password" error message
-4. Successful login navigates user to conversation list (or profile setup if profile incomplete)
-5. Firebase Auth session persistence maintains login state across app restarts
-6. "Forgot Password" link navigates to password reset flow using Firebase sendPasswordResetEmail
-7. Password reset email sent successfully with confirmation message displayed
-8. Auth state listener (onAuthStateChanged) detects logged-in users on app launch and skips login screen
-9. Logout functionality available in settings (signs user out and returns to login screen)
-10. Loading states displayed during login and auth state checks
+1. Login screen displays email and password input fields with "Sign In" button
+2. Email field includes keyboard type for email addresses
+3. Password field is masked with show/hide toggle option
+4. "Forgot Password?" link navigates to password reset screen
+5. Firebase Auth signInWithEmailAndPassword authenticates user credentials
+6. Authentication errors (wrong password, user not found, network issues) display clear error messages
+7. Successful login navigates user to conversation list (or username setup if profile incomplete)
+8. Firebase Auth session persistence maintains login state across app restarts
+9. Auth state listener (onAuthStateChanged) detects logged-in users on app launch and skips login screen
+10. Logout functionality available in settings (signs user out and returns to login screen)
+11. Loading states displayed during login and auth state checks
+12. "Create Account" link navigates to registration screen for new users
 
 ---
 
@@ -71,25 +75,47 @@ so that I can access my yipyap account and conversations.
 
 **User Story:**
 As a registered user,
-I want to create and edit my profile with username, display name, and profile photo,
+I want to set my unique username and customize my display name and photo,
 so that other users can identify me in conversations.
 
 **Acceptance Criteria:**
 
-1. Profile setup screen displays after first registration requiring username and display name
+1. Username setup screen displays after first successful registration requiring only a unique username
 2. Username field validates uniqueness in Firestore (no duplicate usernames allowed)
-3. Display name field accepts alphanumeric characters and spaces (up to 50 characters)
-4. Profile photo upload allows user to select image from device photo library
-5. Selected profile photo uploads to Firebase Storage with proper compression (max 500KB)
-6. Profile data (username, displayName, photoURL) stored in Firestore users collection
-7. Profile edit screen accessible from settings allows updating display name and profile photo
-8. Username cannot be changed after initial setup (displays as read-only)
-9. Profile changes save to Firestore and update immediately in UI (optimistic update)
-10. Default avatar/placeholder displayed if user skips profile photo upload
+3. Username accepts alphanumeric characters and underscores (3-20 characters, lowercase enforced)
+4. Display name field pre-populated from registration (if provided) or empty
+5. User can set or edit display name (up to 50 characters) during setup
+6. User can optionally upload a profile photo (default avatar shown if not provided)
+7. Profile data (username, displayName, photoURL, email) stored in Firestore users collection
+8. Profile edit screen accessible from settings allows updating display name and profile photo
+9. Username cannot be changed after initial setup (displays as read-only)
+10. Profile changes save to Firestore and update immediately in UI (optimistic update)
 
 ---
 
-## Story 1.5: Firebase Security Rules for User Data
+## Story 1.5: Password Reset Flow
+
+**User Story:**
+As a user who forgot my password,
+I want to reset my password via email,
+so that I can regain access to my account.
+
+**Acceptance Criteria:**
+
+1. "Forgot Password?" link on login screen navigates to password reset screen
+2. Password reset screen displays email input field with "Send Reset Email" button
+3. Email field validates proper email format before submission
+4. Firebase Auth sendPasswordResetEmail sends reset email to provided address
+5. Success message displays after email sent: "Password reset email sent. Check your inbox."
+6. Error messages display for invalid email or user not found
+7. "Back to Login" button returns to login screen
+8. Reset email contains secure link to Firebase password reset page
+9. After password reset via email link, user can login with new password
+10. Loading state displayed during email sending process
+
+---
+
+## Story 1.6: Firebase Security Rules for User Data
 
 **User Story:**
 As a platform administrator,

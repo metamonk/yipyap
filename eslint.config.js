@@ -62,6 +62,8 @@ export default [
         jest: 'readonly',
         beforeEach: 'readonly',
         afterEach: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
         global: 'writable',
       },
     },

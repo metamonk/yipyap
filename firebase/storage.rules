@@ -2,8 +2,25 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Default deny all access initially
-    // Will be updated in Story 2.2 for profile photos with proper authentication
+
+    // Profile photos - users can only upload to their own folder
+    match /users/{userId}/profile.jpg {
+      // Any authenticated user can read profile photos
+      allow read: if request.auth != null;
+
+      // Users can only delete their own profile photo
+      allow delete: if request.auth != null && request.auth.uid == userId;
+
+      // Users can only write (upload/update) their own profile photo with validation
+      allow create, update: if request.auth != null &&
+                               request.auth.uid == userId &&
+                               // Validate file size (5MB max)
+                               request.resource.size < 5 * 1024 * 1024 &&
+                               // Validate content type (images only)
+                               request.resource.contentType.matches('image/.*');
+    }
+
+    // Default deny all other access
     match /{allPaths=**} {
       allow read, write: if false;
     }

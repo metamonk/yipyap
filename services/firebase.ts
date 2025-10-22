@@ -6,9 +6,19 @@
  */
 
 import { initializeApp, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth } from 'firebase/auth';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import { Auth, initializeAuth, getAuth } from 'firebase/auth';
+// @ts-expect-error - getReactNativePersistence is exported in React Native builds but not in TS types
+import { getReactNativePersistence } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  initializeFirestore,
+  Firestore,
+  persistentLocalCache,
+  enableNetwork,
+  disableNetwork,
+} from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
+import NetInfo from '@react-native-community/netinfo';
 import { Config } from '@/constants/Config';
 
 /**
@@ -41,16 +51,67 @@ let storage: FirebaseStorage;
  * ```
  */
 export function initializeFirebase(): void {
+  // Skip if already initialized (e.g., during hot reload)
+  if (app) {
+    return;
+  }
+
   try {
     // Initialize Firebase app
     app = initializeApp(Config.firebase);
 
     // Initialize services
-    auth = getAuth(app);
-    db = getFirestore(app);
+    // Configure Firebase Auth with AsyncStorage persistence for React Native
+    // This ensures session persistence across dev server restarts and app reloads
+    try {
+      if (typeof getReactNativePersistence === 'function') {
+        auth = initializeAuth(app, {
+          persistence: getReactNativePersistence(AsyncStorage),
+        });
+      } else {
+        throw new Error('getReactNativePersistence not available');
+      }
+    } catch (persistenceError) {
+      console.warn(
+        'Failed to initialize with AsyncStorage persistence, using default:',
+        persistenceError
+      );
+      // Fallback to default persistence (should still work in RN)
+      auth = getAuth(app);
+    }
+
+    // Initialize Firestore with offline persistence enabled
+    // This caches data locally for faster access and offline support
+    // Offline behavior:
+    // - All reads cached locally in IndexedDB (web) / SQLite (native)
+    // - All writes queued locally when offline
+    // - Queued writes automatically sent when connection restored
+    // - Real-time listeners (onSnapshot) automatically reconnect
+    // - Cached data available instantly on app restart
+    db = initializeFirestore(app, {
+      localCache: persistentLocalCache(),
+    });
+
     storage = getStorage(app);
 
-    // Firebase initialized successfully
+    // Set up network state listener to manage Firestore connection
+    // This enables automatic sync when network is restored and prevents
+    // unnecessary connection attempts when offline
+    NetInfo.addEventListener((state) => {
+      if (state.isConnected) {
+        // Re-enable Firestore network when online
+        // This triggers automatic sync of queued writes
+        enableNetwork(db).catch((error) => {
+          console.error('Failed to enable Firestore network:', error);
+        });
+      } else {
+        // Disable Firestore network when offline
+        // Firestore continues using cache and queuing writes
+        disableNetwork(db).catch((error) => {
+          console.error('Failed to disable Firestore network:', error);
+        });
+      }
+    });
   } catch (error) {
     console.error('Failed to initialize Firebase:', error);
     throw new Error('Firebase initialization failed. Please check your configuration.');

@@ -10,19 +10,45 @@ sequenceDiagram
     participant Firestore
     participant Storage
 
-    User->>App: Enter email/password
-    App->>FirebaseAuth: createUserWithEmailAndPassword()
+    User->>App: Tap "Create Account"
+    User->>App: Enter email, password, display name
+    App->>App: Validate email format and password strength
+    App->>FirebaseAuth: createUserWithEmailAndPassword(email, password)
     FirebaseAuth-->>App: Return user UID
-    App->>App: Navigate to profile setup
-    User->>App: Enter username, display name
+    App->>FirebaseAuth: updateProfile(displayName)
+    FirebaseAuth-->>App: Profile updated
+    App->>App: Navigate to username setup
+    User->>App: Enter unique username
     App->>Firestore: Check username uniqueness
     Firestore-->>App: Username available
-    User->>App: Upload profile photo (optional)
-    App->>Storage: Upload compressed image
-    Storage-->>App: Return photo URL
+    User->>App: Optionally upload profile photo
+    App->>Storage: Upload photo (optional)
+    Storage-->>App: Return photo URL (if uploaded)
     App->>Firestore: Create user document
     Firestore-->>App: User profile created
     App->>App: Navigate to conversation list
+```
+
+## User Login Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant App
+    participant FirebaseAuth
+    participant Firestore
+
+    User->>App: Enter email and password
+    App->>FirebaseAuth: signInWithEmailAndPassword(email, password)
+    FirebaseAuth-->>App: Return user UID + auth token
+    App->>Firestore: Fetch user profile
+    Firestore-->>App: Return user data
+    App->>App: Check if username setup complete
+    alt Username exists
+        App->>App: Navigate to conversation list
+    else No username
+        App->>App: Navigate to username setup
+    end
 ```
 
 ## Real-time Message Send/Receive Flow

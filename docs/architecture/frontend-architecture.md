@@ -7,9 +7,10 @@
 ```
 app/
 ├── (auth)/                 # Authentication screens
-│   ├── login.tsx
-│   ├── register.tsx
-│   └── forgot-password.tsx
+│   ├── login.tsx          # Email/Password Sign-In
+│   ├── register.tsx       # Email/Password Registration
+│   ├── forgot-password.tsx # Password reset
+│   └── username-setup.tsx # First-time username entry
 ├── (tabs)/                 # Main app tabs
 │   ├── _layout.tsx        # Tab navigator
 │   ├── conversations/      # Conversation list
@@ -137,9 +138,10 @@ interface AppState {
 app/
 ├── (auth)/              # Public routes (not authenticated)
 │   ├── _layout.tsx     # Stack navigator
-│   ├── login.tsx
-│   ├── register.tsx
-│   └── forgot-password.tsx
+│   ├── login.tsx       # Email/Password Sign-In screen
+│   ├── register.tsx    # Email/Password Registration screen
+│   ├── forgot-password.tsx # Password reset screen
+│   └── username-setup.tsx # First-time username entry
 ├── (tabs)/              # Protected routes (authenticated)
 │   ├── _layout.tsx     # Tab navigator
 │   ├── conversations/
