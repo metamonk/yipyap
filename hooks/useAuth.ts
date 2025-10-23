@@ -87,18 +87,18 @@ export function useAuth(): UseAuthReturn {
 
   // Set up Firebase auth state listener
   useEffect(() => {
-    console.log('[useAuth] Setting up auth state listener...');
+
     let unsubscribe: (() => void) | undefined;
     let timeoutId: NodeJS.Timeout;
 
     // Initialize auth synchronously to avoid timing issues
     let auth: ReturnType<typeof getFirebaseAuth>;
     try {
-      console.log('[useAuth] Getting Firebase Auth instance...');
+
       auth = getFirebaseAuth();
-      console.log('[useAuth] Firebase Auth instance obtained');
+
     } catch (authError) {
-      console.error('[useAuth] Failed to get Firebase Auth:', authError);
+      console.error('Failed to get Firebase Auth:', authError);
       // eslint-disable-next-line react-hooks/exhaustive-deps
       setError({
         code: 'auth/initialization-error',
@@ -112,27 +112,20 @@ export function useAuth(): UseAuthReturn {
     // Set a timeout to handle cases where auth state never changes
     // This ensures the app doesn't get stuck in loading state
     timeoutId = setTimeout(() => {
-      console.log('[useAuth] Auth state timeout - setting loading to false');
+
       if (isLoading) {
         setIsLoading(false);
       }
     }, 5000); // 5 second timeout
 
     // Listen for auth state changes
-    console.log('[useAuth] Registering onAuthStateChanged listener...');
 
     // Get current user immediately to check if already authenticated
     const currentUser = auth.currentUser;
-    console.log('[useAuth] Current user on mount:', currentUser?.uid || 'none');
 
     unsubscribe = onAuthStateChanged(
       auth,
       async (firebaseUser) => {
-        console.log('[useAuth] Auth state changed callback fired:', {
-          userId: firebaseUser?.uid,
-          email: firebaseUser?.email,
-          isAuthenticated: !!firebaseUser,
-        });
 
         // Clear the timeout since we got a response
         clearTimeout(timeoutId);
@@ -142,29 +135,25 @@ export function useAuth(): UseAuthReturn {
         // If user is authenticated, check if they have a profile
         if (firebaseUser) {
           try {
-            console.log('[useAuth] Fetching user profile for uid:', firebaseUser.uid);
+
             const profile = await getUserProfile(firebaseUser.uid);
-            console.log('[useAuth] User profile fetched:', {
-              hasProfile: !!profile,
-              username: profile?.username,
-            });
+
             setUserProfile(profile);
           } catch (error) {
-            console.error('[useAuth] Error fetching user profile:', error);
+            console.error('Error fetching user profile:', error);
             // Don't set error state here, as this is not a critical failure
             // User might just need to create their profile
             setUserProfile(null);
           }
         } else {
-          console.log('[useAuth] User not authenticated, clearing profile');
+
           setUserProfile(null);
         }
 
-        console.log('[useAuth] Setting isLoading to false');
         setIsLoading(false);
       },
       (authError) => {
-        console.error('[useAuth] Auth state change error:', authError);
+        console.error('Auth state change error:', authError);
         // eslint-disable-next-line react-hooks/exhaustive-deps
         setError({
           code: 'auth/state-change-error',

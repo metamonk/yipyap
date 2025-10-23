@@ -674,7 +674,7 @@ export function subscribeToConversations(
   callback: (conversations: Conversation[]) => void
 ): Unsubscribe {
   try {
-    console.log('[subscribeToConversations] Starting subscription for userId:', userId);
+
     const db = getFirebaseDb();
     const conversationsRef = collection(db, 'conversations');
 
@@ -685,17 +685,10 @@ export function subscribeToConversations(
       orderBy('lastMessageTimestamp', 'desc')
     );
 
-    console.log('[subscribeToConversations] Setting up Firestore listener...');
-
     // Set up real-time listener
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        console.log('[subscribeToConversations] Snapshot received:', {
-          fromCache: snapshot.metadata.fromCache,
-          hasPendingWrites: snapshot.metadata.hasPendingWrites,
-          docCount: snapshot.size,
-        });
 
         const conversations: Conversation[] = [];
         snapshot.forEach((doc) => {
@@ -704,11 +697,6 @@ export function subscribeToConversations(
           if (!data.deletedBy[userId]) {
             conversations.push(data);
           }
-        });
-
-        console.log('[subscribeToConversations] Processed conversations:', {
-          total: snapshot.size,
-          filtered: conversations.length,
         });
 
         callback(conversations);
@@ -720,7 +708,6 @@ export function subscribeToConversations(
       }
     );
 
-    console.log('[subscribeToConversations] Listener setup complete');
     return unsubscribe;
   } catch (error) {
     console.error('[subscribeToConversations] Error setting up subscription:', error);

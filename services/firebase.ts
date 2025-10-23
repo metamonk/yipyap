@@ -54,51 +54,43 @@ let realtimeDb: Database;
  * ```
  */
 export function initializeFirebase(): void {
-  console.log('[Firebase] Starting Firebase initialization...');
 
   // Skip if already initialized (e.g., during hot reload)
   if (app) {
-    console.log('[Firebase] App already initialized, skipping...');
+
     return;
   }
 
   try {
-    console.log('[Firebase] Initializing Firebase app with config:', {
-      projectId: Config.firebase.projectId,
-      authDomain: Config.firebase.authDomain,
-      storageBucket: Config.firebase.storageBucket,
-      hasApiKey: !!Config.firebase.apiKey,
-    });
 
     // Initialize Firebase app
     app = initializeApp(Config.firebase);
-    console.log('[Firebase] Firebase app initialized successfully');
 
     // Initialize services
     // Configure Firebase Auth with AsyncStorage persistence for React Native
     // This ensures session persistence across dev server restarts and app reloads
     try {
-      console.log('[Firebase] Initializing Auth with AsyncStorage persistence...');
+
       if (typeof getReactNativePersistence === 'function') {
         auth = initializeAuth(app, {
           persistence: getReactNativePersistence(AsyncStorage),
         });
-        console.log('[Firebase] Auth initialized with AsyncStorage persistence');
+
       } else {
         throw new Error('getReactNativePersistence not available');
       }
     } catch (persistenceError) {
       console.warn(
-        '[Firebase] Failed to initialize with AsyncStorage persistence, using default:',
+        'Failed to initialize with AsyncStorage persistence, using default:',
         persistenceError
       );
       // Fallback to default persistence (should still work in RN)
       auth = getAuth(app);
-      console.log('[Firebase] Auth initialized with default persistence');
+
     }
 
     // Initialize Firestore with offline persistence enabled
-    console.log('[Firebase] Initializing Firestore with persistent cache...');
+
     // This caches data locally for faster access and offline support
     // Offline behavior:
     // - All reads cached locally
@@ -109,27 +101,22 @@ export function initializeFirebase(): void {
     db = initializeFirestore(app, {
       localCache: persistentLocalCache(),
     });
-    console.log('[Firebase] Firestore initialized with persistent cache');
 
-    console.log('[Firebase] Initializing Storage...');
     storage = getStorage(app);
-    console.log('[Firebase] Storage initialized');
 
     // Initialize Realtime Database for presence system
     // RTDB provides instant status updates via onDisconnect handlers
     // Used for presence and typing indicators (not for primary data storage)
-    console.log('[Firebase] Initializing Realtime Database...');
+
     realtimeDb = getDatabase(app);
-    console.log('[Firebase] Realtime Database initialized');
 
     // CRITICAL FIX: Removed conflicting network management
     // Firestore handles network state automatically with offline persistence
     // Manual enableNetwork/disableNetwork calls were blocking cached queries
     // See: docs/architecture/critical-infrastructure-fixes.md
 
-    console.log('[Firebase] All Firebase services initialized successfully');
   } catch (error) {
-    console.error('[Firebase] Failed to initialize Firebase:', error);
+    console.error('Failed to initialize Firebase:', error);
     throw new Error('Firebase initialization failed. Please check your configuration.');
   }
 }

@@ -23,15 +23,14 @@ import { NotificationBanner } from '@/components/common/NotificationBanner';
 
 // Initialize Firebase before React renders
 // This is safe because initializeFirebase checks if it's already initialized
-console.log('[RootLayout] Initializing Firebase...');
+
 initializeFirebase();
-console.log('[RootLayout] Firebase initialization complete');
 
 /**
  * Root layout component that sets up navigation with auth protection
  */
 export default function RootLayout() {
-  console.log('[RootLayout] Component rendering...');
+
   const { connected } = useConnectionState();
   const { lastNotification, clearLastNotification } = useNotifications();
   useNotificationPermissions();

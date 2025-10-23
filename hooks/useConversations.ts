@@ -96,43 +96,32 @@ export function useConversations(userId: string): UseConversationsResult {
   }, [userId]);
 
   useEffect(() => {
-    console.log('[useConversations] Effect triggered with userId:', userId);
 
     // Don't subscribe if no userId
     if (!userId) {
-      console.log('[useConversations] No userId, setting loading to false');
+
       setLoading(false);
       return;
     }
 
-    console.log('[useConversations] Setting up subscription for userId:', userId);
     setLoading(true);
     setError(null);
 
     try {
       // Subscribe to real-time conversation updates
       const unsubscribe = subscribeToConversations(userId, (updatedConversations) => {
-        console.log('[useConversations] Received conversations update:', {
-          count: updatedConversations.length,
-          conversations: updatedConversations.map(c => ({
-            id: c.id,
-            type: c.type,
-            participantCount: c.participantIds?.length || 0, // Use correct field name: participantIds
-          })),
-        });
+
         setConversations(updatedConversations);
         setLoading(false);
       });
 
-      console.log('[useConversations] Subscription setup complete');
-
       // Cleanup: Unsubscribe when component unmounts or userId changes
       return () => {
-        console.log('[useConversations] Cleaning up subscription');
+
         unsubscribe();
       };
     } catch (err) {
-      console.error('[useConversations] Error subscribing to conversations:', err);
+      console.error('Error subscribing to conversations:', err);
       setError(err instanceof Error ? err.message : 'Failed to load conversations');
       setLoading(false);
     }
