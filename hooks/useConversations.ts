@@ -117,7 +117,7 @@ export function useConversations(userId: string): UseConversationsResult {
           conversations: updatedConversations.map(c => ({
             id: c.id,
             type: c.type,
-            participantCount: c.participants?.length || 0, // Handle undefined participants
+            participantCount: c.participantIds?.length || 0, // Use correct field name: participantIds
           })),
         });
         setConversations(updatedConversations);
