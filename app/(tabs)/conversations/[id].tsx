@@ -18,6 +18,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Animated,
+  Modal,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Timestamp } from 'firebase/firestore';
@@ -26,14 +28,21 @@ import { MessageItem } from '@/components/chat/MessageItem';
 import { MessageInput } from '@/components/chat/MessageInput';
 import { DateSeparator } from '@/components/chat/DateSeparator';
 import { SearchBar } from '@/components/chat/SearchBar';
+import { TypingIndicator } from '@/components/chat/TypingIndicator';
 import { Avatar } from '@/components/common/Avatar';
 import { PresenceIndicator } from '@/components/PresenceIndicator';
 import { useMessages } from '@/hooks/useMessages';
 import { useAuth } from '@/hooks/useAuth';
 import { useMessageSearch } from '@/hooks/useMessageSearch';
-import { useMarkAsRead } from '@/hooks/useMarkAsRead';
-import { getConversation } from '@/services/conversationService';
+import { useTypingIndicator } from '@/hooks/useTypingIndicator';
+import {
+  getConversation,
+  muteConversation,
+  markConversationAsRead,
+} from '@/services/conversationService';
 import { getUserProfile } from '@/services/userService';
+import { markMessageAsRead } from '@/services/messageService';
+import { setActiveConversation } from '@/services/notificationService';
 import { groupMessagesWithSeparators } from '@/utils/messageHelpers';
 import type { Conversation, ChatListItem } from '@/types/models';
 import type { User as UserProfile } from '@/types/user';
@@ -68,13 +77,19 @@ export default function ChatScreen() {
   const isDraft = params.isDraft === 'true';
   const draftType = params.type as 'direct' | 'group' | undefined;
   const draftGroupName = params.groupName;
-  const draftParticipantIds = params.participantIds?.split(',') || [];
+  const draftParticipantIds = useMemo(
+    () => params.participantIds?.split(',') || [],
+    [params.participantIds]
+  );
 
   const { user } = useAuth();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [otherUser, setOtherUser] = useState<UserProfile | null>(null);
   const [conversationLoading, setConversationLoading] = useState(true);
+  const [conversationError, setConversationError] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const highlightOpacity = useRef(new Animated.Value(0)).current;
 
@@ -100,13 +115,48 @@ export default function ChatScreen() {
     isLoadingMore,
     loadMoreMessages,
     isOffline,
-  } = useMessages(conversationId || '', user?.uid || '', conversation?.participantIds || [], draftParams);
+  } = useMessages(
+    conversationId || '',
+    user?.uid || '',
+    conversation?.participantIds || [],
+    draftParams
+  );
+
+  // Typing indicators
+  const { typingUsers } = useTypingIndicator(conversationId, user?.uid);
 
   // Search functionality
   const { searchResults, isSearching, searchMessages, clearSearch } = useMessageSearch(messages);
 
-  // Automatically mark messages as read when viewed
-  useMarkAsRead(conversationId || '', messages);
+  // Track messages that have been marked as read (for idempotency)
+  const markedAsReadRef = useRef<Set<string>>(new Set());
+
+  /**
+   * Set active conversation for notification suppression
+   */
+  useEffect(() => {
+    if (!conversationId) return;
+
+    // Mark this conversation as active
+    setActiveConversation(conversationId);
+
+    // Clear active conversation when user leaves
+    return () => {
+      setActiveConversation(null);
+    };
+  }, [conversationId]);
+
+  /**
+   * Reset unread count when conversation is opened
+   */
+  useEffect(() => {
+    if (!conversationId || !user?.uid || isDraft) return;
+
+    // Reset unread count for current user
+    markConversationAsRead(conversationId, user.uid).catch((error) => {
+      console.error('[ChatScreen] Failed to reset unread count:', error);
+    });
+  }, [conversationId, user?.uid, isDraft]);
 
   /**
    * Load conversation data and other participant's info
@@ -124,8 +174,8 @@ export default function ChatScreen() {
             draftType === 'direct'
               ? [user.uid, params.recipientId!]
               : draftParticipantIds.length > 0
-              ? draftParticipantIds
-              : [user.uid];
+                ? draftParticipantIds
+                : [user.uid];
 
           // Create a mock conversation object for draft mode
           const now = Timestamp.now();
@@ -161,23 +211,54 @@ export default function ChatScreen() {
         }
 
         // Normal mode - fetch conversation from Firestore
-        const conv = await getConversation(conversationId);
+        // Implement retry logic for newly created conversations (eventual consistency)
+        let conv = await getConversation(conversationId);
+
+        // If conversation not found, retry a few times with exponential backoff
+        // This handles Firestore eventual consistency for newly created conversations
+        if (!conv) {
+          const maxRetries = 3;
+          const baseDelay = 500; // Start with 500ms
+
+          for (let i = 0; i < maxRetries; i++) {
+            const delay = baseDelay * Math.pow(2, i); // Exponential backoff: 500ms, 1s, 2s
+            console.log(
+              `Conversation not found, retrying in ${delay}ms (attempt ${i + 1}/${maxRetries})`
+            );
+
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            conv = await getConversation(conversationId);
+
+            if (conv) {
+              console.log('Conversation found after retry');
+              break;
+            }
+          }
+        }
 
         if (!conv) {
-          console.error('Conversation not found');
+          console.error('Conversation not found after retries');
+          setConversationError('Unable to load conversation. Please try again.');
           setConversationLoading(false);
           return;
         }
 
         setConversation(conv);
 
-        // Get other participant's ID (for 1:1 conversations)
-        const otherUserId = conv.participantIds.find((id) => id !== user.uid);
+        // Set mute status for current user
+        if (user?.uid) {
+          setIsMuted(conv.mutedBy?.[user.uid] === true);
+        }
 
-        if (otherUserId) {
-          // Fetch other user's profile
-          const userProfile = await getUserProfile(otherUserId);
-          setOtherUser(userProfile);
+        // Get other participant's profile (for direct conversations only)
+        if (conv.type === 'direct') {
+          const otherUserId = conv.participantIds.find((id) => id !== user.uid);
+
+          if (otherUserId) {
+            // Fetch other user's profile
+            const userProfile = await getUserProfile(otherUserId);
+            setOtherUser(userProfile);
+          }
         }
       } catch (error) {
         console.error('Error loading conversation:', error);
@@ -187,7 +268,15 @@ export default function ChatScreen() {
     };
 
     loadConversationData();
-  }, [conversationId, user?.uid, isDraft, draftType, draftGroupName, params.recipientId]);
+  }, [
+    conversationId,
+    user?.uid,
+    isDraft,
+    draftType,
+    draftGroupName,
+    draftParticipantIds,
+    params.recipientId,
+  ]);
 
   /**
    * Renders a single message or separator item
@@ -205,11 +294,19 @@ export default function ChatScreen() {
       const isHighlighted = message.id === highlightedMessageId;
 
       // Get sender info
+      // For group chats, we'll show sender ID as a fallback until we implement participant profiles
+      // For direct chats, we use the otherUser profile
       const senderDisplayName = isOwnMessage
         ? user?.displayName || 'You'
-        : otherUser?.displayName || 'Unknown';
+        : conversation?.type === 'direct'
+          ? otherUser?.displayName || 'Unknown'
+          : 'Group Member'; // TODO: Implement participant profile cache for group chats
 
-      const senderPhotoURL = isOwnMessage ? user?.photoURL || null : otherUser?.photoURL || null;
+      const senderPhotoURL = isOwnMessage
+        ? user?.photoURL || null
+        : conversation?.type === 'direct'
+          ? otherUser?.photoURL || null
+          : null; // TODO: Implement participant profile cache for group chats
 
       const messageItem = (
         <MessageItem
@@ -248,6 +345,75 @@ export default function ChatScreen() {
    * Key extractor for FlatList optimization
    */
   const keyExtractor = useCallback((item: ChatListItem) => item.id, []);
+
+  /**
+   * Viewability configuration for read receipts (AC1, AC8)
+   * Messages must be 50% visible for 500ms before being marked as read
+   */
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 50,
+    minimumViewTime: 500,
+    waitForInteraction: false,
+  }).current;
+
+  /**
+   * Handle viewport changes for read receipts (AC1, AC3, AC8)
+   * Marks messages as read when they become visible in viewport
+   */
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: Array<{ item: ChatListItem; isViewable: boolean }> }) => {
+      if (!user?.uid || !conversationId) {
+        return;
+      }
+
+      // Filter to messages that just became viewable and should be marked as read
+      const messagesToMarkAsRead = viewableItems
+        .filter((viewableItem) => {
+          // Only process message items (not date separators)
+          if (viewableItem.item.type !== 'message') {
+            return false;
+          }
+
+          const message = viewableItem.item.data;
+
+          // Only mark messages from other users
+          if (message.senderId === user.uid) {
+            return false;
+          }
+
+          // Only mark messages that are currently 'delivered' (AC5 sequencing)
+          if (message.status !== 'delivered') {
+            return false;
+          }
+
+          // Check if we've already marked this message (idempotency - AC8)
+          if (markedAsReadRef.current.has(message.id)) {
+            return false;
+          }
+
+          return true;
+        })
+        .map((viewableItem) => viewableItem.item.data);
+
+      // Mark messages as read
+      messagesToMarkAsRead.forEach((message) => {
+        // Track locally to prevent duplicate updates (AC8)
+        markedAsReadRef.current.add(message.id);
+
+        // Call service to update Firestore (AC3)
+        markMessageAsRead(conversationId, message.id, user.uid).catch((error) => {
+          console.error('Failed to mark message as read:', error);
+          // Remove from tracking so we can retry
+          markedAsReadRef.current.delete(message.id);
+        });
+      });
+    }
+  ).current;
+
+  // Clear marked messages ref when conversation changes
+  useEffect(() => {
+    markedAsReadRef.current.clear();
+  }, [conversationId]);
 
   // Use search results if searching, otherwise use all messages
   const displayMessages = isSearching ? searchResults : messages;
@@ -289,6 +455,49 @@ export default function ChatScreen() {
    */
   const handleClearSearch = () => {
     clearSearch();
+  };
+
+  /**
+   * Handle menu toggle
+   */
+  const handleMenuToggle = () => {
+    setShowMenu(!showMenu);
+  };
+
+  /**
+   * Handle mute/unmute conversation
+   */
+  const handleMuteToggle = async () => {
+    if (!user?.uid || !conversationId || isDraft) {
+      return;
+    }
+
+    setShowMenu(false);
+
+    try {
+      const newMuteState = !isMuted;
+      await muteConversation(conversationId, user.uid, newMuteState);
+
+      // Update local state optimistically
+      setIsMuted(newMuteState);
+
+      // Update conversation state
+      if (conversation) {
+        setConversation({
+          ...conversation,
+          mutedBy: {
+            ...conversation.mutedBy,
+            [user.uid]: newMuteState,
+          },
+        });
+      }
+
+      const message = newMuteState ? 'Conversation muted' : 'Conversation unmuted';
+      Alert.alert('Success', message);
+    } catch (error) {
+      console.error('Error muting conversation:', error);
+      Alert.alert('Error', 'Failed to update notification settings. Please try again.');
+    }
   };
 
   /**
@@ -342,14 +551,37 @@ export default function ChatScreen() {
         console.error('Error scrolling to message:', error);
       }
     }, 500); // Delay to ensure list has rendered
-  }, [targetMessageId, chatItems.length, flatListRef, highlightOpacity]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- flatListRef and highlightOpacity are stable refs
+  }, [targetMessageId, chatItems]);
 
   // Show loading spinner while conversation data loads
-  if (conversationLoading || !conversation) {
+  if (conversationLoading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
         <Text style={styles.loadingText}>Loading conversation...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  // Show error state if conversation failed to load
+  if (!conversation) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <Ionicons name="alert-circle-outline" size={64} color="#FF3B30" />
+        <Text style={styles.errorText}>{conversationError || 'Unable to load conversation'}</Text>
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(tabs)/conversations');
+            }
+          }}
+        >
+          <Text style={styles.retryButtonText}>Go Back</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
@@ -362,38 +594,108 @@ export default function ChatScreen() {
           <Ionicons name="chevron-back" size={28} color="#007AFF" />
         </TouchableOpacity>
 
-        {otherUser && (
-          <View style={styles.headerInfo}>
-            <Avatar
-              photoURL={otherUser.photoURL || null}
-              displayName={otherUser.displayName}
-              size={36}
-            />
-            <View style={styles.headerTextContainer}>
-              <View style={styles.headerNameRow}>
-                <Text style={styles.headerName}>{otherUser.displayName}</Text>
-              </View>
-              {conversation.type === 'direct' && (
-                <PresenceIndicator userId={otherUser.id} size="small" showLastSeen={true} />
-              )}
-              {isOffline && (
-                <Text style={styles.offlineIndicator}>
-                  Offline - messages will send when connected
+        <View style={styles.headerInfo}>
+          {conversation.type === 'group' ? (
+            // Group conversation header
+            <>
+              <Avatar
+                photoURL={conversation.groupPhotoURL || null}
+                displayName={conversation.groupName || 'Group Chat'}
+                size={36}
+              />
+              <View style={styles.headerTextContainer}>
+                <View style={styles.headerNameRow}>
+                  <Text style={styles.headerName}>{conversation.groupName || 'Group Chat'}</Text>
+                </View>
+                <Text style={styles.headerSubtext}>
+                  {conversation.participantIds.length} participants
                 </Text>
-              )}
-            </View>
-          </View>
-        )}
+                {isOffline && (
+                  <Text style={styles.offlineIndicator}>
+                    Offline - messages will send when connected
+                  </Text>
+                )}
+              </View>
+            </>
+          ) : otherUser ? (
+            // Direct conversation header
+            <>
+              <Avatar
+                photoURL={otherUser.photoURL || null}
+                displayName={otherUser.displayName}
+                size={36}
+              />
+              <View style={styles.headerTextContainer}>
+                <View style={styles.headerNameRow}>
+                  <Text style={styles.headerName}>{otherUser.displayName}</Text>
+                </View>
+                <PresenceIndicator userId={otherUser.id} size="small" showLastSeen={true} />
+                {isOffline && (
+                  <Text style={styles.offlineIndicator}>
+                    Offline - messages will send when connected
+                  </Text>
+                )}
+              </View>
+            </>
+          ) : null}
+        </View>
 
-        {/* Search Icon */}
-        <TouchableOpacity
-          onPress={handleSearchToggle}
-          style={styles.searchButton}
-          testID="search-toggle-button"
-        >
-          <Ionicons name={showSearch ? 'close' : 'search'} size={24} color="#007AFF" />
-        </TouchableOpacity>
+        {/* Action Buttons */}
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={handleSearchToggle}
+            style={styles.iconButton}
+            testID="search-toggle-button"
+          >
+            <Ionicons name={showSearch ? 'close' : 'search'} size={24} color="#007AFF" />
+          </TouchableOpacity>
+
+          {!isDraft && (
+            <TouchableOpacity
+              onPress={handleMenuToggle}
+              style={styles.iconButton}
+              testID="menu-button"
+            >
+              <Ionicons name="ellipsis-vertical" size={24} color="#007AFF" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
+
+      {/* Menu Modal */}
+      <Modal
+        visible={showMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowMenu(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowMenu(false)}
+        >
+          <View style={styles.menuContainer}>
+            <TouchableOpacity style={styles.menuItem} onPress={handleMuteToggle}>
+              <Ionicons
+                name={isMuted ? 'notifications' : 'notifications-off'}
+                size={22}
+                color="#007AFF"
+              />
+              <Text style={styles.menuItemText}>
+                {isMuted ? 'Unmute Notifications' : 'Mute Notifications'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.menuItem, styles.menuItemLast]}
+              onPress={() => setShowMenu(false)}
+            >
+              <Ionicons name="close" size={22} color="#8E8E93" />
+              <Text style={[styles.menuItemText, styles.menuItemTextMuted]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Search Bar (conditionally shown) */}
       {showSearch && (
@@ -439,6 +741,9 @@ export default function ChatScreen() {
               minIndexForVisible: 0,
               autoscrollToTopThreshold: 10,
             }}
+            // Read receipts viewport detection (AC1, AC8)
+            viewabilityConfig={viewabilityConfig}
+            onViewableItemsChanged={onViewableItemsChanged}
             // Loading indicator at top when fetching older messages
             ListHeaderComponent={
               isLoadingMore ? (
@@ -468,8 +773,16 @@ export default function ChatScreen() {
           />
         )}
 
+        {/* Typing Indicator - positioned above MessageInput */}
+        {typingUsers.length > 0 && <TypingIndicator typingUsers={typingUsers} />}
+
         {/* Message Input */}
-        <MessageInput onSend={sendMessage} disabled={!user} />
+        <MessageInput
+          onSend={sendMessage}
+          conversationId={conversationId || ''}
+          userId={user?.uid || ''}
+          disabled={!user}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -491,6 +804,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#8E8E93',
   },
+  errorText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#FF3B30',
+    textAlign: 'center',
+    paddingHorizontal: 32,
+  },
+  retryButton: {
+    marginTop: 24,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -503,9 +835,14 @@ const styles = StyleSheet.create({
   backButton: {
     marginRight: 12,
   },
-  searchButton: {
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginLeft: 12,
+  },
+  iconButton: {
     padding: 4,
+    marginLeft: 8,
   },
   headerInfo: {
     flexDirection: 'row',
@@ -524,6 +861,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#000000',
+  },
+  headerSubtext: {
+    fontSize: 14,
+    color: '#8E8E93',
+    marginTop: 2,
   },
   offlineIndicator: {
     fontSize: 12,
@@ -572,5 +914,40 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginHorizontal: 8,
     marginVertical: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    minWidth: 250,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  menuItemLast: {
+    borderBottomWidth: 0,
+  },
+  menuItemText: {
+    marginLeft: 12,
+    fontSize: 16,
+    color: '#000000',
+  },
+  menuItemTextMuted: {
+    color: '#8E8E93',
   },
 });
