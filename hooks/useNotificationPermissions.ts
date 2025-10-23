@@ -97,23 +97,25 @@ export function useNotificationPermissions(
     try {
       setLoading(true);
       const permissionResponse = await Notifications.getPermissionsAsync();
-      setStatus(permissionResponse);
 
-      // Call callback if permission changed
-      if (onPermissionChange) {
-        const wasGranted = status?.status === 'granted';
-        const isGranted = permissionResponse.status === 'granted';
+      setStatus((prevStatus) => {
+        // Call callback if permission changed
+        if (onPermissionChange) {
+          const wasGranted = prevStatus?.status === 'granted';
+          const isGranted = permissionResponse.status === 'granted';
 
-        if (wasGranted !== isGranted) {
-          onPermissionChange(isGranted);
+          if (wasGranted !== isGranted) {
+            onPermissionChange(isGranted);
+          }
         }
-      }
+        return permissionResponse;
+      });
     } catch (error) {
       console.error('[useNotificationPermissions] Error checking permissions:', error);
     } finally {
       setLoading(false);
     }
-  }, [status, onPermissionChange]);
+  }, [onPermissionChange]); // Remove status from dependencies to prevent infinite loop
 
   /**
    * Requests notification permissions with user-friendly flow

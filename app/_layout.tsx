@@ -36,7 +36,7 @@ export default function RootLayout() {
   // const { connected } = useConnectionState();
   const { lastNotification, clearLastNotification } = useNotifications();
 
-  useNotificationPermissions();
+  useNotificationPermissions(); // Re-enabled after fixing infinite loop
   // useOfflineSync();
   const connected = false; // Temporary default
 
