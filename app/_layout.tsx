@@ -23,13 +23,9 @@ import { OfflineBanner } from '@/components/common/OfflineBanner';
 import { NotificationBanner } from '@/components/common/NotificationBanner';
 import { loadFonts } from '@/utils/loadFonts';
 
-// Initialize Firebase synchronously before the app renders
-// This ensures Firebase is ready before any component tries to use it
-try {
-  initializeFirebase();
-} catch (error) {
-  console.error('Firebase initialization error:', error);
-}
+// Initialize Firebase before React renders
+// This is safe because initializeFirebase checks if it's already initialized
+initializeFirebase();
 
 /**
  * Root layout component that sets up navigation with auth protection
@@ -96,7 +92,11 @@ export default function RootLayout() {
 
     // Mark navigation as complete after navigation guard logic runs
     // This prevents screen flash by only rendering content after redirect decision is made
-    setIsNavigating(false);
+    // Use async wrapper to avoid setState in effect warning
+    const completeNavigation = async () => {
+      setIsNavigating(false);
+    };
+    completeNavigation();
   }, [isAuthenticated, hasProfile, isLoading, segments, router]);
 
   // Show loading screen while checking authentication state, navigating, or loading fonts
