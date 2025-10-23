@@ -15,7 +15,6 @@ import {
   RefreshControl,
   StyleSheet,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -302,7 +301,15 @@ export default function ConversationListScreen() {
   const keyExtractor = (item: Conversation) => item.id;
 
   // Show loading spinner on initial load or when no user is authenticated
+  console.log('[ConversationListScreen] Loading check:', {
+    loading,
+    refreshing,
+    currentUserId,
+    shouldShowLoading: (loading && !refreshing) || !currentUserId,
+  });
+
   if ((loading && !refreshing) || !currentUserId) {
+    console.log('[ConversationListScreen] Showing loading screen');
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#007AFF" />

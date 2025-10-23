@@ -18,16 +18,34 @@ export default function Index() {
   const router = useRouter();
   const { isAuthenticated, hasProfile, isLoading } = useAuth();
 
+  console.log('[Index] Render:', {
+    isLoading,
+    isAuthenticated,
+    hasProfile,
+  });
+
   useEffect(() => {
+    console.log('[Index] useEffect triggered:', {
+      isLoading,
+      isAuthenticated,
+      hasProfile,
+    });
+
     // Skip if still loading
-    if (isLoading) return;
+    if (isLoading) {
+      console.log('[Index] Still loading, skipping redirect');
+      return;
+    }
 
     // Redirect based on auth state
     if (!isAuthenticated) {
+      console.log('[Index] User not authenticated, redirecting to login');
       router.replace('/(auth)/login');
     } else if (isAuthenticated && !hasProfile) {
+      console.log('[Index] User authenticated but no profile, redirecting to username setup');
       router.replace('/(auth)/username-setup');
     } else if (isAuthenticated && hasProfile) {
+      console.log('[Index] User authenticated with profile, redirecting to conversations');
       router.replace('/(tabs)/conversations');
     }
   }, [isAuthenticated, hasProfile, isLoading, router]);

@@ -189,17 +189,26 @@ export async function createUserProfile(
  */
 export async function getUserProfile(uid: string): Promise<User | null> {
   try {
+    console.log('[getUserProfile] Fetching user profile for uid:', uid);
     const db = getFirebaseDb();
     const userDocRef = doc(db, 'users', uid);
+    console.log('[getUserProfile] Getting document from Firestore...');
     const userDoc: DocumentSnapshot = await getDoc(userDocRef);
 
     if (!userDoc.exists()) {
+      console.log('[getUserProfile] User document does not exist for uid:', uid);
       return null;
     }
 
-    return userDoc.data() as User;
+    const userData = userDoc.data() as User;
+    console.log('[getUserProfile] User profile retrieved:', {
+      uid: userData.uid,
+      username: userData.username,
+      hasDisplayName: !!userData.displayName,
+    });
+    return userData;
   } catch (error) {
-    console.error('Error fetching user profile:', error);
+    console.error('[getUserProfile] Error fetching user profile:', error);
     throw new Error('Failed to fetch user profile. Please try again.');
   }
 }

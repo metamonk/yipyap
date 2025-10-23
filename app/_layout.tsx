@@ -10,7 +10,7 @@
  * - Protects (tabs) routes from unauthorized access
  */
 
-import { View, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { Stack, useSegments } from 'expo-router';
 import { initializeFirebase } from '@/services/firebase';
 import { useAuth } from '@/hooks/useAuth';
@@ -23,30 +23,18 @@ import { NotificationBanner } from '@/components/common/NotificationBanner';
 
 // Initialize Firebase before React renders
 // This is safe because initializeFirebase checks if it's already initialized
+console.log('[RootLayout] Initializing Firebase...');
 initializeFirebase();
+console.log('[RootLayout] Firebase initialization complete');
 
 /**
  * Root layout component that sets up navigation with auth protection
  */
 export default function RootLayout() {
-  const { isLoading } = useAuth();
-  const segments = useSegments();
+  console.log('[RootLayout] Component rendering...');
+  useAuth(); // Initialize auth hook
   const { connected } = useConnectionState();
   const { lastNotification, clearLastNotification } = useNotifications();
-
-  const getStatusBarStyle = () => {
-    if (segments[0] === '(auth)') {
-      return 'dark';
-    }
-    return 'light';
-  };
-
-  const getStatusBarBackgroundColor = () => {
-    if (segments[0] === '(auth)') {
-      return 'transparent';
-    }
-    return '#ffffff';
-  };
 
   useNotificationPermissions();
   useOfflineSync();
@@ -73,12 +61,3 @@ export default function RootLayout() {
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-  },
-});

@@ -674,6 +674,7 @@ export function subscribeToConversations(
   callback: (conversations: Conversation[]) => void
 ): Unsubscribe {
   try {
+    console.log('[subscribeToConversations] Starting subscription for userId:', userId);
     const db = getFirebaseDb();
     const conversationsRef = collection(db, 'conversations');
 
@@ -684,10 +685,18 @@ export function subscribeToConversations(
       orderBy('lastMessageTimestamp', 'desc')
     );
 
+    console.log('[subscribeToConversations] Setting up Firestore listener...');
+
     // Set up real-time listener
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
+        console.log('[subscribeToConversations] Snapshot received:', {
+          fromCache: snapshot.metadata.fromCache,
+          hasPendingWrites: snapshot.metadata.hasPendingWrites,
+          docCount: snapshot.size,
+        });
+
         const conversations: Conversation[] = [];
         snapshot.forEach((doc) => {
           const data = doc.data() as Conversation;
@@ -697,18 +706,24 @@ export function subscribeToConversations(
           }
         });
 
+        console.log('[subscribeToConversations] Processed conversations:', {
+          total: snapshot.size,
+          filtered: conversations.length,
+        });
+
         callback(conversations);
       },
       (error) => {
-        console.error('Error in conversation subscription:', error);
+        console.error('[subscribeToConversations] Error in subscription:', error);
         // Pass empty array on error to prevent app crash
         callback([]);
       }
     );
 
+    console.log('[subscribeToConversations] Listener setup complete');
     return unsubscribe;
   } catch (error) {
-    console.error('Error subscribing to conversations:', error);
+    console.error('[subscribeToConversations] Error setting up subscription:', error);
     throw new Error('Failed to subscribe to conversations. Please try again.');
   }
 }

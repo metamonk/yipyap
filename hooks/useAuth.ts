@@ -87,14 +87,17 @@ export function useAuth(): UseAuthReturn {
 
   // Set up Firebase auth state listener
   useEffect(() => {
+    console.log('[useAuth] Setting up auth state listener...');
     let unsubscribe: (() => void) | undefined;
 
     // Initialize auth synchronously to avoid timing issues
     let auth: ReturnType<typeof getFirebaseAuth>;
     try {
+      console.log('[useAuth] Getting Firebase Auth instance...');
       auth = getFirebaseAuth();
+      console.log('[useAuth] Firebase Auth instance obtained');
     } catch (authError) {
-      console.error('Failed to get Firebase Auth:', authError);
+      console.error('[useAuth] Failed to get Firebase Auth:', authError);
       // eslint-disable-next-line react-hooks/exhaustive-deps
       setError({
         code: 'auth/initialization-error',
@@ -106,30 +109,43 @@ export function useAuth(): UseAuthReturn {
     }
 
     // Listen for auth state changes
+    console.log('[useAuth] Registering onAuthStateChanged listener...');
     unsubscribe = onAuthStateChanged(
       auth,
       async (firebaseUser) => {
+        console.log('[useAuth] Auth state changed:', {
+          userId: firebaseUser?.uid,
+          email: firebaseUser?.email,
+          isAuthenticated: !!firebaseUser,
+        });
         setUser(firebaseUser);
 
         // If user is authenticated, check if they have a profile
         if (firebaseUser) {
           try {
+            console.log('[useAuth] Fetching user profile for uid:', firebaseUser.uid);
             const profile = await getUserProfile(firebaseUser.uid);
+            console.log('[useAuth] User profile fetched:', {
+              hasProfile: !!profile,
+              username: profile?.username,
+            });
             setUserProfile(profile);
           } catch (error) {
-            console.error('Error fetching user profile:', error);
+            console.error('[useAuth] Error fetching user profile:', error);
             // Don't set error state here, as this is not a critical failure
             // User might just need to create their profile
             setUserProfile(null);
           }
         } else {
+          console.log('[useAuth] User not authenticated, clearing profile');
           setUserProfile(null);
         }
 
+        console.log('[useAuth] Setting isLoading to false');
         setIsLoading(false);
       },
       (authError) => {
-        console.error('Auth state change error:', authError);
+        console.error('[useAuth] Auth state change error:', authError);
         // eslint-disable-next-line react-hooks/exhaustive-deps
         setError({
           code: 'auth/state-change-error',
