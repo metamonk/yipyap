@@ -182,7 +182,7 @@ export function useAuth(): UseAuthReturn {
         unsubscribe();
       }
     };
-  }, [isLoading]); // Add isLoading as dependency for timeout check
+  }, []); // Empty dependency array - setup only once on mount
 
   /**
    * Sign in with email and password
