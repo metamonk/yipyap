@@ -2,17 +2,18 @@
 
 ## User
 
-**Purpose:** Represents a registered user in the system with profile information and settings
+**Purpose:** Represents a registered user in the system with comprehensive profile information, multi-device support, and advanced preferences
 
 **Key Attributes:**
 
-- `uid`: string - Unique Firebase Auth ID
-- `username`: string - Unique username for user identification
+- `uid`: string - Unique Firebase Auth ID (same as document ID)
+- `username`: string - Unique username (3-20 chars, lowercase, alphanumeric + underscore)
 - `displayName`: string - User's display name (up to 50 characters)
+- `email`: string - User's email address from Firebase Auth
 - `photoURL`: string | null - Firebase Storage URL for profile photo
-- `fcmToken`: string | null - Firebase Cloud Messaging token for push notifications
+- `fcmTokens`: PushToken[] - Array of push tokens for multi-device support
 - `presence`: object - Online/offline status and last seen timestamp
-- `settings`: object - User preferences including read receipts toggle
+- `settings`: object - Comprehensive user preferences
 - `createdAt`: timestamp - Account creation timestamp
 - `updatedAt`: timestamp - Last profile update
 
@@ -23,8 +24,10 @@ interface User {
   uid: string;
   username: string;
   displayName: string;
+  email: string;
   photoURL?: string;
-  fcmToken?: string;
+  fcmToken?: string; // Legacy single token support
+  fcmTokens?: PushToken[]; // Multi-device push tokens
   presence: {
     status: 'online' | 'offline';
     lastSeen: firebase.firestore.Timestamp;
@@ -32,9 +35,41 @@ interface User {
   settings: {
     sendReadReceipts: boolean;
     notificationsEnabled: boolean;
+    notifications?: NotificationPreferences;
+    presence?: PresencePreferences;
   };
   createdAt: firebase.firestore.Timestamp;
   updatedAt: firebase.firestore.Timestamp;
+}
+
+interface PushToken {
+  token: string;
+  type: 'expo' | 'fcm' | 'apns';
+  platform: 'ios' | 'android';
+  deviceId: string;
+  appVersion: string;
+  createdAt: firebase.firestore.Timestamp;
+  lastUsed: firebase.firestore.Timestamp;
+}
+
+interface NotificationPreferences {
+  enabled: boolean;
+  showPreview: boolean;
+  sound: boolean;
+  vibration: boolean;
+  directMessages: boolean;
+  groupMessages: boolean;
+  systemMessages: boolean;
+  quietHoursStart?: string; // "22:00" format
+  quietHoursEnd?: string; // "08:00" format
+}
+
+interface PresencePreferences {
+  showOnlineStatus: boolean;
+  showLastSeen: boolean;
+  awayTimeoutMinutes: number;
+  awayDetectionEnabled: boolean;
+  invisibleMode: boolean;
 }
 ```
 
@@ -45,21 +80,22 @@ interface User {
 
 ## Conversation
 
-**Purpose:** Represents a chat conversation between users (1:1 or group)
+**Purpose:** Represents a chat conversation between users (1:1 or group) with enhanced group management
 
 **Key Attributes:**
 
 - `id`: string - Unique conversation ID (deterministic for 1:1, random for groups)
 - `type`: string - Either 'direct' or 'group'
-- `participantIds`: string[] - Array of user UIDs in conversation
+- `participantIds`: string[] - Array of user UIDs in conversation (indexed for queries)
 - `groupName`: string | null - Name for group chats
 - `groupPhotoURL`: string | null - Group photo URL
 - `creatorId`: string | null - UID of group creator
+- `adminIds`: string[] | null - Array of user IDs with admin privileges (groups only)
 - `lastMessage`: object - Preview of most recent message
-- `lastMessageTimestamp`: timestamp - Time of last message
+- `lastMessageTimestamp`: timestamp - Time of last message (indexed for sorting)
 - `unreadCount`: map - Per-user unread message counts
 - `archivedBy`: map - Per-user archive status
-- `deletedBy`: map - Per-user deletion status
+- `deletedBy`: map - Per-user soft deletion status
 - `mutedBy`: map - Per-user mute status
 
 ### TypeScript Interface
@@ -68,10 +104,11 @@ interface User {
 interface Conversation {
   id: string;
   type: 'direct' | 'group';
-  participantIds: string[];
+  participantIds: string[]; // Note: Was 'participants' in early docs
   groupName?: string;
   groupPhotoURL?: string;
   creatorId?: string;
+  adminIds?: string[]; // Group admin privileges
   lastMessage: {
     text: string;
     senderId: string;
@@ -130,5 +167,312 @@ interface Message {
 
 - Many-to-One with Conversation (belongs to one conversation)
 - Many-to-One with User (sent by one user)
+
+## Additional Implementation Types
+
+### Presence System (Realtime Database)
+
+**Purpose:** Real-time presence tracking using Firebase Realtime Database for instant updates
+
+```typescript
+interface PresenceData {
+  state: 'online' | 'offline' | 'away';
+  lastSeen: number; // Unix timestamp (ms)
+  devices: Record<string, DevicePresence>;
+}
+
+interface DevicePresence {
+  state: 'online' | 'offline';
+  platform: 'ios' | 'android' | 'web';
+  lastActivity: number;
+  appVersion?: string;
+}
+
+interface TypingIndicator {
+  isTyping: boolean;
+  timestamp: number;
+}
+```
+
+### Resilience & Error Handling
+
+**Purpose:** Retry queue and batch operations for reliable message delivery
+
+```typescript
+interface RetryQueueItem {
+  id: string;
+  operationType: 'READ_RECEIPT_BATCH' | 'MESSAGE_SEND' | 'STATUS_UPDATE';
+  data: {
+    messageIds?: string[];
+    userId?: string;
+    timestamp?: Timestamp;
+    conversationId?: string;
+    [key: string]: unknown;
+  };
+  retryCount: number;
+  nextRetryTime: number;
+  createdAt: number;
+  lastError?: string;
+}
+
+interface BatchUpdateResult {
+  success: boolean;
+  processedCount: number;
+  failedCount: number;
+  totalCount: number;
+  duration: number;
+  errors: Array<{
+    itemId: string;
+    error: string;
+    errorType: 'network' | 'permission' | 'quota' | 'validation' | 'unknown';
+  }>;
+  retryQueued: boolean;
+}
+```
+
+### Group Management
+
+**Purpose:** Validation and state management for group creation and editing
+
+```typescript
+interface MemberSelectionState {
+  selectedMemberIds: string[];
+  currentCount: number;
+  canAddMore: boolean;
+  limitReached: boolean;
+  warningThresholdReached: boolean;
+}
+
+interface GroupValidationState {
+  isValid: boolean;
+  errorMessage: string | null;
+  warningMessage: string | null;
+  severity: 'error' | 'warning' | 'success';
+  memberCount: number;
+  canSubmit: boolean;
+}
+
+type GroupCreationError =
+  | { type: 'SIZE_LIMIT_EXCEEDED'; message: string; currentCount: number; limit: number }
+  | { type: 'INSUFFICIENT_MEMBERS'; message: string; currentCount: number; minimumRequired: number }
+  | { type: 'MISSING_GROUP_NAME'; message: string }
+  | { type: 'NETWORK_ERROR'; message: string; details?: string }
+  | { type: 'PERMISSION_ERROR'; message: string; details?: string };
+```
+
+### Conversation Operations
+
+**Purpose:** Atomic operations and multi-select UI management
+
+```typescript
+interface CreateConversationWithMessageParams {
+  type: 'direct' | 'group';
+  participantIds: string[];
+  messageText: string;
+  senderId: string;
+  groupName?: string;
+  groupPhotoURL?: string;
+}
+
+interface CreateConversationResult {
+  conversationId: string;
+  messageId: string;
+}
+
+interface ConversationSelectionState {
+  isSelectionMode: boolean;
+  selectedConversationIds: Set<string>;
+}
+```
+
+---
+
+## Phase 2: AI Intelligence Layer Data Models
+
+### AI Message Metadata (Extension)
+
+**Purpose:** Extends the base Message model with comprehensive AI processing metadata
+
+**Enhanced Attributes:**
+
+```typescript
+interface AIMessageMetadata extends Message {
+  metadata: {
+    // Categorization
+    category: 'fan_engagement' | 'business_opportunity' | 'spam' | 'urgent' | 'general';
+    categoryConfidence: number; // 0-1 confidence score
+
+    // Sentiment Analysis
+    sentiment: 'positive' | 'negative' | 'neutral' | 'mixed';
+    sentimentScore: number; // -1 to 1 scale
+    emotionalTone: string[]; // ['excited', 'frustrated', 'curious']
+
+    // Business Intelligence
+    opportunityScore: number; // 0-100 business value score
+    opportunityType?: 'sponsorship' | 'collaboration' | 'partnership' | 'sale';
+
+    // AI Processing Status
+    aiProcessed: boolean;
+    aiProcessedAt?: firebase.firestore.Timestamp;
+    aiVersion: string; // Model version used
+
+    // Response Assistance
+    suggestedResponse?: string;
+    suggestedResponseApproved?: boolean;
+    autoResponseSent?: boolean;
+    autoResponseId?: string;
+
+    // FAQ Detection
+    isFAQ: boolean;
+    faqTemplateId?: string;
+    faqMatchConfidence?: number;
+  };
+}
+```
+
+### FAQ Template
+
+**Purpose:** Stores creator-approved FAQ templates for automatic responses
+
+**Key Attributes:**
+
+```typescript
+interface FAQTemplate {
+  id: string;
+  creatorId: string; // User who created template
+  question: string; // The FAQ question pattern
+  answer: string; // Approved response text
+  keywords: string[]; // Keywords for matching
+  embedding?: number[]; // Vector embedding for semantic search
+  category: string; // FAQ category (pricing, availability, etc.)
+  isActive: boolean;
+  useCount: number; // Times this FAQ has been used
+  lastUsedAt?: firebase.firestore.Timestamp;
+  createdAt: firebase.firestore.Timestamp;
+  updatedAt: firebase.firestore.Timestamp;
+}
+```
+
+### AI Training Data
+
+**Purpose:** Stores user-specific training data for voice matching and personalization
+
+**Key Attributes:**
+
+```typescript
+interface AITrainingData {
+  id: string;
+  userId: string;
+  type: 'voice_sample' | 'response_feedback' | 'categorization_feedback';
+
+  // Voice Training
+  voiceSample?: {
+    originalMessage: string;
+    userResponse: string;
+    context: string;
+    approved: boolean;
+  };
+
+  // Feedback Data
+  feedback?: {
+    originalSuggestion: string;
+    userEdit?: string;
+    rating: number; // 1-5 stars
+    comments?: string;
+  };
+
+  // Training Metadata
+  modelVersion: string;
+  processed: boolean;
+  processedAt?: firebase.firestore.Timestamp;
+  createdAt: firebase.firestore.Timestamp;
+}
+```
+
+### AI Workflow Configuration
+
+**Purpose:** Stores user preferences for autonomous AI workflows
+
+**Key Attributes:**
+
+```typescript
+interface AIWorkflowConfig {
+  id: string;
+  userId: string;
+
+  // Feature Toggles
+  features: {
+    autoCategorizatioEnabled: boolean;
+    voiceMatchingEnabled: boolean;
+    faqAutoResponseEnabled: boolean;
+    sentimentAnalysisEnabled: boolean;
+    opportunityScoringEnabled: boolean;
+    dailyWorkflowEnabled: boolean;
+  };
+
+  // Workflow Settings
+  workflowSettings: {
+    dailyWorkflowTime: string; // "09:00" format
+    timezone: string;
+    maxAutoResponses: number; // Per day limit
+    requireApproval: boolean; // Manual approval for AI actions
+    escalationThreshold: number; // Sentiment score for escalation
+  };
+
+  // Model Preferences
+  modelPreferences: {
+    preferredProvider: 'openai' | 'anthropic' | 'auto';
+    costOptimization: 'performance' | 'balanced' | 'economy';
+  };
+
+  createdAt: firebase.firestore.Timestamp;
+  updatedAt: firebase.firestore.Timestamp;
+}
+```
+
+### AI Analytics
+
+**Purpose:** Tracks AI performance metrics and usage statistics
+
+**Key Attributes:**
+
+```typescript
+interface AIAnalytics {
+  id: string;
+  userId: string;
+  period: 'daily' | 'weekly' | 'monthly';
+  periodStart: firebase.firestore.Timestamp;
+
+  metrics: {
+    messagesProcessed: number;
+    messagesAutoCategorized: number;
+    categoryAccuracy: number; // Percentage
+
+    responsesGenerated: number;
+    responsesApproved: number;
+    responsesEdited: number;
+    responseApprovalRate: number; // Percentage
+
+    faqsMatched: number;
+    faqsAutoResponded: number;
+
+    opportunitiesIdentified: number;
+    highValueOpportunities: number;
+
+    timeSaved: number; // Minutes
+    costIncurred: number; // USD cents
+  };
+
+  createdAt: firebase.firestore.Timestamp;
+}
+```
+
+### Relationships (Phase 2)
+
+- AIMessageMetadata: One-to-One extension of Message
+- FAQTemplate: Many-to-One with User (creator)
+- AITrainingData: Many-to-One with User
+- AIWorkflowConfig: One-to-One with User
+- AIAnalytics: Many-to-One with User
 
 ---

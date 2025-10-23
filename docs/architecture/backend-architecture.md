@@ -2,7 +2,34 @@
 
 ## Service Architecture
 
-Since we're using Firebase (serverless BaaS), the backend architecture consists of Firebase services configuration and optional Cloud Functions for server-side logic.
+Since we're using Firebase (serverless BaaS), the backend architecture consists of Firebase services configuration, a comprehensive service layer for business logic, and optional Cloud Functions for server-side operations.
+
+### Service Layer Organization
+
+The application implements a well-structured service layer pattern with dedicated services for each domain:
+
+```
+services/
+├── firebase.ts              # Firebase initialization & configuration
+├── authService.ts           # Authentication operations
+├── userService.ts           # User profile management
+├── conversationService.ts   # Conversation CRUD & management
+├── messageService.ts        # Message operations & delivery
+├── presenceService.ts       # Online/offline status (RTDB)
+├── typingService.ts         # Typing indicators (RTDB)
+├── storageService.ts        # File uploads (profile photos)
+├── notificationService.ts   # Push notification handling
+├── fcmTokenService.ts       # Multi-device token management
+├── userCacheService.ts      # User data caching layer
+└── retryQueueService.ts     # Resilient operation retry
+
+Each service:
+- Encapsulates Firebase SDK calls
+- Handles error conditions gracefully
+- Implements business logic rules
+- Provides TypeScript-typed interfaces
+- Manages retry logic where appropriate
+```
 
 ### Firebase SDK Approach
 
@@ -104,6 +131,78 @@ export const sendMessageNotification = functions.firestore
 
     await admin.messaging().sendToDevice(tokens, payload);
   });
+```
+
+## Resilience Patterns
+
+### Retry Queue Service
+
+The application implements a sophisticated retry queue for handling transient failures:
+
+```typescript
+// retryQueueService.ts key features
+- Exponential backoff with configurable delays
+- Circuit breaker pattern to prevent cascading failures
+- Operation-specific retry strategies
+- Persistent queue across app sessions
+- Automatic cleanup of expired items
+```
+
+**Supported Operations:**
+
+- `READ_RECEIPT_BATCH`: Batch updates for read receipts
+- `MESSAGE_SEND`: Message delivery retry
+- `STATUS_UPDATE`: Message status updates
+
+**Configuration:**
+
+```typescript
+{
+  maxRetries: 5,
+  backoffDelays: [1000, 2000, 4000, 8000, 16000, 30000],
+  maxQueueSize: 100,
+  enableCircuitBreaker: true,
+  circuitBreakerThreshold: 10,
+  circuitBreakerCooldown: 60000
+}
+```
+
+### Optimistic UI Updates
+
+Messages display immediately with optimistic updates, then reconcile with server state:
+
+```typescript
+// Pattern used throughout the app
+1. Display message with 'sending' status
+2. Add to local state optimistically
+3. Send to Firebase in background
+4. Update status on success/failure
+5. Queue for retry if failed
+```
+
+### Offline Support
+
+Built-in Firestore offline persistence with custom enhancements:
+
+```typescript
+// Enhanced offline capabilities
+- Firestore offline cache enabled by default
+- Message queue for offline sends
+- Automatic sync on reconnection
+- Connection state monitoring (RTDB .info/connected)
+- Graceful degradation of features
+```
+
+### Batch Operations
+
+Efficient batch processing to reduce Firestore operations:
+
+```typescript
+// Batch update patterns
+- Read receipts batched per conversation
+- Bulk conversation operations (archive/delete)
+- Paginated data fetching (50 items default)
+- Debounced search queries (300ms)
 ```
 
 ## Database Architecture

@@ -10,15 +10,19 @@ firestore
 │       ├── uid: string
 │       ├── username: string         // Unique, indexed
 │       ├── displayName: string
+│       ├── email: string            // From Firebase Auth
 │       ├── photoURL: string?
-│       ├── fcmToken: string?
-│       ├── presence: {
+│       ├── fcmToken: string?        // Legacy single token
+│       ├── fcmTokens: PushToken[]?  // Multi-device tokens
+│       ├── presence: {              // Basic presence (detailed in RTDB)
 │       │     status: 'online' | 'offline',
 │       │     lastSeen: timestamp
 │       │   }
 │       ├── settings: {
 │       │     sendReadReceipts: boolean,
-│       │     notificationsEnabled: boolean
+│       │     notificationsEnabled: boolean,
+│       │     notifications?: {...}, // Detailed preferences
+│       │     presence?: {...}       // Presence preferences
 │       │   }
 │       ├── createdAt: timestamp
 │       └── updatedAt: timestamp
@@ -31,6 +35,7 @@ firestore
 │       ├── groupName: string?       // For group chats
 │       ├── groupPhotoURL: string?
 │       ├── creatorId: string?       // Group creator
+│       ├── adminIds: string[]?      // Group admins
 │       ├── lastMessage: {
 │       │     text: string,
 │       │     senderId: string,
@@ -60,6 +65,29 @@ firestore
 └── usernames/                       // Username uniqueness check
     └── {username}/
         └── uid: string               // Points to user
+```
+
+## Firebase Realtime Database Structure
+
+```javascript
+// Realtime Database (for low-latency presence & typing)
+realtimeDatabase
+├── presence/                         // User presence tracking
+│   └── {userId}/
+│       ├── state: 'online' | 'offline' | 'away'
+│       ├── lastSeen: number         // Unix timestamp (ms)
+│       └── devices/                 // Multi-device support
+│           └── {deviceId}/
+│               ├── state: 'online' | 'offline'
+│               ├── platform: 'ios' | 'android' | 'web'
+│               ├── lastActivity: number
+│               └── appVersion?: string
+│
+└── typing/                          // Typing indicators
+    └── {conversationId}/
+        └── {userId}/
+            ├── isTyping: boolean
+            └── timestamp: number    // Unix timestamp (ms)
 ```
 
 ## Firestore Indexes
