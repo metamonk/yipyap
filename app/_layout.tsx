@@ -32,7 +32,6 @@ console.log('[RootLayout] Firebase initialization complete');
  */
 export default function RootLayout() {
   console.log('[RootLayout] Component rendering...');
-  useAuth(); // Initialize auth hook
   const { connected } = useConnectionState();
   const { lastNotification, clearLastNotification } = useNotifications();
 

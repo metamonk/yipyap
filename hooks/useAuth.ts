@@ -89,6 +89,7 @@ export function useAuth(): UseAuthReturn {
   useEffect(() => {
     console.log('[useAuth] Setting up auth state listener...');
     let unsubscribe: (() => void) | undefined;
+    let timeoutId: NodeJS.Timeout;
 
     // Initialize auth synchronously to avoid timing issues
     let auth: ReturnType<typeof getFirebaseAuth>;
@@ -108,16 +109,34 @@ export function useAuth(): UseAuthReturn {
       return;
     }
 
+    // Set a timeout to handle cases where auth state never changes
+    // This ensures the app doesn't get stuck in loading state
+    timeoutId = setTimeout(() => {
+      console.log('[useAuth] Auth state timeout - setting loading to false');
+      if (isLoading) {
+        setIsLoading(false);
+      }
+    }, 5000); // 5 second timeout
+
     // Listen for auth state changes
     console.log('[useAuth] Registering onAuthStateChanged listener...');
+
+    // Get current user immediately to check if already authenticated
+    const currentUser = auth.currentUser;
+    console.log('[useAuth] Current user on mount:', currentUser?.uid || 'none');
+
     unsubscribe = onAuthStateChanged(
       auth,
       async (firebaseUser) => {
-        console.log('[useAuth] Auth state changed:', {
+        console.log('[useAuth] Auth state changed callback fired:', {
           userId: firebaseUser?.uid,
           email: firebaseUser?.email,
           isAuthenticated: !!firebaseUser,
         });
+
+        // Clear the timeout since we got a response
+        clearTimeout(timeoutId);
+
         setUser(firebaseUser);
 
         // If user is authenticated, check if they have a profile
@@ -158,11 +177,12 @@ export function useAuth(): UseAuthReturn {
 
     // Cleanup subscription on unmount
     return () => {
+      clearTimeout(timeoutId);
       if (unsubscribe) {
         unsubscribe();
       }
     };
-  }, []);
+  }, [isLoading]); // Add isLoading as dependency for timeout check
 
   /**
    * Sign in with email and password
