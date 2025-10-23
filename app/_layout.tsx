@@ -32,13 +32,10 @@ console.log('[RootLayout] Firebase initialization complete');
  */
 export default function RootLayout() {
   console.log('[RootLayout] Component rendering...');
-  // Temporarily disable hooks to isolate the re-render issue
-  // const { connected } = useConnectionState();
+  const { connected } = useConnectionState();
   const { lastNotification, clearLastNotification } = useNotifications();
-
-  useNotificationPermissions(); // Re-enabled after fixing infinite loop
-  // useOfflineSync();
-  const connected = false; // Temporary default
+  useNotificationPermissions();
+  useOfflineSync();
 
   // Note: Navigation is now handled by app/index.tsx
   // This layout just provides the Stack navigator structure
