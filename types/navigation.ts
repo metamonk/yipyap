@@ -119,9 +119,10 @@ export interface ConversationListParams {
 export type NewConversationParams = Record<string, never>;
 
 /**
- * Route parameters for the new group screen
+ * Route parameters for group creation (deprecated)
  *
+ * @deprecated Group creation is now handled through the unified conversation creation flow in new.tsx
  * @remarks
- * This screen has no route parameters - users select participants and enter group name within the screen.
+ * Groups are automatically detected when 2+ recipients are selected in the unified creation screen.
  */
 export type NewGroupParams = Record<string, never>;

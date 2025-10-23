@@ -3,7 +3,7 @@
  * @module components/common/NotificationBanner
  */
 
-import React, { FC, useEffect, useState } from 'react';
+import React, { FC, useEffect, useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
@@ -46,29 +46,7 @@ export const NotificationBanner: FC<NotificationBannerProps> = ({
     null
   );
 
-  useEffect(() => {
-    if (notification) {
-      // Show banner
-      setCurrentNotification(notification);
-      setVisible(true);
-
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        useNativeDriver: true,
-        tension: 40,
-        friction: 8,
-      }).start();
-
-      // Auto-hide after duration
-      const timeout = setTimeout(() => {
-        hideBanner();
-      }, duration);
-
-      return () => clearTimeout(timeout);
-    }
-  }, [notification]);
-
-  const hideBanner = () => {
+  const hideBanner = useCallback(() => {
     Animated.timing(slideAnim, {
       toValue: -100,
       duration: 300,
@@ -78,7 +56,38 @@ export const NotificationBanner: FC<NotificationBannerProps> = ({
       setCurrentNotification(null);
       onClose?.();
     });
-  };
+  }, [slideAnim, onClose]);
+
+  useEffect(() => {
+    if (notification) {
+      const showBanner = async () => {
+        // Show banner
+        setCurrentNotification(notification);
+        setVisible(true);
+
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 40,
+          friction: 8,
+        }).start();
+
+        // Auto-hide after duration
+        const timeout = setTimeout(() => {
+          hideBanner();
+        }, duration);
+
+        return () => clearTimeout(timeout);
+      };
+
+      const cleanup = showBanner();
+      return () => {
+        if (cleanup instanceof Promise) {
+          cleanup.then((fn) => fn && fn());
+        }
+      };
+    }
+  }, [notification, slideAnim, duration, hideBanner]);
 
   const handlePress = () => {
     hideBanner();

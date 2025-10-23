@@ -5,8 +5,17 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, ActivityIndicator, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Image,
+  ActivityIndicator,
+  Alert,
+  TouchableOpacity,
+} from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { NavigationHeader } from '../../_components/NavigationHeader';
 import { getFirebaseAuth } from '@/services/firebase';
 import { getUserProfile } from '@/services/userService';
@@ -25,25 +34,25 @@ export default function ProfileScreen() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    const loadProfile = async () => {
+      if (!currentUser) {
+        Alert.alert('Error', 'You must be logged in to view your profile.');
+        return;
+      }
+
+      try {
+        const userProfile = await getUserProfile(currentUser.uid);
+        setProfile(userProfile);
+      } catch (error) {
+        console.error('Error loading profile:', error);
+        Alert.alert('Error', 'Failed to load profile. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
     loadProfile();
-  }, []);
-
-  const loadProfile = async () => {
-    if (!currentUser) {
-      Alert.alert('Error', 'You must be logged in to view your profile.');
-      return;
-    }
-
-    try {
-      const userProfile = await getUserProfile(currentUser.uid);
-      setProfile(userProfile);
-    } catch (error) {
-      console.error('Error loading profile:', error);
-      Alert.alert('Error', 'Failed to load profile. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  }, [currentUser]);
 
   if (isLoading) {
     return (
@@ -101,6 +110,20 @@ export default function ProfileScreen() {
             <Text style={styles.infoLabel}>Email</Text>
             <Text style={styles.infoValue}>{profile.email}</Text>
           </View>
+        </View>
+
+        {/* Settings Section */}
+        <View style={styles.settingsSection}>
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => router.push('/profile/settings')}
+          >
+            <View style={styles.settingsContent}>
+              <Ionicons name="settings-outline" size={24} color="#007AFF" />
+              <Text style={styles.settingsText}>Settings</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+          </TouchableOpacity>
         </View>
       </View>
     </View>
@@ -169,5 +192,26 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 16,
     color: '#999999',
+  },
+  settingsSection: {
+    marginTop: 24,
+  },
+  settingsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F2F2F7',
+    padding: 16,
+    borderRadius: 12,
+  },
+  settingsContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  settingsText: {
+    fontSize: 17,
+    color: '#007AFF',
+    marginLeft: 12,
+    fontWeight: '500',
   },
 });

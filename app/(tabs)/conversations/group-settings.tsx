@@ -6,7 +6,7 @@
  * Shows member list and admin controls.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -58,11 +58,7 @@ export default function GroupSettingsScreen() {
   /**
    * Load conversation data
    */
-  useEffect(() => {
-    loadConversation();
-  }, [conversationId]);
-
-  const loadConversation = async () => {
+  const loadConversation = useCallback(async () => {
     try {
       setLoading(true);
       const conv = await getConversation(conversationId);
@@ -88,7 +84,11 @@ export default function GroupSettingsScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [conversationId]);
+
+  useEffect(() => {
+    loadConversation();
+  }, [loadConversation]);
 
   /**
    * Handle group name change

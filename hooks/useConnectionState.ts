@@ -8,7 +8,7 @@
  * Queues presence updates during offline periods.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ref, onValue, Unsubscribe } from 'firebase/database';
 import { getFirebaseRealtimeDb } from '@/services/firebase';
 import type { ConnectionState } from '@/types/models';
@@ -21,6 +21,10 @@ interface QueuedOperation {
   operation: () => Promise<void>;
   timestamp: number;
 }
+
+// Exponential backoff delays (in ms)
+const BACKOFF_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
+const MAX_QUEUE_SIZE = 50;
 
 /**
  * Hook for monitoring Firebase RTDB connection state
@@ -59,14 +63,10 @@ export function useConnectionState() {
   const reconnectAttemptsRef = useRef<number>(0);
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
 
-  // Exponential backoff delays (in ms)
-  const BACKOFF_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
-  const MAX_QUEUE_SIZE = 50;
-
   /**
    * Processes queued operations when connection restored
    */
-  const processQueue = async (): Promise<void> => {
+  const processQueue = useCallback(async (): Promise<void> => {
     if (queueRef.current.length === 0) return;
 
     const operations = [...queueRef.current];
@@ -83,7 +83,7 @@ export function useConnectionState() {
         setQueuedCount(queueRef.current.length);
       }
     }
-  };
+  }, []);
 
   /**
    * Queues an operation to be executed when connection restored
@@ -120,7 +120,7 @@ export function useConnectionState() {
   /**
    * Handles reconnection with exponential backoff
    */
-  const handleReconnect = (): void => {
+  const handleReconnect = useCallback((): void => {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
     }
@@ -132,7 +132,7 @@ export function useConnectionState() {
     reconnectTimeoutRef.current = setTimeout(() => {
       reconnectAttemptsRef.current++;
     }, delay);
-  };
+  }, []);
 
   useEffect(() => {
     try {
@@ -179,7 +179,7 @@ export function useConnectionState() {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, []);
+  }, [handleReconnect, processQueue]);
 
   return {
     ...connectionState,

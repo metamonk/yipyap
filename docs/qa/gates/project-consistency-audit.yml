@@ -1,0 +1,106 @@
+schema: 1
+story: 'PROJECT-AUDIT'
+story_title: 'Full Project Story and PRD Consistency Audit'
+gate: FAIL
+status_reason: 'Critical gaps: 19 PRD stories missing (42% scope), undocumented hotfixes, specification conflicts'
+reviewer: 'Quinn (Test Architect)'
+updated: '2025-01-23T10:00:00Z'
+
+top_issues:
+  - issue: '19 PRD-defined stories missing implementation'
+    severity: high
+    refs: ['Epic 3 Stories 3.2-3.7', 'Epic 4 Stories 4.2-4.8']
+    suggested_owner: po
+  - issue: 'Story 2.1 hotfix implemented features outside planned scope'
+    severity: high
+    refs: ['docs/stories/2.1.story.md']
+    suggested_owner: sm
+  - issue: 'Group participant limit conflict: 2-10 (implemented) vs 3-50 (PRD)'
+    severity: high
+    refs: ['Story 2.1', 'PRD Epic 4.1']
+    suggested_owner: po
+  - issue: 'Story 3.1 depends on non-existent Story 2.12'
+    severity: medium
+    refs: ['docs/stories/3.1.story.md']
+    suggested_owner: dev
+  - issue: 'Draft Story 4.1 in production stories folder'
+    severity: medium
+    refs: ['docs/stories/4.1.story.md']
+    suggested_owner: sm
+
+quality_score: 20  # 100 - (20*3 high) - (10*2 medium) = 20
+expires: '2025-02-06T10:00:00Z'
+
+evidence:
+  stories_analyzed: 31
+  prds_reviewed: 11
+  missing_stories: 19
+  stories_with_issues: 8
+
+coverage_analysis:
+  epic_1:
+    prd_stories: 6
+    implemented: 6
+    coverage_percent: 100
+  epic_2:
+    prd_stories: 8
+    implemented: 8
+    additional_stories: 7  # 2.9-2.15 not in PRD
+    coverage_percent: 100
+  epic_3:
+    prd_stories: 7
+    implemented: 1
+    coverage_percent: 14
+  epic_4:
+    prd_stories: 8
+    implemented: 0
+    coverage_percent: 0
+
+specification_conflicts:
+  - conflict: 'Group participant limits'
+    prd_spec: '3-50 participants'
+    implementation: '2-10 participants'
+    location: 'Story 2.1 vs PRD Epic 4.1'
+  - conflict: 'Read receipts data model'
+    prd_spec: 'status field approach'
+    implementation: 'readBy array approach'
+    location: 'Story 2.1 vs PRD Story 3.3'
+
+technical_debt:
+  - debt: 'Read receipt batching needs retry logic'
+    source: 'Story 2.1 hotfix'
+    priority: high
+  - debt: 'Notifications only work in foreground'
+    source: 'Story 2.1 hotfix'
+    priority: high
+  - debt: 'No group management features'
+    source: 'Story 2.1 hotfix'
+    priority: medium
+  - debt: 'Missing comprehensive test coverage'
+    source: 'Story 2.1 hotfix'
+    priority: high
+
+recommendations:
+  immediate:
+    - action: 'Create or remove missing Epic 3 stories (3.2-3.7)'
+      refs: ['docs/prd/epic-3-communication-status-notifications.md']
+      priority: critical
+    - action: 'Create or remove missing Epic 4 stories (4.2-4.8)'
+      refs: ['docs/prd/epic-4-group-chat-conversation-management.md']
+      priority: critical
+    - action: 'Resolve group participant limit specification conflict'
+      refs: ['Story 2.1', 'PRD Epic 4']
+      priority: high
+    - action: 'Create follow-up stories for Story 2.1 technical debt'
+      refs: ['docs/stories/2.1.story.md']
+      priority: high
+  future:
+    - action: 'Standardize story status field vocabulary'
+      refs: ['All story files']
+      priority: medium
+    - action: 'Implement formal dependency tracking system'
+      refs: ['Story 3.1 -> Story 2.12 broken reference']
+      priority: medium
+    - action: 'Move Draft Story 4.1 to drafts folder'
+      refs: ['docs/stories/4.1.story.md']
+      priority: low

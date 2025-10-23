@@ -4,9 +4,10 @@
  * @remarks
  * Provides a text input field with send button and character counter.
  * Enforces 1000 character limit and handles message submission.
+ * Publishes typing state to Firebase Realtime Database.
  */
 
-import React, { FC, useState } from 'react';
+import React, { FC, useState, useEffect, useRef } from 'react';
 import {
   View,
   TextInput,
@@ -17,6 +18,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { typingService } from '@/services/typingService';
 
 /** Maximum allowed message length in characters */
 const MAX_MESSAGE_LENGTH = 1000;
@@ -27,6 +29,12 @@ const MAX_MESSAGE_LENGTH = 1000;
 export interface MessageInputProps {
   /** Callback function called when user sends a message */
   onSend: (text: string) => Promise<void>;
+
+  /** ID of the conversation this input is for */
+  conversationId: string;
+
+  /** ID of the current user */
+  userId: string;
 
   /** Whether the input should be disabled (optional) */
   disabled?: boolean;
@@ -44,6 +52,8 @@ export interface MessageInputProps {
  * - Clears input after successful send
  * - Shows loading indicator while sending
  * - Displays error alert if send fails
+ * - Publishes typing state when user types (debounced 300ms)
+ * - Clears typing state when message sent or user stops typing
  *
  * @example
  * ```tsx
@@ -51,16 +61,69 @@ export interface MessageInputProps {
  *   onSend={async (text) => {
  *     await messageService.sendMessage(conversationId, userId, text);
  *   }}
+ *   conversationId="conv123"
+ *   userId="user456"
  * />
  * ```
  */
-export const MessageInput: FC<MessageInputProps> = ({ onSend, disabled = false }) => {
+export const MessageInput: FC<MessageInputProps> = ({
+  onSend,
+  conversationId,
+  userId,
+  disabled = false,
+}) => {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+
+  // Track typing state
+  const isTypingRef = useRef(false);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /**
+   * Handles text input changes and manages typing state
+   * @param newText - The updated text value
+   */
+  const handleTextChange = (newText: string) => {
+    setText(newText);
+
+    // If text is empty, stop typing
+    if (!newText.trim()) {
+      if (isTypingRef.current) {
+        typingService.setTyping(conversationId, userId, false);
+        isTypingRef.current = false;
+      }
+
+      // Clear any pending timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    // User is typing - publish state if not already published
+    if (!isTypingRef.current) {
+      typingService.setTyping(conversationId, userId, true);
+      isTypingRef.current = true;
+    }
+
+    // Reset 3-second auto-clear timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      if (isTypingRef.current) {
+        typingService.setTyping(conversationId, userId, false);
+        isTypingRef.current = false;
+      }
+    }, 3000);
+  };
 
   /**
    * Handles send button press
    * Validates input, calls onSend callback, and clears input on success
+   * Immediately clears typing state when message is sent
    */
   const handleSend = async () => {
     const trimmedText = text.trim();
@@ -73,8 +136,21 @@ export const MessageInput: FC<MessageInputProps> = ({ onSend, disabled = false }
     setSending(true);
     try {
       await onSend(trimmedText);
+
       // Clear input on successful send
       setText('');
+
+      // IMMEDIATELY clear typing state
+      if (isTypingRef.current) {
+        typingService.setTyping(conversationId, userId, false);
+        isTypingRef.current = false;
+      }
+
+      // Clear timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
     } catch (error) {
       // Show error to user
       console.error('Failed to send message:', error);
@@ -86,6 +162,23 @@ export const MessageInput: FC<MessageInputProps> = ({ onSend, disabled = false }
     }
   };
 
+  /**
+   * Cleanup typing state on unmount or navigation
+   */
+  useEffect(() => {
+    return () => {
+      // Clear typing state when component unmounts
+      if (isTypingRef.current) {
+        typingService.setTyping(conversationId, userId, false);
+      }
+
+      // Clear any pending timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, [conversationId, userId]);
+
   const isSendDisabled = !text.trim() || sending || disabled;
 
   return (
@@ -94,7 +187,7 @@ export const MessageInput: FC<MessageInputProps> = ({ onSend, disabled = false }
         <TextInput
           style={styles.input}
           value={text}
-          onChangeText={setText}
+          onChangeText={handleTextChange}
           placeholder="Type a message..."
           placeholderTextColor="#8E8E93"
           multiline

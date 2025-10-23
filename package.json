@@ -15,6 +15,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "test:integration": "INTEGRATION_TEST=true jest tests/integration/",
+    "test:integration:with-emulator": "firebase emulators:exec --only firestore,database,storage 'INTEGRATION_TEST=true jest tests/integration/'",
     "test:rules": "firebase emulators:exec --only firestore,storage 'NODE_OPTIONS=--experimental-vm-modules jest --config jest.rules.config.js'",
     "emulator": "firebase emulators:start --only firestore,storage",
     "prepare": "husky"

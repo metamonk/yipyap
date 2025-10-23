@@ -419,11 +419,13 @@ export class PerformanceMonitor {
     const retries = metric.retryCount > 0 ? ` (${metric.retryCount} retries)` : '';
     const fallback = metric.usedFallback ? ' [FALLBACK]' : '';
 
+    // eslint-disable-next-line no-console -- Development-only logging (guarded by method check)
     console.log(
       `${status} ${metric.operationType}: ${metric.duration}ms for ${metric.batchSize} items${retries}${fallback}`
     );
 
     if (!metric.success && metric.errorMessage) {
+      // eslint-disable-next-line no-console -- Development-only logging (guarded by method check)
       console.log(`  Error: ${metric.errorType} - ${metric.errorMessage}`);
     }
   }
@@ -520,6 +522,7 @@ export class PerformanceMonitor {
       oldMetrics.forEach(id => this.metrics.delete(id));
 
       if (oldMetrics.length > 0 && process.env.NODE_ENV === 'development') {
+        // eslint-disable-next-line no-console -- Development-only logging
         console.log(`Cleaned up ${oldMetrics.length} old performance metrics`);
       }
     }, 3600000); // Every hour

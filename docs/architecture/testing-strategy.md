@@ -175,4 +175,38 @@ describe('Messaging Flow', () => {
 });
 ```
 
+## Known Test Infrastructure Limitations
+
+### FirestoreError Mocking Limitation
+
+**Issue:** Jest's module mocking system creates incompatibility with `instanceof` checks for Firebase's `FirestoreError` class.
+
+**Affected Tests:**
+- `tests/unit/services/messageService.readReceipt.test.ts` (lines 305-386)
+- Any test that attempts to verify FirestoreError categorization logic
+
+**Root Cause:** When Jest mocks the `firebase/firestore` module, it creates a new class instance for `FirestoreError`. This causes `instanceof FirestoreError` checks in production code to fail in tests, even though the production code is correct.
+
+**Related Jest Issues:**
+- https://github.com/facebook/jest/issues/2549
+- https://github.com/jestjs/jest/issues/8279
+
+**Production Impact:** NONE - The production code is correct and works as expected:
+- Real FirestoreError instances thrown by Firebase pass instanceof checks correctly
+- The categorizeError function has proper fallback logic for generic Error objects
+- Error messages containing 'network' or 'offline' are correctly categorized even without instanceof check
+
+**Test Strategy:**
+- Tests verify the fallback error handling path (generic Error objects with message keywords)
+- Integration tests use real Firestore Emulator where FirestoreError instances are genuine
+- The fallback logic provides confidence that error categorization works in production
+
+**Future Resolution Options:**
+1. Wait for Jest to fix instanceof mocking limitations (long-term)
+2. Refactor error categorization to use error.code property checks instead of instanceof (may reduce type safety)
+3. Use real Firebase SDK in unit tests (increases test complexity and runtime)
+4. Accept this as documented limitation (current approach)
+
+**Recommendation:** Current approach (option 4) is acceptable. The production code is correct, integration tests verify real Firebase behavior, and unit tests verify the fallback logic.
+
 ---

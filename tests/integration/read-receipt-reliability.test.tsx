@@ -3,7 +3,7 @@
  * Tests retry logic, batch updates, network recovery, and UI feedback
  */
 
-import { render, waitFor, act } from '@testing-library/react-native';
+import { render, waitFor, act, renderHook } from '@testing-library/react-native';
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -689,19 +689,13 @@ describe('Read Receipt Reliability Integration', () => {
 
   describe('Network Monitor Hook Integration', () => {
     it('should trigger queue processing on network recovery', async () => {
-      // Use a test component to test the hook
-       
-      let hookResult: any;
-
-      function TestComponent() {
-        hookResult = useNetworkMonitor({
+      // Use renderHook to properly test the hook
+      const { result } = renderHook(() =>
+        useNetworkMonitor({
           autoProcessQueue: true,
           reconnectionDebounce: 100, // Short debounce for testing
-        });
-        return null;
-      }
-
-      render(<TestComponent />);
+        })
+      );
 
       // Simulate offline
       await act(async () => {
@@ -736,7 +730,7 @@ describe('Read Receipt Reliability Integration', () => {
 
       // Wait for debounced processing
       await waitFor(() => {
-        expect(hookResult.isConnected).toBe(true);
+        expect(result.current.isConnected).toBe(true);
       }, { timeout: 3000 });
 
       // Queue should be processed

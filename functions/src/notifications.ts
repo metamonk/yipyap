@@ -206,6 +206,7 @@ interface ConversationData {
   participantIds: string[];
   groupName?: string;
   unreadCount: Record<string, number>;
+  mutedBy?: Record<string, boolean>;
 }
 
 /**
@@ -383,6 +384,15 @@ export const sendMessageNotification = functions.firestore
       // Send notification to each recipient
       const sendPromises = recipients.map(async (recipient) => {
         try {
+          // Check if conversation is muted for this user
+          if (conversation.mutedBy?.[recipient.uid] === true) {
+            console.warn(
+              '[sendMessageNotification] Conversation muted for user:',
+              recipient.uid
+            );
+            return null;
+          }
+
           // Check if user has notifications enabled
           if (!shouldSendNotification(recipient, notificationType)) {
             console.warn(

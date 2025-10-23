@@ -11,14 +11,14 @@ so that I can have multi-person conversations.
 
 **Acceptance Criteria:**
 
-1. "New Group" option available from conversation list (alongside "New Conversation")
+1. Unified conversation creation automatically detects group mode when 2+ recipients selected
 2. Group creation flow allows selecting 2+ other users (minimum 3 total including creator)
-3. Maximum 50 participants enforced during group creation (validation with error message if exceeded)
-4. Group creation screen includes required group name field and optional group photo upload
-5. Group photo uploads to Firebase Storage with compression (similar to profile photos)
+3. Maximum 50 participants enforced during recipient selection (validation with error message if exceeded)
+4. Optional group name field appears automatically when multiple recipients selected
+5. Group photo upload available in group settings after group is created
 6. Firestore conversation document created with type='group', participantIds array, groupName, and groupPhotoURL
 7. All participants receive notification/update that they've been added to new group
-8. Group chat displays in conversation list for all participants immediately after creation
+8. Group chat displays in conversation list for all participants after first message sent
 9. Group chat view shows group name and photo in header (instead of 1:1 participant name)
 10. TypeScript interfaces updated to support group-specific fields in Conversation type
 

@@ -377,6 +377,7 @@ export class IdempotencyCache {
     expiredIds.forEach(id => this.remove(id));
 
     if (expiredIds.length > 0 && process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console -- Development-only logging
       console.log(`Cleaned up ${expiredIds.length} expired cache entries`);
     }
   }
@@ -432,6 +433,7 @@ export function makeIdempotent<T extends unknown[], R>(
       const cachedResult = cache.getResult(operationId);
       if (cachedResult !== undefined) {
         if (process.env.NODE_ENV !== 'production') {
+          // eslint-disable-next-line no-console -- Development-only logging
           console.log('Operation deduplicated, returning cached result');
         }
         return cachedResult as R;

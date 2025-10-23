@@ -3,7 +3,7 @@
  * @module components/conversation/UserSelectList
  */
 
-import React, { FC, useState, useEffect } from 'react';
+import React, { FC, useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -63,7 +63,7 @@ export const UserSelectList: FC<UserSelectListProps> = ({
   // Load users on mount
   useEffect(() => {
     loadUsers();
-  }, []);
+  }, [loadUsers]);
 
   // Filter users based on search
   useEffect(() => {
@@ -86,7 +86,7 @@ export const UserSelectList: FC<UserSelectListProps> = ({
     onSelectionChange(selectedUsers);
   }, [selectedUserIds, users, onSelectionChange]);
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     try {
       setLoading(true);
       const allUsers = await getAllUsers();
@@ -100,7 +100,7 @@ export const UserSelectList: FC<UserSelectListProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser?.uid]);
 
   const toggleUserSelection = (userId: string) => {
     const newSelection = new Set(selectedUserIds);

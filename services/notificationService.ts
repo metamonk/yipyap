@@ -8,7 +8,7 @@
 
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { Platform } from 'react-native';
+import { Platform, AppState } from 'react-native';
 import type { EventSubscription } from 'expo-modules-core';
 import type { Message } from '@/types/models';
 import type { NotificationPreferences } from '@/types/user';
@@ -36,20 +36,63 @@ export interface NotificationData {
 }
 
 /**
+ * Currently active conversation ID (null if not viewing any conversation)
+ */
+let activeConversationId: string | null = null;
+
+/**
+ * Sets the currently active conversation
+ * @param conversationId - The conversation ID or null if not viewing any
+ * @example
+ * ```typescript
+ * // When user navigates to a conversation
+ * setActiveConversation('conv-123');
+ *
+ * // When user leaves the conversation
+ * setActiveConversation(null);
+ * ```
+ */
+export function setActiveConversation(conversationId: string | null): void {
+  activeConversationId = conversationId;
+}
+
+/**
+ * Gets the currently active conversation ID
+ * @returns The active conversation ID or null
+ */
+export function getActiveConversation(): string | null {
+  return activeConversationId;
+}
+
+/**
  * Configure notification handler for foreground notifications
+ * Suppresses alerts for messages in the currently active conversation
  */
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     // Get notification data
     const data = notification.request.content.data as unknown as NotificationData;
 
-    // Check if we should show based on preferences (will be enhanced)
-    const shouldShow = await shouldShowNotification(data.type);
+    // Check if app is in foreground
+    const appState = AppState.currentState;
+    const isInForeground = appState === 'active';
+
+    // Check if notification is for active conversation
+    const isActiveConversation = data.conversationId === activeConversationId;
+
+    // Suppress notification if user is viewing the conversation
+    const shouldSuppress = isInForeground && isActiveConversation;
+
+    // Check preferences
+    const shouldShowByPreferences = await shouldShowNotification(data.type);
+
+    // Final decision: show if not suppressed AND preferences allow
+    const shouldShow = !shouldSuppress && shouldShowByPreferences;
 
     return {
       shouldShowAlert: shouldShow,
       shouldPlaySound: shouldShow,
-      shouldSetBadge: true,
+      shouldSetBadge: true, // Always update badge
       shouldShowBanner: shouldShow,
       shouldShowList: shouldShow,
     };

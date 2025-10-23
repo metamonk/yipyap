@@ -54,6 +54,44 @@ describe('MessageStatus', () => {
       expect(readElement).toBeTruthy();
     });
 
+    // Story 3.3 TEST-004: Verify blue checkmark color
+    it('displays checkmarks in blue color (#007AFF) for read status', () => {
+      const { getByTestId, UNSAFE_getAllByType } = render(<MessageStatus status="read" />);
+
+      const readElement = getByTestId('status-read');
+      expect(readElement).toBeTruthy();
+
+      // Get all Ionicons within the read status element
+      const checkmarks = UNSAFE_getAllByType(
+        require('@expo/vector-icons').Ionicons as React.ComponentType
+      );
+
+      // Should have 2 checkmarks (double checkmark)
+      expect(checkmarks.length).toBeGreaterThanOrEqual(2);
+
+      // Both checkmarks should be blue (#007AFF)
+      const blueCheckmarks = checkmarks.filter((icon) => icon.props.color === '#007AFF');
+      expect(blueCheckmarks.length).toBeGreaterThanOrEqual(2);
+
+      // Verify checkmark icon name
+      const checkmarkIcons = checkmarks.filter((icon) => icon.props.name === 'checkmark');
+      expect(checkmarkIcons.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('displays two checkmarks (double checkmark) for read status', () => {
+      const { UNSAFE_getAllByType } = render(<MessageStatus status="read" />);
+
+      const checkmarks = UNSAFE_getAllByType(
+        require('@expo/vector-icons').Ionicons as React.ComponentType
+      );
+
+      // Filter to checkmark icons only (in case there are other icons)
+      const checkmarkIcons = checkmarks.filter((icon) => icon.props.name === 'checkmark');
+
+      // Should have exactly 2 checkmarks
+      expect(checkmarkIcons.length).toBe(2);
+    });
+
     it('does not display retry button for read status', () => {
       const { queryByTestId } = render(<MessageStatus status="read" />);
 

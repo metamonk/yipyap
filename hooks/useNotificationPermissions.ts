@@ -80,6 +80,17 @@ export function useNotificationPermissions(
   const [loading, setLoading] = useState(true);
 
   /**
+   * Opens device settings to notification settings
+   */
+  const openSettings = useCallback(() => {
+    if (Platform.OS === 'ios') {
+      Linking.openURL('app-settings:');
+    } else {
+      Linking.openSettings();
+    }
+  }, []);
+
+  /**
    * Checks current permission status
    */
   const checkPermissions = useCallback(async () => {
@@ -186,25 +197,14 @@ export function useNotificationPermissions(
     } finally {
       setLoading(false);
     }
-  }, [onPermissionChange]);
-
-  /**
-   * Opens device settings to notification settings
-   */
-  const openSettings = useCallback(() => {
-    if (Platform.OS === 'ios') {
-      Linking.openURL('app-settings:');
-    } else {
-      Linking.openSettings();
-    }
-  }, []);
+  }, [onPermissionChange, openSettings]);
 
   // Check permissions on mount if requested
   useEffect(() => {
     if (checkOnMount) {
       checkPermissions();
     }
-  }, [checkOnMount]);
+  }, [checkOnMount, checkPermissions]);
 
   return {
     status,

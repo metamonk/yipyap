@@ -1,6 +1,5 @@
 module.exports = {
-  preset: "react-native",
-  testEnvironment: "node",
+  preset: "jest-expo",
   setupFilesAfterEnv: ["<rootDir>/tests/setup.ts"],
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json"],
   testMatch: [
@@ -27,7 +26,7 @@ module.exports = {
     "!**/__tests__/**"
   ],
   transformIgnorePatterns: [
-    "node_modules/(?!(react-native|@react-native|react-navigation|@react-navigation|expo|@expo|@unimodules|react-native-screens|react-native-safe-area-context|react-native-reanimated|react-native-gesture-handler|react-native-svg)/)"
+    "node_modules/(?!(react-native|@react-native|react-navigation|@react-navigation|expo|expo-.*|@expo|@expo/.*|@unimodules|react-native-screens|react-native-safe-area-context|react-native-reanimated|react-native-gesture-handler|react-native-svg|firebase|@firebase)/)"
   ],
   globals: {
     "ts-jest": {

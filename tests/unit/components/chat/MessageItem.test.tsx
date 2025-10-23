@@ -6,6 +6,7 @@ import React from 'react';
 import { render } from '@testing-library/react-native';
 import { Timestamp } from 'firebase/firestore';
 import { MessageItem } from '@/components/chat/MessageItem';
+import { MessageStatus } from '@/components/chat/MessageStatus';
 import type { Message } from '@/types/models';
 
 // Mock dependencies
@@ -14,6 +15,9 @@ jest.mock('@/components/common/Avatar', () => ({
 }));
 jest.mock('@/utils/dateHelpers', () => ({
   formatMessageTime: jest.fn(() => '10:45 AM'),
+}));
+jest.mock('@/components/chat/MessageStatus', () => ({
+  MessageStatus: jest.fn(() => null),
 }));
 
 describe('MessageItem', () => {
@@ -75,7 +79,10 @@ describe('MessageItem', () => {
       );
 
       const container = getByTestId('message-container');
-      expect(container.props.style).toContainEqual(
+      const styles = Array.isArray(container.props.style)
+        ? container.props.style
+        : [container.props.style];
+      expect(styles).toContainEqual(
         expect.objectContaining({ justifyContent: 'flex-end' })
       );
     });
@@ -109,6 +116,64 @@ describe('MessageItem', () => {
     });
   });
 
+  describe('Message Status Indicator Visibility (AC6)', () => {
+    beforeEach(() => {
+      // Clear mock calls before each test
+      (MessageStatus as jest.Mock).mockClear();
+    });
+
+    it('renders MessageStatus component when isOwnMessage is true', () => {
+      render(
+        <MessageItem
+          message={mockMessage}
+          isOwnMessage={true}
+          senderDisplayName="You"
+          senderPhotoURL={null}
+        />
+      );
+
+      // MessageStatus should be called (rendered)
+      expect(MessageStatus).toHaveBeenCalled();
+      // Verify the correct status prop was passed
+      const callArgs = (MessageStatus as jest.Mock).mock.calls[0][0];
+      expect(callArgs).toMatchObject({
+        status: mockMessage.status,
+      });
+    });
+
+    it('does NOT render MessageStatus component when isOwnMessage is false', () => {
+      render(
+        <MessageItem
+          message={mockMessage}
+          isOwnMessage={false}
+          senderDisplayName="John Doe"
+          senderPhotoURL={null}
+        />
+      );
+
+      // MessageStatus should NOT be called (not rendered)
+      expect(MessageStatus).not.toHaveBeenCalled();
+    });
+
+    it('passes correct status prop to MessageStatus for sent messages', () => {
+      const sendingMessage = { ...mockMessage, status: 'sending' as const };
+      render(
+        <MessageItem
+          message={sendingMessage}
+          isOwnMessage={true}
+          senderDisplayName="You"
+          senderPhotoURL={null}
+        />
+      );
+
+      // Verify the correct status prop was passed
+      const callArgs = (MessageStatus as jest.Mock).mock.calls[0][0];
+      expect(callArgs).toMatchObject({
+        status: 'sending',
+      });
+    });
+  });
+
   describe('Received Messages', () => {
     it('applies received message styles when isOwnMessage is false', () => {
       const { getByTestId } = render(
@@ -121,7 +186,10 @@ describe('MessageItem', () => {
       );
 
       const container = getByTestId('message-container');
-      expect(container.props.style).toContainEqual(
+      const styles = Array.isArray(container.props.style)
+        ? container.props.style
+        : [container.props.style];
+      expect(styles).toContainEqual(
         expect.objectContaining({ justifyContent: 'flex-start' })
       );
     });

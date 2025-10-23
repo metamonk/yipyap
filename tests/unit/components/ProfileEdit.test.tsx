@@ -13,6 +13,11 @@ import { getFirebaseAuth } from '@/services/firebase';
 import * as ImagePicker from 'expo-image-picker';
 import { Timestamp } from 'firebase/firestore';
 
+// Mock Alert globally before imports
+global.Alert = {
+  alert: jest.fn(),
+};
+
 // Mock dependencies
 jest.mock('@/services/userService');
 jest.mock('@/services/storageService');
@@ -320,6 +325,170 @@ describe('ProfileEditScreen', () => {
 
     await waitFor(() => {
       expect(mockRouter.back).toHaveBeenCalled();
+    });
+  });
+
+  // Story 3.3: Read Receipts Settings Tests (TEST-003)
+  describe('Read Receipts Settings Toggle', () => {
+    it('should render read receipts toggle', async () => {
+      render(<ProfileEditScreen />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Send Read Receipts')).toBeTruthy();
+        expect(screen.getByText("When disabled, others won't see when you've read their messages")).toBeTruthy();
+        expect(screen.getByTestId('read-receipts-toggle')).toBeTruthy();
+      });
+    });
+
+    it('should show current sendReadReceipts preference state', async () => {
+      const mockUserWithPreference = {
+        ...mockUserProfile,
+        settings: {
+          sendReadReceipts: false, // Disabled
+          notificationsEnabled: true,
+        },
+      };
+      (getUserProfile as jest.Mock).mockResolvedValue(mockUserWithPreference);
+
+      render(<ProfileEditScreen />);
+
+      await waitFor(() => {
+        const toggle = screen.getByTestId('read-receipts-toggle');
+        expect(toggle.props.value).toBe(false);
+      });
+    });
+
+    it('should enable save button when toggle changes', async () => {
+      render(<ProfileEditScreen />);
+
+      await waitFor(() => {
+        const toggle = screen.getByTestId('read-receipts-toggle');
+        expect(toggle.props.value).toBe(true); // Initial state from mock
+      });
+
+      // Toggle to false
+      const toggle = screen.getByTestId('read-receipts-toggle');
+      fireEvent(toggle, 'onValueChange', false);
+
+      await waitFor(() => {
+        const saveButton = screen.getByText('Save');
+        expect(saveButton).toBeTruthy();
+      });
+    });
+
+    it('should update user settings in Firestore when toggle changes', async () => {
+      (updateUserProfile as jest.Mock).mockResolvedValue(undefined);
+
+      render(<ProfileEditScreen />);
+
+      await waitFor(() => {
+        const toggle = screen.getByTestId('read-receipts-toggle');
+        expect(toggle).toBeTruthy();
+      });
+
+      // Toggle read receipts off
+      const toggle = screen.getByTestId('read-receipts-toggle');
+      fireEvent(toggle, 'onValueChange', false);
+
+      // Save changes
+      const saveButton = screen.getByText('Save');
+      fireEvent.press(saveButton);
+
+      await waitFor(() => {
+        expect(updateUserProfile).toHaveBeenCalledWith(
+          'test-uid',
+          expect.objectContaining({
+            settings: expect.objectContaining({
+              sendReadReceipts: false,
+            }),
+          })
+        );
+      });
+    });
+
+    it('should show optimistic UI update before Firestore confirms', async () => {
+      // Delay Firestore update to test optimistic UI
+      let resolveUpdate: () => void;
+      const updatePromise = new Promise<void>((resolve) => {
+        resolveUpdate = resolve;
+      });
+      (updateUserProfile as jest.Mock).mockImplementation(() => updatePromise);
+
+      render(<ProfileEditScreen />);
+
+      await waitFor(() => {
+        const toggle = screen.getByTestId('read-receipts-toggle');
+        expect(toggle.props.value).toBe(true);
+      });
+
+      // Toggle immediately shows new state
+      const toggle = screen.getByTestId('read-receipts-toggle');
+      fireEvent(toggle, 'onValueChange', false);
+
+      // Verify optimistic update (toggle shows false before Firestore confirms)
+      expect(toggle.props.value).toBe(false);
+
+      // Resolve Firestore update
+      resolveUpdate!();
+      await waitFor(() => {
+        expect(toggle.props.value).toBe(false);
+      });
+    });
+
+    it('should handle error when settings update fails', async () => {
+      (updateUserProfile as jest.Mock).mockRejectedValue(new Error('Failed to update settings'));
+
+      render(<ProfileEditScreen />);
+
+      await waitFor(() => {
+        const toggle = screen.getByTestId('read-receipts-toggle');
+        expect(toggle.props.value).toBe(true);
+      });
+
+      // Toggle off
+      const toggle = screen.getByTestId('read-receipts-toggle');
+      fireEvent(toggle, 'onValueChange', false);
+
+      // Attempt to save
+      const saveButton = screen.getByText('Save');
+      fireEvent.press(saveButton);
+
+      await waitFor(() => {
+        // Should revert to original state on error
+        const toggleAfterError = screen.getByTestId('read-receipts-toggle');
+        expect(toggleAfterError.props.value).toBe(true);
+      });
+    });
+
+    it('should disable toggle when saving', async () => {
+      let resolveUpdate: () => void;
+      const updatePromise = new Promise<void>((resolve) => {
+        resolveUpdate = resolve;
+      });
+      (updateUserProfile as jest.Mock).mockImplementation(() => updatePromise);
+
+      render(<ProfileEditScreen />);
+
+      await waitFor(() => {
+        const toggle = screen.getByTestId('read-receipts-toggle');
+        fireEvent(toggle, 'onValueChange', false);
+      });
+
+      // Start save
+      const saveButton = screen.getByText('Save');
+      fireEvent.press(saveButton);
+
+      await waitFor(() => {
+        const toggle = screen.getByTestId('read-receipts-toggle');
+        expect(toggle.props.disabled).toBe(true);
+      });
+
+      // Complete save
+      resolveUpdate!();
+      await waitFor(() => {
+        const toggle = screen.getByTestId('read-receipts-toggle');
+        expect(toggle.props.disabled).toBe(false);
+      });
     });
   });
 });

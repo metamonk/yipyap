@@ -11,16 +11,18 @@ so that I know if they're available to respond immediately.
 
 **Acceptance Criteria:**
 
-1. Firestore `presence` collection created to track user online/offline status
-2. User's presence document updates to "online" when app becomes active (foreground)
-3. User's presence document updates to "offline" with current timestamp when app backgrounds or user logs out
+1. Firebase Realtime Database `/presence/{userId}` path created to track user online/offline status
+2. User's presence data updates to "online" when app becomes active (foreground)
+3. User's presence data updates to "offline" with current timestamp when app backgrounds or user logs out
 4. Presence indicator (green dot = online, gray dot = offline) displays on conversation list next to each contact
 5. Presence indicator displays in chat view header showing conversation partner's status
-6. Real-time listener (onSnapshot) on presence collection updates UI when contact's status changes
+6. Real-time listener (RTDB onValue) on presence paths updates UI when contact's status changes
 7. "Last seen" timestamp displays for offline users (e.g., "Last seen 5 minutes ago", "Last seen yesterday")
-8. Presence updates handle edge cases (app crash, network disconnect) using Firestore onDisconnect() trigger
-9. TypeScript interface defined for Presence document structure
+8. Presence updates handle edge cases (app crash, network disconnect) using RTDB `.onDisconnect()` handlers
+9. TypeScript interface defined for PresenceData structure with multi-device support
 10. Presence system tested with multiple users going online/offline simultaneously
+
+**Note:** This story uses Firebase Realtime Database (not Firestore) per industry best practices for presence systems. Story 2.12 already implemented the foundational presence system using RTDB.
 
 ---
 
@@ -77,15 +79,17 @@ so that I know they're actively composing a response.
 **Acceptance Criteria:**
 
 1. Typing indicator displays in chat view when conversation partner is actively typing (e.g., "Alice is typing..." or animated dots)
-2. User's typing state publishes to Firestore presence or conversation metadata when text input has focus and content changes
+2. User's typing state publishes to Firebase Realtime Database at `/typing/{conversationId}/{userId}` when text input has focus and content changes
 3. Typing state clears when user stops typing for 3 seconds (debounced) or sends message
-4. Real-time listener updates typing indicator UI when partner's typing state changes
+4. Real-time listener (RTDB onValue) updates typing indicator UI when partner's typing state changes
 5. Typing indicator displays below last message or in chat header (design decision)
-6. Typing state uses ephemeral data (doesn't persist in message history, uses Firestore presence or temporary field)
+6. Typing state uses ephemeral data stored in RTDB with automatic cleanup via `.onDisconnect()`
 7. Typing indicator works in both 1:1 and group chats (group chat may show "Alice and Bob are typing")
-8. Typing state properly cleans up when user navigates away from chat or app backgrounds
-9. TypeScript types defined for typing state in conversation or presence metadata
+8. Typing state properly cleans up when user navigates away from chat or app backgrounds using `.onDisconnect()` handlers
+9. TypeScript types defined for typing state structure
 10. Typing indicator tested with multiple users typing simultaneously
+
+**Note:** This story uses Firebase Realtime Database (not Firestore) for ephemeral typing state, consistent with presence system. Story 2.12 already implemented typing indicator infrastructure using RTDB.
 
 ---
 

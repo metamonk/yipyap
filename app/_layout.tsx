@@ -10,18 +10,16 @@
  * - Protects (tabs) routes from unauthorized access
  */
 
-import { useEffect, useState } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { View, StyleSheet } from 'react-native';
+import { Stack, useSegments } from 'expo-router';
 import { initializeFirebase } from '@/services/firebase';
 import { useAuth } from '@/hooks/useAuth';
-import { useNetworkStatus } from '@/hooks/useNetworkStatus';
-import { usePresence } from '@/hooks/usePresence';
+import { useConnectionState } from '@/hooks/useConnectionState';
 import { useNotifications } from '@/hooks/useNotifications';
-import { useGlobalMessageListener } from '@/hooks/useGlobalMessageListener';
+import { useNotificationPermissions } from '@/hooks/useNotificationPermissions';
+import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { OfflineBanner } from '@/components/common/OfflineBanner';
 import { NotificationBanner } from '@/components/common/NotificationBanner';
-import { loadFonts } from '@/utils/loadFonts';
 
 // Initialize Firebase before React renders
 // This is safe because initializeFirebase checks if it's already initialized
@@ -31,84 +29,30 @@ initializeFirebase();
  * Root layout component that sets up navigation with auth protection
  */
 export default function RootLayout() {
-  const { isAuthenticated, hasProfile, isLoading } = useAuth();
-  const { connectionStatus } = useNetworkStatus();
+  const { isLoading } = useAuth();
   const segments = useSegments();
-  const router = useRouter();
-  const [isNavigating, setIsNavigating] = useState(true);
-  const [fontsLoaded, setFontsLoaded] = useState(false);
-
-  // Initialize presence tracking for authenticated users
-  usePresence();
-
-  // Initialize notifications
+  const connectionStatus = useConnectionState();
   const { lastNotification, clearLastNotification } = useNotifications();
 
-  // Initialize global message listener for notification triggering
-  useGlobalMessageListener();
-
-  // Preload icon fonts for offline support
-  useEffect(() => {
-    loadFonts()
-      .then(() => setFontsLoaded(true))
-      .catch((error) => {
-        console.warn('Font loading failed:', error);
-        // Continue anyway to prevent app from hanging
-        setFontsLoaded(true);
-      });
-  }, []);
-
-  // Implement protected route pattern
-  // Redirects based on authentication state, profile status, and current route
-  useEffect(() => {
-    // Don't redirect while still checking auth state
-    if (isLoading) return;
-
-    // Check if user is in the auth group (login, register, forgot-password, username-setup)
-    const inAuthGroup = segments[0] === '(auth)';
-    const onUsernameSetup = (segments as string[])[1] === 'username-setup';
-
-    if (!isAuthenticated && !inAuthGroup) {
-      // User is not authenticated and trying to access protected routes
-      // Redirect to login
-      router.replace('/(auth)/login');
-    } else if (isAuthenticated && !hasProfile && !onUsernameSetup) {
-      // User is authenticated but has no profile and not on username setup
-      // Redirect to username setup
-      router.replace('/(auth)/username-setup');
-    } else if (isAuthenticated && hasProfile && inAuthGroup && !onUsernameSetup) {
-      // User is authenticated with profile but still on auth screens (not username setup)
-      // Redirect to main app
-      router.replace('/(tabs)');
-    } else if (isAuthenticated && hasProfile && onUsernameSetup) {
-      // User is authenticated with profile but on username setup
-      // Redirect to main app (profile already exists)
-      router.replace('/(tabs)');
-    } else if (isAuthenticated && hasProfile && !inAuthGroup && segments.length < 1) {
-      // User is authenticated with profile but on root index route
-      // Redirect to main app
-      router.replace('/(tabs)');
+  const getStatusBarStyle = () => {
+    if (segments[0] === '(auth)') {
+      return 'dark';
     }
+    return 'light';
+  };
 
-    // Mark navigation as complete after navigation guard logic runs
-    // This prevents screen flash by only rendering content after redirect decision is made
-    // Use async wrapper to avoid setState in effect warning
-    const completeNavigation = async () => {
-      setIsNavigating(false);
-    };
-    completeNavigation();
-  }, [isAuthenticated, hasProfile, isLoading, segments, router]);
+  const getStatusBarBackgroundColor = () => {
+    if (segments[0] === '(auth)') {
+      return 'transparent';
+    }
+    return '#ffffff';
+  };
 
-  // Show loading screen while checking authentication state, navigating, or loading fonts
-  // This prevents screen flash by not rendering routes until navigation guard completes
-  // and ensures fonts are loaded before any icons try to render
-  if (isLoading || isNavigating || !fontsLoaded) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4285F4" />
-      </View>
-    );
-  }
+  useNotificationPermissions();
+  useOfflineSync();
+
+  // Note: Navigation is now handled by app/index.tsx
+  // This layout just provides the Stack navigator structure
 
   return (
     <>

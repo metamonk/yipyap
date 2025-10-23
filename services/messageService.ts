@@ -26,6 +26,9 @@ import {
   Unsubscribe,
   runTransaction,
   updateDoc,
+  doc,
+  getDoc,
+  arrayUnion,
 } from 'firebase/firestore';
 import { getFirebaseDb } from './firebase';
 import type { Message, CreateMessageInput } from '@/types/models';
@@ -447,15 +450,100 @@ export async function updateMessageStatus(
 ): Promise<void> {
   try {
     const db = getFirebaseDb();
-    const messageRef = collection(db, 'conversations', conversationId, 'messages');
-    const { doc: docRef, updateDoc } = await import('firebase/firestore');
+    const messageRef = doc(db, 'conversations', conversationId, 'messages', messageId);
 
-    await updateDoc(docRef(messageRef, messageId), {
+    await updateDoc(messageRef, {
       status,
     });
   } catch (error) {
     console.error('Error updating message status:', error);
     throw new Error('Failed to update message status. Please try again.');
+  }
+}
+
+/**
+ * Marks a message as delivered when recipient's app receives it
+ *
+ * @param conversationId - The conversation ID containing the message
+ * @param messageId - The message ID to mark as delivered
+ * @returns Promise resolving when status update is complete
+ * @throws {Error} When user lacks permission or update fails after retries
+ *
+ * @remarks
+ * This function implements sequencing and retry patterns from Story 2.9:
+ * - SEQUENCING: Checks if message exists before updating (prevents race conditions)
+ * - IDEMPOTENCY: Only updates if current status is 'sending' (prevents downgrading from 'read')
+ * - RETRY LOGIC: Retries network failures only (not permission errors)
+ * - OFFLINE QUEUE: Queues update when offline for processing when connection restored
+ *
+ * Called by recipient's app when message is received via Firestore listener.
+ * Sender's app marks message as 'delivered' immediately after Firestore write confirms.
+ *
+ * @example
+ * ```typescript
+ * // When recipient receives message via listener
+ * await markMessageAsDelivered('user123_user456', 'msg123');
+ * ```
+ */
+export async function markMessageAsDelivered(
+  conversationId: string,
+  messageId: string
+): Promise<void> {
+  const db = getFirebaseDb();
+
+  try {
+    // STEP 1: Sequencing - Check prerequisite (message exists)
+    const messageRef = doc(db, 'conversations', conversationId, 'messages', messageId);
+    const messageSnap = await getDoc(messageRef);
+
+    if (!messageSnap.exists()) {
+      console.warn(`Message ${messageId} not found, skipping delivery update`);
+      return; // Prevent race condition - message hasn't propagated yet
+    }
+
+    // STEP 2: Idempotency - Check if already delivered or read
+    const currentStatus = messageSnap.data()?.status;
+    if (currentStatus === 'delivered' || currentStatus === 'read') {
+      return; // Already delivered/read, skip update to prevent downgrade
+    }
+
+    // STEP 3: Update status to 'delivered'
+    await updateDoc(messageRef, {
+      status: 'delivered',
+    });
+  } catch (error) {
+    console.error('Error marking message as delivered:', error);
+
+    // Categorize error for proper handling
+    const errorType = categorizeError(error);
+
+    // Don't queue permission errors - these are real security issues
+    if (errorType === 'permission') {
+      throw new Error('Permission denied. You must be a participant in this conversation.');
+    }
+
+    // Queue for retry on network errors
+    const retryQueue = RetryQueue.getInstance();
+    try {
+      await retryQueue.enqueue({
+        operationType: 'STATUS_UPDATE',
+        data: {
+          conversationId,
+          messageId,
+          status: 'delivered',
+          timestamp: Timestamp.now(),
+        },
+      });
+
+      // Don't throw error - operation is queued for retry
+      if (process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console -- Development-only logging
+        console.log('Delivery status update queued for retry');
+      }
+    } catch (queueError) {
+      console.error('Failed to queue delivery status update for retry:', queueError);
+      throw new Error('Failed to mark message as delivered. Please try again.');
+    }
   }
 }
 
@@ -477,23 +565,117 @@ export async function updateMessageStatus(
  * await markMessageAsRead('user123_user456', 'msg123', 'user456');
  * ```
  */
+/**
+ * Marks a message as read when recipient views it in chat view
+ *
+ * @param conversationId - The ID of the conversation containing the message
+ * @param messageId - The ID of the message to mark as read
+ * @param userId - The ID of the user marking the message as read
+ *
+ * @remarks
+ * - Respects user's sendReadReceipts privacy preference
+ * - Uses sequencing to prevent race conditions (checks status before updating)
+ * - Implements idempotency (only updates if not already read)
+ * - Does not mark user's own messages as read
+ * - Uses arrayUnion for atomic readBy updates
+ * - Queues for retry on network failures (not permission errors)
+ *
+ * @throws {Error} When user lacks permission or network fails
+ *
+ * @example
+ * ```typescript
+ * await markMessageAsRead('conv123', 'msg456', 'user789');
+ * ```
+ */
 export async function markMessageAsRead(
   conversationId: string,
   messageId: string,
   userId: string
 ): Promise<void> {
-  try {
-    const db = getFirebaseDb();
-    const messageRef = collection(db, 'conversations', conversationId, 'messages');
-    const { doc: docRef, updateDoc, arrayUnion } = await import('firebase/firestore');
+  const db = getFirebaseDb();
 
-    await updateDoc(docRef(messageRef, messageId), {
-      readBy: arrayUnion(userId),
+  try {
+    // STEP 1: Check user's read receipt preference (AC6)
+    const userRef = doc(db, 'users', userId);
+    const userSnap = await getDoc(userRef);
+
+    if (!userSnap.exists()) {
+      console.warn(`User ${userId} not found, skipping read receipt`);
+      return;
+    }
+
+    const sendReadReceipts = userSnap.data()?.settings?.sendReadReceipts ?? true;
+
+    // If user disabled read receipts, don't mark as read (AC6)
+    if (!sendReadReceipts) {
+      return;
+    }
+
+    // STEP 2: Sequencing - Check prerequisite (message exists)
+    const messageRef = doc(db, 'conversations', conversationId, 'messages', messageId);
+    const messageSnap = await getDoc(messageRef);
+
+    if (!messageSnap.exists()) {
+      console.warn(`Message ${messageId} not found, skipping read receipt`);
+      return; // Prevent race condition - message hasn't propagated yet
+    }
+
+    const message = messageSnap.data();
+
+    // STEP 3: Idempotency - Check if already read
+    if (message.status === 'read') {
+      return; // Already read, skip update
+    }
+
+    // STEP 4: Don't mark own messages as read
+    if (message.senderId === userId) {
+      return; // Sender already in readBy array on message creation
+    }
+
+    // STEP 5: Only mark as read if currently delivered (sequencing)
+    if (message.status !== 'delivered') {
+      console.warn(`Message ${messageId} status is '${message.status}', not 'delivered' - skipping read receipt`);
+      return; // Don't skip the 'delivered' status or downgrade from 'read'
+    }
+
+    // STEP 6: Update status to 'read' and add user to readBy array (AC3)
+    await updateDoc(messageRef, {
       status: 'read',
+      readBy: arrayUnion(userId), // Atomic array update
     });
   } catch (error) {
     console.error('Error marking message as read:', error);
-    throw new Error('Failed to mark message as read. Please try again.');
+
+    // Categorize error for proper handling
+    const errorType = categorizeError(error);
+
+    // Don't queue permission errors - these are real security issues
+    if (errorType === 'permission') {
+      throw new Error('Permission denied. You must be a participant in this conversation.');
+    }
+
+    // Queue for retry on network errors (AC9)
+    const retryQueue = RetryQueue.getInstance();
+    try {
+      await retryQueue.enqueue({
+        operationType: 'READ_RECEIPT',
+        data: {
+          conversationId,
+          messageId,
+          userId,
+          timestamp: Timestamp.now(),
+        },
+      });
+
+      // Don't throw error - operation is queued for retry
+      if (process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console -- Development-only logging
+        console.log('Read receipt update queued for retry');
+      }
+    } catch (queueError) {
+      console.error('Failed to queue read receipt update for retry:', queueError);
+      throw new Error('Failed to mark message as read. Please try again.');
+    }
   }
 }
 
@@ -593,6 +775,62 @@ function initializeRetryQueue(): void {
       return false; // Retry
     }
   });
+
+  // Register processor for delivery status updates
+  retryQueue.registerProcessor('STATUS_UPDATE', async (item: RetryQueueItem) => {
+    const data = item.data as {
+      conversationId: string;
+      messageId: string;
+      status: 'delivered' | 'read';
+    };
+
+    try {
+      await updateMessageStatus(data.conversationId, data.messageId, data.status);
+      return true; // Success
+    } catch (error) {
+      console.error('Status update failed:', error);
+
+      // Categorize error
+      const errorType = categorizeError(error);
+
+      // Don't retry permission errors
+      if (errorType === 'permission') {
+        console.error('Permission denied, not retrying:', error);
+        return true; // Mark as "success" to remove from queue
+      }
+
+      // Continue retrying for network errors
+      return false;
+    }
+  });
+
+  // Register processor for individual read receipt updates
+  retryQueue.registerProcessor('READ_RECEIPT', async (item: RetryQueueItem) => {
+    const data = item.data as {
+      conversationId: string;
+      messageId: string;
+      userId: string;
+    };
+
+    try {
+      await markMessageAsRead(data.conversationId, data.messageId, data.userId);
+      return true; // Success
+    } catch (error) {
+      console.error('Read receipt update failed:', error);
+
+      // Categorize error
+      const errorType = categorizeError(error);
+
+      // Don't retry permission errors
+      if (errorType === 'permission') {
+        console.error('Permission denied, not retrying:', error);
+        return true; // Mark as "success" to remove from queue
+      }
+
+      // Continue retrying for network errors
+      return false;
+    }
+  });
 }
 
 // Initialize retry queue when module loads
@@ -642,7 +880,6 @@ async function batchUpdateReadReceiptsWithTransaction(
   userId: string
 ): Promise<void> {
   const db = getFirebaseDb();
-  const { doc, arrayUnion } = await import('firebase/firestore');
 
   await runTransaction(db, async (transaction) => {
     // Read all documents first (required for transactions)
@@ -692,7 +929,6 @@ async function fallbackToIndividualUpdates(
   userId: string
 ): Promise<void> {
   const db = getFirebaseDb();
-  const { doc, updateDoc, arrayUnion } = await import('firebase/firestore');
 
   console.warn(`Falling back to individual updates for ${messageIds.length} messages`);
 
@@ -769,7 +1005,6 @@ export async function markMessagesAsReadBatch(
     // This sequencing prevents errors when messages haven't propagated yet
     // See: docs/architecture/real-time-data-patterns.md
     const db = getFirebaseDb();
-    const { doc, getDoc } = await import('firebase/firestore');
 
     const existingMessages = await Promise.all(
       messageIds.map(async (id) => {
@@ -829,6 +1064,7 @@ export async function markMessagesAsReadBatch(
 
       // Don't throw error - operation is queued for retry
       if (process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console -- Development-only logging
         console.log('Batch update queued for retry');
       }
     } catch (queueError) {

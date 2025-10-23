@@ -47,32 +47,42 @@ export function useOfflineSync(): OfflineSyncState {
   const [wasOffline, setWasOffline] = useState(false);
 
   useEffect(() => {
-    // Track when we go offline to detect transitions
-    if (connectionStatus === 'offline') {
-      setWasOffline(true);
-    }
+    const handleConnectionChange = async () => {
+      // Track when we go offline to detect transitions
+      if (connectionStatus === 'offline') {
+        setWasOffline(true);
+      }
 
-    // When we come back online after being offline, trigger sync
-    if (connectionStatus === 'online' && wasOffline) {
-      // Firestore handles actual syncing automatically via enableNetwork
-      // We just update UI state to show sync in progress
-      setSyncState((prev) => ({ ...prev, isSyncing: true }));
+      // When we come back online after being offline, trigger sync
+      if (connectionStatus === 'online' && wasOffline) {
+        // Firestore handles actual syncing automatically via enableNetwork
+        // We just update UI state to show sync in progress
+        setSyncState((prev) => ({ ...prev, isSyncing: true }));
 
-      // Simulate sync completion after a delay
-      // In reality, Firestore syncs in the background
-      const timer = setTimeout(() => {
-        setSyncState({
-          queuedMessageCount: 0,
-          isSyncing: false,
-          lastSyncTime: new Date(),
-          syncSuccessRate: 100,
-        });
+        // Simulate sync completion after a delay
+        // In reality, Firestore syncs in the background
+        const timer = setTimeout(() => {
+          setSyncState({
+            queuedMessageCount: 0,
+            isSyncing: false,
+            lastSyncTime: new Date(),
+            syncSuccessRate: 100,
+          });
 
-        setWasOffline(false);
-      }, 2000);
+          setWasOffline(false);
+        }, 2000);
 
-      return () => clearTimeout(timer);
-    }
+        return () => clearTimeout(timer);
+      }
+    };
+
+    const cleanup = handleConnectionChange();
+    return () => {
+      // Handle cleanup if the async function returns a cleanup function
+      if (cleanup instanceof Promise) {
+        cleanup.then((fn) => fn && fn());
+      }
+    };
   }, [connectionStatus, wasOffline]);
 
   return syncState;

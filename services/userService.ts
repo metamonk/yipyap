@@ -15,6 +15,7 @@ import {
   FirestoreError,
   collection,
   query,
+  where,
   getDocs,
   limit,
   orderBy,
@@ -115,11 +116,12 @@ export async function createUserProfile(
 
       // Create user profile document
       // Note: Only include photoURL if it has a value (Firestore doesn't accept undefined)
-      const newUser: Omit<User, 'createdAt' | 'updatedAt'> & { photoURL?: string } = {
+      const newUser: Omit<User, 'createdAt' | 'updatedAt'> & { photoURL?: string; displayNameLower?: string } = {
         uid,
         email,
         username: normalizedUsername,
         displayName: displayName.trim(),
+        displayNameLower: displayName.trim().toLowerCase(), // Add for search optimization
         ...(photoUri && { photoURL: photoUri }),
         presence: {
           status: 'offline',
@@ -242,6 +244,7 @@ export async function updateUserProfile(
 
     if (updates.displayName !== undefined) {
       updateData.displayName = updates.displayName.trim();
+      updateData.displayNameLower = updates.displayName.trim().toLowerCase(); // Add for search optimization
     }
 
     if (updates.photoURL !== undefined) {
@@ -326,7 +329,8 @@ export async function getUserByUsername(username: string): Promise<User | null> 
  */
 export async function searchUsers(searchQuery: string): Promise<User[]> {
   try {
-    if (!searchQuery || searchQuery.trim().length === 0) {
+    // Require at least 2 characters for search to prevent excessive queries
+    if (!searchQuery || searchQuery.trim().length < 2) {
       return [];
     }
 
@@ -340,31 +344,53 @@ export async function searchUsers(searchQuery: string): Promise<User[]> {
       return [user];
     }
 
-    // Strategy 2: Fetch recent users and filter client-side by display name
-    // NOTE: This is a limitation of Firestore. For production-scale search,
-    // consider integrating Algolia or Elasticsearch in Phase 2.
-    const recentUsersQuery = query(
+    // Strategy 2: Try prefix matching on username
+    // This allows searching for users by typing the beginning of their username
+    const endQuery = normalizedQuery + '\uf8ff'; // Unicode character after 'z'
+    
+    const usernameQuery = query(
       usersRef,
-      limit(100) // Limit to prevent excessive reads
+      where('username', '>=', normalizedQuery),
+      where('username', '<=', endQuery),
+      orderBy('username'),
+      limit(20)
     );
 
-    const snapshot = await getDocs(recentUsersQuery);
-    const users: User[] = [];
+    const usernameSnapshot = await getDocs(usernameQuery);
+    const results: User[] = [];
+    const seenUids = new Set<string>();
 
-    snapshot.forEach((doc) => {
+    usernameSnapshot.forEach((doc) => {
       const userData = doc.data() as User;
-
-      // Filter by display name (case-insensitive partial match)
-      if (
-        userData.displayName.toLowerCase().includes(normalizedQuery) ||
-        userData.username.toLowerCase().includes(normalizedQuery)
-      ) {
-        users.push(userData);
-      }
+      results.push(userData);
+      seenUids.add(userData.uid);
     });
 
-    // Limit results to 20
-    return users.slice(0, 20);
+    // Strategy 3: If we have less than 10 results, also try email search
+    // This is more targeted than fetching all users
+    if (results.length < 10 && normalizedQuery.includes('@')) {
+      const emailQuery = query(
+        usersRef,
+        where('email', '==', normalizedQuery),
+        limit(1)
+      );
+
+      const emailSnapshot = await getDocs(emailQuery);
+      
+      emailSnapshot.forEach((doc) => {
+        const userData = doc.data() as User;
+        
+        // Skip if we already have this user
+        if (!seenUids.has(userData.uid)) {
+          results.push(userData);
+          seenUids.add(userData.uid);
+        }
+      });
+    }
+
+    // Return up to 20 results
+    // Note: For browsing all users, use getPaginatedUsers() instead
+    return results.slice(0, 20);
   } catch (error) {
     console.error('Error searching users:', error);
     throw new Error('Failed to search users. Please try again.');

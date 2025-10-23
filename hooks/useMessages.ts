@@ -10,7 +10,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { FlatList, Alert } from 'react-native';
 import { Timestamp, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
-import { subscribeToMessages, sendMessage, getMessages, DraftConversationParams } from '@/services/messageService';
+import { subscribeToMessages, sendMessage, getMessages, DraftConversationParams, markMessageAsDelivered } from '@/services/messageService';
 import { useNetworkStatus } from './useNetworkStatus';
 import type { Message } from '@/types/models';
 
@@ -225,6 +225,9 @@ export function useMessages(
       return;
     }
 
+    // Debounce map for delivery status updates to prevent excessive calls
+    const deliveryUpdateDebounce = new Map<string, ReturnType<typeof setTimeout>>();
+
     // Subscribe to messages (for real-time updates of new messages)
     const unsubscribe = subscribeToMessages(
       conversationId,
@@ -312,6 +315,51 @@ export function useMessages(
           });
         });
 
+        /**
+         * DELIVERY STATUS UPDATE LOGIC (Story 3.2)
+         *
+         * When recipient's app receives a message via Firestore listener,
+         * mark it as delivered to update the sender's UI.
+         *
+         * This implements:
+         * - Recipient detection: Only mark delivered if current user is recipient (not sender)
+         * - Idempotency: markMessageAsDelivered checks if already delivered/read
+         * - Debouncing: Prevent excessive status updates when multiple messages arrive
+         * - Offline handling: markMessageAsDelivered queues update if offline
+         */
+        updatedMessages.forEach((message) => {
+          // Only mark as delivered if:
+          // 1. Current user is NOT the sender (recipient only)
+          // 2. Message has 'sending' status (not already delivered/read)
+          // 3. Message has valid timestamp (serverTimestamp resolved)
+          if (
+            message.senderId !== currentUserId &&
+            message.status === 'sending' &&
+            message.timestamp
+          ) {
+            // Debounce delivery status updates (500ms delay)
+            // This prevents multiple rapid calls when messages arrive in quick succession
+            const existingTimeout = deliveryUpdateDebounce.get(message.id);
+            if (existingTimeout) {
+              clearTimeout(existingTimeout);
+            }
+
+            const timeout = setTimeout(async () => {
+              try {
+                await markMessageAsDelivered(conversationId, message.id);
+                deliveryUpdateDebounce.delete(message.id);
+              } catch (error) {
+                // Error is logged and queued inside markMessageAsDelivered
+                // Don't throw - delivery status update is not critical for UI
+                console.error('Failed to mark message as delivered:', error);
+                deliveryUpdateDebounce.delete(message.id);
+              }
+            }, 500);
+
+            deliveryUpdateDebounce.set(message.id, timeout);
+          }
+        });
+
         // Auto-scroll to bottom when new messages arrive
         scrollToBottom();
       },
@@ -320,12 +368,15 @@ export function useMessages(
 
     // Cleanup subscription on unmount
     return () => {
+      // Clear all pending debounce timeouts
+      deliveryUpdateDebounce.forEach((timeout) => clearTimeout(timeout));
+      deliveryUpdateDebounce.clear();
       unsubscribe();
     };
     // scrollToBottom is intentionally omitted from deps to prevent infinite loops
     // It's only called in the callback and doesn't need to trigger re-subscription
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversationId, loading, optimisticMessages, draftParams]);
+  }, [conversationId, loading, optimisticMessages, draftParams, currentUserId]);
 
   /**
    * Scroll to bottom after initial load

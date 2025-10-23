@@ -197,6 +197,7 @@ export function useNetworkMonitor(options: UseNetworkMonitorOptions = {}): Netwo
 
     if (queueSize > 0) {
       if (process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console -- Development-only logging
         console.log(`Processing ${queueSize} queued operations after reconnection`);
       }
       setIsQueueProcessing(true);
@@ -236,6 +237,7 @@ export function useNetworkMonitor(options: UseNetworkMonitorOptions = {}): Netwo
     if (wasConnected && !isNowConnected) {
       // Going offline
       if (process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console -- Development-only logging
         console.log('Network connection lost');
       }
 
@@ -249,6 +251,7 @@ export function useNetworkMonitor(options: UseNetworkMonitorOptions = {}): Netwo
     } else if (!wasConnected && isNowConnected) {
       // Coming online - debounce to avoid rapid reconnection attempts
       if (process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console -- Development-only logging
         console.log('Network connection restored, waiting for stability...');
       }
 
@@ -260,6 +263,7 @@ export function useNetworkMonitor(options: UseNetworkMonitorOptions = {}): Netwo
       // Set new debounced reconnection handler
       reconnectionTimerRef.current = setTimeout(() => {
         if (process.env.NODE_ENV !== 'production') {
+          // eslint-disable-next-line no-console -- Development-only logging
           console.log('Network connection stable, processing queued operations');
         }
         onOnline?.();

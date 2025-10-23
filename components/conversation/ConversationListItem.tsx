@@ -8,7 +8,9 @@
 
 import React, { FC, memo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/common/Avatar';
+import { CompositeAvatar } from '@/components/common/CompositeAvatar';
 import { Badge } from '@/components/common/Badge';
 import { PresenceIndicator } from '@/components/PresenceIndicator';
 import { formatRelativeTime } from '@/utils/dateHelpers';
@@ -24,7 +26,7 @@ export interface ConversationListItemProps {
   /** Current user's ID (used to determine unread count) */
   currentUserId: string;
 
-  /** Display name of the other participant */
+  /** Display name of the other participant (for direct chats) or group name */
   otherParticipantName: string;
 
   /** Profile photo URL of the other participant (null if no photo) */
@@ -32,6 +34,13 @@ export interface ConversationListItemProps {
 
   /** User ID of the other participant (for direct conversations, used for presence) */
   otherParticipantId?: string;
+
+  /** Array of participants for group conversations */
+  participants?: Array<{
+    photoURL?: string | null;
+    displayName: string;
+    uid: string;
+  }>;
 
   /** Callback fired when the conversation item is pressed */
   onPress: (conversationId: string) => void;
@@ -69,12 +78,16 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
     otherParticipantName,
     otherParticipantPhoto,
     otherParticipantId,
+    participants,
     onPress,
   }) => {
-    const { id, type, lastMessage, lastMessageTimestamp, unreadCount } = conversation;
+    const { id, type, lastMessage, lastMessageTimestamp, unreadCount, mutedBy } = conversation;
 
     // Get unread count for current user
     const userUnreadCount = unreadCount[currentUserId] || 0;
+
+    // Check if conversation is muted by current user
+    const isMuted = mutedBy?.[currentUserId] === true;
 
     // Truncate last message to 50 characters
     const MAX_PREVIEW_LENGTH = 50;
@@ -99,7 +112,18 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
       >
         {/* Avatar with presence indicator */}
         <View style={styles.avatarContainer}>
-          <Avatar photoURL={otherParticipantPhoto} displayName={otherParticipantName} size={48} />
+          {type === 'group' && participants ? (
+            <CompositeAvatar
+              participants={participants.filter(p => p.uid !== currentUserId)}
+              size={48}
+            />
+          ) : (
+            <Avatar
+              photoURL={otherParticipantPhoto}
+              displayName={otherParticipantName}
+              size={48}
+            />
+          )}
           {type === 'direct' && otherParticipantId && (
             <View style={styles.presenceIndicator}>
               <PresenceIndicator userId={otherParticipantId} size="small" hideWhenOffline={false} />
@@ -109,11 +133,21 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
 
         {/* Content */}
         <View style={styles.content}>
-          {/* Top row: name and timestamp */}
+          {/* Top row: name, mute icon, and timestamp */}
           <View style={styles.topRow}>
-            <Text style={styles.name} numberOfLines={1}>
-              {otherParticipantName}
-            </Text>
+            <View style={styles.nameContainer}>
+              <Text style={styles.name} numberOfLines={1}>
+                {otherParticipantName}
+              </Text>
+              {isMuted && (
+                <Ionicons
+                  name="notifications-off-outline"
+                  size={16}
+                  color="#8E8E93"
+                  style={styles.muteIcon}
+                />
+              )}
+            </View>
             <Text style={styles.timestamp}>{timeAgo}</Text>
           </View>
 
@@ -163,12 +197,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 4,
   },
-  name: {
+  nameContainer: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  name: {
     fontSize: 16,
     fontWeight: '600',
     color: '#000000',
-    marginRight: 8,
+    flexShrink: 1,
+  },
+  muteIcon: {
+    marginLeft: 6,
   },
   timestamp: {
     fontSize: 12,

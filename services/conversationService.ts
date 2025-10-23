@@ -1044,3 +1044,76 @@ export async function removeMember(
     throw new Error('Failed to remove member. Please try again.');
   }
 }
+
+/**
+ * Mutes or unmutes notifications for a conversation for a specific user
+ *
+ * @param conversationId - Conversation ID to mute/unmute
+ * @param userId - User ID muting/unmuting the conversation
+ * @param mute - True to mute, false to unmute
+ * @returns Promise resolving when update is complete
+ * @throws {Error} When user is not a participant or update fails
+ *
+ * @remarks
+ * - Updates the mutedBy map in the conversation document
+ * - Only participants can mute/unmute conversations
+ * - Muted conversations still show unread badges, only push notifications are suppressed
+ * - The Cloud Function respects this mute setting when sending push notifications
+ *
+ * @example
+ * ```typescript
+ * // Mute conversation
+ * await muteConversation('user123_user456', 'user123', true);
+ *
+ * // Unmute conversation
+ * await muteConversation('user123_user456', 'user123', false);
+ * ```
+ */
+export async function muteConversation(
+  conversationId: string,
+  userId: string,
+  mute: boolean
+): Promise<void> {
+  try {
+    const db = getFirebaseDb();
+
+    // Get conversation to check if user is a participant
+    const conversation = await getConversation(conversationId);
+    if (!conversation) {
+      throw new Error('Conversation not found.');
+    }
+
+    if (!conversation.participantIds.includes(userId)) {
+      throw new Error('You must be a participant in this conversation to mute it.');
+    }
+
+    // Update mutedBy field for this user
+    const conversationRef = doc(db, 'conversations', conversationId);
+    await updateDoc(conversationRef, {
+      [`mutedBy.${userId}`]: mute,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('Error muting conversation:', error);
+
+    // Re-throw custom error messages (from validation logic)
+    if (error instanceof Error && error.message.includes('Conversation not found')) {
+      throw error;
+    }
+
+    if (error instanceof Error && error.message.includes('must be a participant')) {
+      throw error;
+    }
+
+    const firestoreError = error as FirestoreError;
+    if (firestoreError.code === 'not-found') {
+      throw new Error('Conversation not found.');
+    }
+
+    if (firestoreError.code === 'permission-denied') {
+      throw new Error('Permission denied. Unable to update mute settings.');
+    }
+
+    throw new Error('Failed to update mute settings. Please try again.');
+  }
+}

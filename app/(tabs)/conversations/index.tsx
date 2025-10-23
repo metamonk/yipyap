@@ -109,26 +109,34 @@ export default function ConversationListScreen() {
     }
 
     const fetchParticipants = async () => {
-      const newParticipantData: Record<string, User> = { ...participantData };
-
       try {
-        // Get unique participant IDs (excluding current user)
+        // Get unique participant IDs (excluding current user) that we don't have data for
         const participantIds = new Set<string>();
         conversations.forEach((conv) => {
           conv.participantIds.forEach((id) => {
-            if (id !== currentUserId && !newParticipantData[id]) {
+            if (id !== currentUserId) {
               participantIds.add(id);
             }
           });
         });
 
-        // Fetch user data for each participant
+        // Check which ones we already have
+        const missingIds = Array.from(participantIds).filter(
+          id => !participantData[id]
+        );
+
+        if (missingIds.length === 0) {
+          return; // All data already fetched
+        }
+
+        // Fetch only missing user data
+        const fetchedUsers: Record<string, User> = {};
         await Promise.all(
-          Array.from(participantIds).map(async (userId) => {
+          missingIds.map(async (userId) => {
             try {
               const user = await getUserProfile(userId);
               if (user) {
-                newParticipantData[userId] = user;
+                fetchedUsers[userId] = user;
               }
             } catch (err) {
               console.error(`Failed to fetch user ${userId}:`, err);
@@ -136,14 +144,20 @@ export default function ConversationListScreen() {
           })
         );
 
-        setParticipantData(newParticipantData);
+        // Update state only if we fetched new data
+        if (Object.keys(fetchedUsers).length > 0) {
+          setParticipantData(prev => ({
+            ...prev,
+            ...fetchedUsers
+          }));
+        }
       } catch (err) {
         console.error('Error fetching participants:', err);
       }
     };
 
     fetchParticipants();
-  }, [conversations, currentUserId]);
+  }, [conversations, currentUserId]); // Removed participantData from deps
 
   /**
    * Get the other participant in a direct conversation
@@ -168,21 +182,8 @@ export default function ConversationListScreen() {
       return;
     }
 
-    // Show options for direct message or group chat
-    Alert.alert('New Conversation', 'What type of conversation would you like to start?', [
-      {
-        text: 'Direct Message',
-        onPress: () => router.push('/conversations/new'),
-      },
-      {
-        text: 'Group Chat',
-        onPress: () => router.push('/(tabs)/conversations/new-group'),
-      },
-      {
-        text: 'Cancel',
-        style: 'cancel',
-      },
-    ]);
+    // Navigate to unified new conversation screen
+    router.push('/(tabs)/conversations/new');
   };
 
   /**

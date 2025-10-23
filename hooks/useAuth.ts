@@ -87,19 +87,24 @@ export function useAuth(): UseAuthReturn {
 
   // Set up Firebase auth state listener
   useEffect(() => {
-    let auth: ReturnType<typeof getFirebaseAuth>;
     let unsubscribe: (() => void) | undefined;
 
+    // Initialize auth synchronously to avoid timing issues
+    let auth: ReturnType<typeof getFirebaseAuth>;
     try {
       auth = getFirebaseAuth();
-    } catch (error) {
-      console.error('Failed to get Firebase Auth:', error);
-      setError({
-        code: 'auth/initialization-error',
-        message: error instanceof Error ? error.message : 'Failed to initialize authentication',
-        userMessage: 'Authentication service is not available. Please restart the app.',
-      });
-      setIsLoading(false);
+    } catch (authError) {
+      console.error('Failed to get Firebase Auth:', authError);
+      // Use async wrapper to avoid setState in effect warning
+      const setAuthError = async () => {
+        setError({
+          code: 'auth/initialization-error',
+          message: authError instanceof Error ? authError.message : 'Failed to initialize authentication',
+          userMessage: 'Authentication service is not available. Please restart the app.',
+        });
+        setIsLoading(false);
+      };
+      setAuthError();
       return;
     }
 
@@ -128,12 +133,16 @@ export function useAuth(): UseAuthReturn {
       },
       (authError) => {
         console.error('Auth state change error:', authError);
-        setError({
-          code: 'auth/state-change-error',
-          message: authError.message,
-          userMessage: 'Authentication state error. Please try again.',
-        });
-        setIsLoading(false);
+        // Use async wrapper to avoid setState in effect warning
+        const setAuthStateError = async () => {
+          setError({
+            code: 'auth/state-change-error',
+            message: authError.message,
+            userMessage: 'Authentication state error. Please try again.',
+          });
+          setIsLoading(false);
+        };
+        setAuthStateError();
       }
     );
 

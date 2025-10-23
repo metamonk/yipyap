@@ -23,9 +23,16 @@ import type { Message, Conversation } from '@/types/models';
 export function useGlobalMessageListener() {
   const { user } = useAuth();
   const pathname = usePathname();
-  const lastMessageTimestampRef = useRef<number>(Date.now());
+  const lastMessageTimestampRef = useRef<number>(0);
   const userCacheRef = useRef<Map<string, string>>(new Map());
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+
+  // Initialize timestamp in useEffect to avoid calling impure function during render
+  useEffect(() => {
+    if (lastMessageTimestampRef.current === 0) {
+      lastMessageTimestampRef.current = Date.now();
+    }
+  }, []);
 
   useEffect(() => {
     // Track app state changes

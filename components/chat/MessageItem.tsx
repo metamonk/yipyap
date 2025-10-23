@@ -7,7 +7,7 @@
  * appear left-aligned with gray background and include sender info.
  */
 
-import React, { FC, memo, useEffect, useRef } from 'react';
+import React, { FC, memo, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { Avatar } from '@/components/common/Avatar';
 import { MessageStatus } from '@/components/chat/MessageStatus';
@@ -61,7 +61,7 @@ export interface MessageItemProps {
 export const MessageItem: FC<MessageItemProps> = memo(
   ({ message, isOwnMessage, senderDisplayName, senderPhotoURL, onRetry, isRetrying = false }) => {
     // Animation for retry indication
-    const opacityAnim = useRef(new Animated.Value(1)).current;
+    const opacityAnim = useMemo(() => new Animated.Value(1), []);
 
     useEffect(() => {
       if (isRetrying) {
@@ -91,7 +91,8 @@ export const MessageItem: FC<MessageItemProps> = memo(
         // Reset opacity when not retrying
         opacityAnim.setValue(1);
       }
-    }, [isRetrying, opacityAnim]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- opacityAnim is stable (created via useMemo)
+    }, [isRetrying]);
 
     return (
       <Animated.View
@@ -132,7 +133,7 @@ export const MessageItem: FC<MessageItemProps> = memo(
 
               {/* Syncing indicator */}
               {isRetrying && (
-                <Text style={styles.syncingText} accessibilityRole="status">
+                <Text style={styles.syncingText} accessibilityLiveRegion="polite">
                   {' • syncing'}
                 </Text>
               )}

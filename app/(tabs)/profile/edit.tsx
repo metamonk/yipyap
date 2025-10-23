@@ -19,6 +19,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Switch,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -42,6 +43,7 @@ export default function ProfileEditScreen() {
   const [displayName, setDisplayName] = useState('');
   const [photoUri, setPhotoUri] = useState<string | undefined>();
   const [currentPhotoURL, setCurrentPhotoURL] = useState<string | undefined>();
+  const [sendReadReceipts, setSendReadReceipts] = useState(true);
 
   // UI state
   const [isLoading, setIsLoading] = useState(true);
@@ -49,22 +51,20 @@ export default function ProfileEditScreen() {
   const [displayNameError, setDisplayNameError] = useState<string | undefined>();
 
   useEffect(() => {
-    loadProfile();
-  }, []);
+    const loadProfile = async () => {
+      if (!currentUser) {
+        Alert.alert('Error', 'You must be logged in to edit your profile.');
+        router.replace('/(auth)/login');
+        return;
+      }
 
-  const loadProfile = async () => {
-    if (!currentUser) {
-      Alert.alert('Error', 'You must be logged in to edit your profile.');
-      router.replace('/(auth)/login');
-      return;
-    }
-
-    try {
-      const profile = await getUserProfile(currentUser.uid);
-      if (profile) {
-        setOriginalProfile(profile);
-        setDisplayName(profile.displayName);
-        setCurrentPhotoURL(profile.photoURL);
+      try {
+        const profile = await getUserProfile(currentUser.uid);
+        if (profile) {
+          setOriginalProfile(profile);
+          setDisplayName(profile.displayName);
+          setCurrentPhotoURL(profile.photoURL);
+          setSendReadReceipts(profile.settings?.sendReadReceipts ?? true);
       } else {
         Alert.alert('Error', 'Profile not found.');
         router.replace('/(tabs)/profile');
@@ -76,7 +76,10 @@ export default function ProfileEditScreen() {
     } finally {
       setIsLoading(false);
     }
-  };
+    };
+
+    loadProfile();
+  }, [currentUser, router]);
 
   /**
    * Handles profile photo selection from device gallery
@@ -147,7 +150,7 @@ export default function ProfileEditScreen() {
       }
 
       // Update profile in Firestore
-      const updates: { displayName?: string; photoURL?: string } = {};
+      const updates: { displayName?: string; photoURL?: string; settings?: { sendReadReceipts: boolean } } = {};
 
       if (optimisticDisplayName !== originalProfile.displayName) {
         updates.displayName = optimisticDisplayName;
@@ -155,6 +158,11 @@ export default function ProfileEditScreen() {
 
       if (newPhotoURL !== originalProfile.photoURL) {
         updates.photoURL = newPhotoURL;
+      }
+
+      // Update read receipts setting if changed
+      if (sendReadReceipts !== (originalProfile.settings?.sendReadReceipts ?? true)) {
+        updates.settings = { sendReadReceipts };
       }
 
       // Only update if there are changes
@@ -165,6 +173,10 @@ export default function ProfileEditScreen() {
         setOriginalProfile({
           ...originalProfile,
           ...updates,
+          settings: {
+            ...originalProfile.settings,
+            ...updates.settings,
+          },
         });
       }
 
@@ -188,6 +200,7 @@ export default function ProfileEditScreen() {
       setDisplayName(originalProfile.displayName);
       setCurrentPhotoURL(originalProfile.photoURL);
       setPhotoUri(undefined);
+      setSendReadReceipts(originalProfile.settings?.sendReadReceipts ?? true);
 
       const errorMessage = error instanceof Error ? error.message : 'Failed to update profile';
       Alert.alert('Error', errorMessage);
@@ -196,7 +209,10 @@ export default function ProfileEditScreen() {
     }
   };
 
-  const hasChanges = displayName.trim() !== originalProfile?.displayName || photoUri !== undefined;
+  const hasChanges =
+    displayName.trim() !== originalProfile?.displayName ||
+    photoUri !== undefined ||
+    sendReadReceipts !== (originalProfile?.settings?.sendReadReceipts ?? true);
 
   if (isLoading) {
     return (
@@ -303,6 +319,30 @@ export default function ProfileEditScreen() {
               <Text style={styles.label}>Email</Text>
               <View style={styles.readOnlyInput}>
                 <Text style={styles.readOnlyText}>{originalProfile.email}</Text>
+              </View>
+            </View>
+
+            {/* Privacy Settings Section */}
+            <View style={styles.settingsSection}>
+              <Text style={styles.sectionHeader}>Privacy</Text>
+
+              {/* Read Receipts Toggle */}
+              <View style={styles.settingRow}>
+                <View style={styles.settingTextContainer}>
+                  <Text style={styles.settingLabel}>Send Read Receipts</Text>
+                  <Text style={styles.settingHint}>
+                    When disabled, others won&apos;t see when you&apos;ve read their messages
+                  </Text>
+                </View>
+                <Switch
+                  value={sendReadReceipts}
+                  onValueChange={setSendReadReceipts}
+                  disabled={isSaving}
+                  trackColor={{ false: '#E5E5E5', true: '#34C759' }}
+                  thumbColor="#FFFFFF"
+                  ios_backgroundColor="#E5E5E5"
+                  testID="read-receipts-toggle"
+                />
               </View>
             </View>
           </View>
@@ -421,5 +461,39 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#FF3B30',
     marginTop: 4,
+  },
+  settingsSection: {
+    paddingHorizontal: 24,
+    paddingTop: 32,
+    marginTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
+  sectionHeader: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000000',
+    marginBottom: 16,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+  },
+  settingTextContainer: {
+    flex: 1,
+    marginRight: 16,
+  },
+  settingLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#000000',
+    marginBottom: 4,
+  },
+  settingHint: {
+    fontSize: 13,
+    color: '#666666',
+    lineHeight: 18,
   },
 });
