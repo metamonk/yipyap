@@ -31,7 +31,7 @@ initializeFirebase();
 export default function RootLayout() {
   const { isLoading } = useAuth();
   const segments = useSegments();
-  const connectionStatus = useConnectionState();
+  const { connected } = useConnectionState();
   const { lastNotification, clearLastNotification } = useNotifications();
 
   const getStatusBarStyle = () => {
@@ -56,7 +56,7 @@ export default function RootLayout() {
 
   return (
     <>
-      <OfflineBanner isOffline={connectionStatus === 'offline'} />
+      <OfflineBanner isOffline={!connected} />
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />

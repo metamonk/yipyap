@@ -6,11 +6,9 @@
  */
 
 import { initializeApp, FirebaseApp } from 'firebase/app';
-import {
-  Auth,
-  initializeAuth,
-  getReactNativePersistence
-} from 'firebase/auth';
+import { Auth, initializeAuth, getAuth } from 'firebase/auth';
+// @ts-expect-error - getReactNativePersistence is exported in React Native builds but not in TS types
+import { getReactNativePersistence } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   initializeFirestore,
@@ -67,12 +65,24 @@ export function initializeFirebase(): void {
     app = initializeApp(Config.firebase);
 
     // Initialize services
-    // Initialize Firebase Auth with AsyncStorage persistence for React Native
-    // This ensures auth state persists between app sessions
-    auth = initializeAuth(app, {
-      persistence: getReactNativePersistence(AsyncStorage)
-    });
-    console.log('[Firebase] Auth initialized with AsyncStorage persistence');
+    // Configure Firebase Auth with AsyncStorage persistence for React Native
+    // This ensures session persistence across dev server restarts and app reloads
+    try {
+      if (typeof getReactNativePersistence === 'function') {
+        auth = initializeAuth(app, {
+          persistence: getReactNativePersistence(AsyncStorage),
+        });
+      } else {
+        throw new Error('getReactNativePersistence not available');
+      }
+    } catch (persistenceError) {
+      console.warn(
+        'Failed to initialize with AsyncStorage persistence, using default:',
+        persistenceError
+      );
+      // Fallback to default persistence (should still work in RN)
+      auth = getAuth(app);
+    }
 
     // Initialize Firestore with memory cache for React Native
     // Note: React Native doesn't support IndexedDB, so we use memory cache
