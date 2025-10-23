@@ -6,8 +6,9 @@
  * last message preview, timestamp, and unread count badge.
  */
 
-import React, { FC, memo } from 'react';
+import React, { FC, memo, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/common/Avatar';
 import { CompositeAvatar } from '@/components/common/CompositeAvatar';
@@ -44,6 +45,27 @@ export interface ConversationListItemProps {
 
   /** Callback fired when the conversation item is pressed */
   onPress: (conversationId: string) => void;
+
+  /** Callback fired when archive/unarchive action is triggered */
+  onArchive?: (conversationId: string, archive: boolean) => void;
+
+  /** Callback fired when delete action is triggered */
+  onDelete?: (conversationId: string) => void;
+
+  /** Whether this item is in the archived list (shows Unarchive instead of Archive) */
+  isArchived?: boolean;
+
+  /** Whether selection mode is active (Story 4.7) */
+  isSelectionMode?: boolean;
+
+  /** Whether this conversation is currently selected (Story 4.7) */
+  isSelected?: boolean;
+
+  /** Callback fired when the conversation item is long-pressed (Story 4.7) */
+  onLongPress?: () => void;
+
+  /** Callback fired when the conversation selection is toggled (Story 4.7) */
+  onToggleSelect?: () => void;
 }
 
 /**
@@ -80,8 +102,16 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
     otherParticipantId,
     participants,
     onPress,
+    onArchive,
+    onDelete,
+    isArchived = false,
+    isSelectionMode = false,
+    isSelected = false,
+    onLongPress,
+    onToggleSelect,
   }) => {
     const { id, type, lastMessage, lastMessageTimestamp, unreadCount, mutedBy } = conversation;
+    const swipeableRef = useRef<Swipeable>(null);
 
     // Get unread count for current user
     const userUnreadCount = unreadCount[currentUserId] || 0;
@@ -100,29 +130,92 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
     const timeAgo = formatRelativeTime(lastMessageTimestamp);
 
     const handlePress = () => {
-      onPress(id);
+      // In selection mode, tap toggles selection instead of navigating
+      if (isSelectionMode && onToggleSelect) {
+        onToggleSelect();
+      } else {
+        onPress(id);
+      }
     };
 
-    return (
+    const handleArchive = () => {
+      if (onArchive) {
+        onArchive(id, !isArchived); // Toggle archive state
+        swipeableRef.current?.close();
+      }
+    };
+
+    const handleDelete = () => {
+      if (onDelete) {
+        onDelete(id);
+        swipeableRef.current?.close();
+      }
+    };
+
+    const renderRightActions = () => {
+      if (!onArchive && !onDelete) return null;
+
+      return (
+        <View style={styles.actionsContainer}>
+          {onArchive && (
+            <TouchableOpacity
+              style={styles.archiveAction}
+              onPress={handleArchive}
+              activeOpacity={0.7}
+              testID={isArchived ? 'unarchive-button' : 'archive-button'}
+            >
+              <Ionicons
+                name={isArchived ? 'archive-outline' : 'archive'}
+                size={24}
+                color="#FFFFFF"
+              />
+              <Text style={styles.archiveText}>{isArchived ? 'Unarchive' : 'Archive'}</Text>
+            </TouchableOpacity>
+          )}
+          {onDelete && (
+            <TouchableOpacity
+              style={styles.deleteAction}
+              onPress={handleDelete}
+              activeOpacity={0.7}
+              testID="delete-button"
+            >
+              <Ionicons name="trash-outline" size={24} color="#FFFFFF" />
+              <Text style={styles.deleteText}>Delete</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      );
+    };
+
+    const conversationItem = (
       <TouchableOpacity
-        style={styles.container}
+        style={[styles.container, isSelected && styles.selectedContainer]}
         onPress={handlePress}
+        onLongPress={onLongPress}
+        delayLongPress={500}
         testID="conversation-item"
         activeOpacity={0.7}
       >
+        {/* Checkbox (Story 4.7) - shown in selection mode */}
+        {isSelectionMode && (
+          <View style={styles.checkboxContainer}>
+            <Ionicons
+              name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
+              size={24}
+              color={isSelected ? '#007AFF' : '#999'}
+            />
+          </View>
+        )}
+
         {/* Avatar with presence indicator */}
         <View style={styles.avatarContainer}>
           {type === 'group' && participants ? (
             <CompositeAvatar
-              participants={participants.filter(p => p.uid !== currentUserId)}
+              participants={participants.filter((p) => p.uid !== currentUserId)}
               size={48}
             />
           ) : (
-            <Avatar
-              photoURL={otherParticipantPhoto}
-              displayName={otherParticipantName}
-              size={48}
-            />
+            <Avatar photoURL={otherParticipantPhoto} displayName={otherParticipantName} size={48} />
           )}
           {type === 'direct' && otherParticipantId && (
             <View style={styles.presenceIndicator}>
@@ -154,7 +247,9 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
           {/* Bottom row: message preview and badge */}
           <View style={styles.bottomRow}>
             <Text style={styles.preview} numberOfLines={1}>
-              {messagePreview}
+              {type === 'group' && conversation.participantIds
+                ? `${conversation.participantIds.length} members • ${messagePreview}`
+                : messagePreview}
             </Text>
             {userUnreadCount > 0 && (
               <View style={styles.badgeContainer}>
@@ -165,6 +260,22 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
         </View>
       </TouchableOpacity>
     );
+
+    // If onArchive or onDelete is provided, wrap in Swipeable
+    if (onArchive || onDelete) {
+      return (
+        <Swipeable
+          ref={swipeableRef}
+          renderRightActions={renderRightActions}
+          overshootRight={false}
+        >
+          {conversationItem}
+        </Swipeable>
+      );
+    }
+
+    // Otherwise return plain item
+    return conversationItem;
   }
 );
 
@@ -177,6 +288,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5E5',
     backgroundColor: '#FFFFFF',
+  },
+  selectedContainer: {
+    backgroundColor: '#E3F2FD',
+  },
+  checkboxContainer: {
+    justifyContent: 'center',
+    marginRight: 12,
   },
   avatarContainer: {
     position: 'relative',
@@ -229,5 +347,34 @@ const styles = StyleSheet.create({
   },
   badgeContainer: {
     marginLeft: 8,
+  },
+  actionsContainer: {
+    flexDirection: 'row',
+  },
+  archiveAction: {
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    height: '100%',
+  },
+  archiveText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  deleteAction: {
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    height: '100%',
+  },
+  deleteText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
   },
 });

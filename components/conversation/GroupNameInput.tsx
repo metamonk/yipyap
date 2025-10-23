@@ -6,15 +6,8 @@
  * Features smooth animations and character counting.
  */
 
-import React, { useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  Animated,
-  Platform,
-} from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, TextInput, StyleSheet, Animated, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 interface GroupNameInputProps {
@@ -45,11 +38,11 @@ export const GroupNameInput: React.FC<GroupNameInputProps> = ({
   onChange,
   isVisible,
   maxLength = 50,
-  placeholder = 'Group name (optional)',
+  placeholder = 'Group name (required)',
   testID,
 }) => {
-  const animatedHeight = useRef(new Animated.Value(0)).current;
-  const animatedOpacity = useRef(new Animated.Value(0)).current;
+  const [animatedHeight] = useState(() => new Animated.Value(0));
+  const [animatedOpacity] = useState(() => new Animated.Value(0));
   const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -90,10 +83,10 @@ export const GroupNameInput: React.FC<GroupNameInputProps> = ({
   const isNearLimit = value.length > maxLength * 0.9; // Warn when 90% full
   const remainingChars = maxLength - value.length;
 
-  // @ts-ignore - Animated.Value has internal _value property
-  if (!isVisible && animatedHeight._value === 0) {
-    // Don't render if not visible and animation is complete
-    return null;
+  // Don't render if not visible initially (avoid unnecessary rendering)
+  // Note: We can't check Animated.Value during render, so we rely on isVisible
+  if (!isVisible) {
+    // Component will animate out before unmounting
   }
 
   return (
@@ -123,12 +116,7 @@ export const GroupNameInput: React.FC<GroupNameInputProps> = ({
       </View>
 
       <View style={styles.inputContainer}>
-        <Ionicons
-          name="people"
-          size={24}
-          color="#8E8E93"
-          style={styles.icon}
-        />
+        <Ionicons name="people" size={24} color="#8E8E93" style={styles.icon} />
         <TextInput
           ref={inputRef}
           style={styles.input}
@@ -141,14 +129,12 @@ export const GroupNameInput: React.FC<GroupNameInputProps> = ({
           autoCorrect={true}
           returnKeyType="done"
           accessibilityLabel="Group name"
-          accessibilityHint={`Optional group name, maximum ${maxLength} characters`}
+          accessibilityHint={`Required group name, maximum ${maxLength} characters`}
           testID={`${testID}-input`}
         />
       </View>
 
-      <Text style={styles.helperText}>
-        Give your group a memorable name (optional)
-      </Text>
+      <Text style={styles.helperText}>Give your group a memorable name</Text>
     </Animated.View>
   );
 };

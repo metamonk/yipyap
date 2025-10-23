@@ -10,7 +10,7 @@
  */
 
 import React, { FC } from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 /**
@@ -22,6 +22,15 @@ export interface MessageStatusProps {
 
   /** Callback when retry button tapped (for failed messages) */
   onRetry?: () => void;
+
+  /** Whether this is a group conversation (shows read count for groups) */
+  isGroupChat?: boolean;
+
+  /** Number of participants who have read the message (for group chats) */
+  readByCount?: number;
+
+  /** Callback when read receipt is tapped (for group chats) */
+  onReadReceiptPress?: () => void;
 }
 
 /**
@@ -33,14 +42,28 @@ export interface MessageStatusProps {
  * - Only displays for messages sent by the current user
  * - Position below message text, right-aligned
  * - Failed status includes retry button
+ * - For group chats, shows read count: "Read by 5" instead of just checkmarks
+ * - For group chats with no reads, shows "Delivered" text
  *
  * @example
  * ```tsx
+ * // 1:1 chat
  * <MessageStatus status="sending" />
+ * <MessageStatus status="read" />
  * <MessageStatus status="failed" onRetry={handleRetry} />
+ *
+ * // Group chat
+ * <MessageStatus status="delivered" isGroupChat={true} readByCount={0} />
+ * <MessageStatus status="read" isGroupChat={true} readByCount={5} />
  * ```
  */
-export const MessageStatus: FC<MessageStatusProps> = ({ status, onRetry }) => {
+export const MessageStatus: FC<MessageStatusProps> = ({
+  status,
+  onRetry,
+  isGroupChat = false,
+  readByCount = 0,
+  onReadReceiptPress,
+}) => {
   if (status === 'sending') {
     return (
       <View style={styles.container} testID="status-sending">
@@ -52,22 +75,34 @@ export const MessageStatus: FC<MessageStatusProps> = ({ status, onRetry }) => {
   if (status === 'delivered') {
     return (
       <View style={styles.container} testID="status-delivered">
-        <View style={styles.checkmarkContainer}>
-          <Ionicons name="checkmark" size={14} color="#8E8E93" />
-          <Ionicons name="checkmark" size={14} color="#8E8E93" style={styles.doubleCheck} />
+        <View style={styles.statusRow}>
+          {isGroupChat && <Text style={styles.statusText}>Delivered</Text>}
+          <View style={styles.checkmarkContainer}>
+            <Ionicons name="checkmark" size={14} color="#8E8E93" />
+            <Ionicons name="checkmark" size={14} color="#8E8E93" style={styles.doubleCheck} />
+          </View>
         </View>
       </View>
     );
   }
 
   if (status === 'read') {
-    // Phase 2 feature - blue double checkmark
+    // Blue double checkmark for read status
+    // For group chats, show read count (tappable to open detail modal)
     return (
       <View style={styles.container} testID="status-read">
-        <View style={styles.checkmarkContainer}>
-          <Ionicons name="checkmark" size={14} color="#007AFF" />
-          <Ionicons name="checkmark" size={14} color="#007AFF" style={styles.doubleCheck} />
-        </View>
+        <TouchableOpacity
+          style={styles.statusRow}
+          onPress={isGroupChat && onReadReceiptPress ? onReadReceiptPress : undefined}
+          disabled={!isGroupChat || !onReadReceiptPress}
+          activeOpacity={isGroupChat && onReadReceiptPress ? 0.7 : 1}
+        >
+          {isGroupChat && <Text style={styles.readCountText}>Read by {readByCount}</Text>}
+          <View style={styles.checkmarkContainer}>
+            <Ionicons name="checkmark" size={14} color="#007AFF" />
+            <Ionicons name="checkmark" size={14} color="#007AFF" style={styles.doubleCheck} />
+          </View>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -94,6 +129,20 @@ const styles = StyleSheet.create({
   container: {
     alignSelf: 'flex-end',
     marginTop: 4,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statusText: {
+    fontSize: 11,
+    color: '#8E8E93',
+  },
+  readCountText: {
+    fontSize: 11,
+    color: '#007AFF',
+    fontWeight: '500',
   },
   checkmarkContainer: {
     flexDirection: 'row',

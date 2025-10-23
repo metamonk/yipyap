@@ -87,46 +87,48 @@ export function useAuth(): UseAuthReturn {
 
   // Set up Firebase auth state listener
   useEffect(() => {
-
     let unsubscribe: (() => void) | undefined;
-    let timeoutId: NodeJS.Timeout;
+    let timeoutId: ReturnType<typeof setTimeout>;
 
-    // Initialize auth synchronously to avoid timing issues
-    let auth: ReturnType<typeof getFirebaseAuth>;
-    try {
+    const initializeAuth = () => {
+      try {
+        const auth = getFirebaseAuth();
+        return auth;
+      } catch (authError) {
+        console.error('Failed to get Firebase Auth:', authError);
+        // Defer state updates to avoid synchronous setState in effect
+        Promise.resolve().then(() => {
+          setError({
+            code: 'auth/initialization-error',
+            message:
+              authError instanceof Error
+                ? authError.message
+                : 'Failed to initialize authentication',
+            userMessage: 'Authentication service is not available. Please restart the app.',
+          });
+          setIsLoading(false);
+        });
+        return null;
+      }
+    };
 
-      auth = getFirebaseAuth();
-
-    } catch (authError) {
-      console.error('Failed to get Firebase Auth:', authError);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      setError({
-        code: 'auth/initialization-error',
-        message: authError instanceof Error ? authError.message : 'Failed to initialize authentication',
-        userMessage: 'Authentication service is not available. Please restart the app.',
-      });
-      setIsLoading(false);
+    const auth = initializeAuth();
+    if (!auth) {
       return;
     }
 
     // Set a timeout to handle cases where auth state never changes
     // This ensures the app doesn't get stuck in loading state
     timeoutId = setTimeout(() => {
-
       if (isLoading) {
         setIsLoading(false);
       }
     }, 5000); // 5 second timeout
 
     // Listen for auth state changes
-
-    // Get current user immediately to check if already authenticated
-    const currentUser = auth.currentUser;
-
     unsubscribe = onAuthStateChanged(
       auth,
       async (firebaseUser) => {
-
         // Clear the timeout since we got a response
         clearTimeout(timeoutId);
 
@@ -135,7 +137,6 @@ export function useAuth(): UseAuthReturn {
         // If user is authenticated, check if they have a profile
         if (firebaseUser) {
           try {
-
             const profile = await getUserProfile(firebaseUser.uid);
 
             setUserProfile(profile);
@@ -146,7 +147,6 @@ export function useAuth(): UseAuthReturn {
             setUserProfile(null);
           }
         } else {
-
           setUserProfile(null);
         }
 
@@ -154,7 +154,7 @@ export function useAuth(): UseAuthReturn {
       },
       (authError) => {
         console.error('Auth state change error:', authError);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+
         setError({
           code: 'auth/state-change-error',
           message: authError.message,

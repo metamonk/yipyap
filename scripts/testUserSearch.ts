@@ -7,7 +7,15 @@
  */
 
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
+import {
+  getFirestore,
+  collection,
+  query,
+  where,
+  orderBy,
+  limit,
+  getDocs,
+} from 'firebase/firestore';
 import { Config } from '../constants/Config';
 
 async function testUserSearch() {
@@ -39,20 +47,20 @@ async function testUserSearch() {
       );
 
       const snapshot = await getDocs(usernameQuery);
-      const results: any[] = [];
+      const results: unknown[] = [];
 
       snapshot.forEach((doc) => {
         const userData = doc.data();
         results.push({
           username: userData.username,
           displayName: userData.displayName,
-          email: userData.email
+          email: userData.email,
         });
       });
 
       if (results.length > 0) {
         console.log(`✅ Found ${results.length} result(s):`);
-        results.forEach(user => {
+        results.forEach((user) => {
           console.log(`   • @${user.username} - ${user.displayName} (${user.email})`);
         });
       } else {
@@ -69,7 +77,6 @@ async function testUserSearch() {
     console.log('   1. Deploy the Firestore indexes');
     console.log('   2. Run seed script to create test users');
     console.log('   3. Test in the actual app');
-
   } catch (error) {
     console.error('\n❌ Error testing user search:', error);
     console.log('\n⚠️  Make sure:');

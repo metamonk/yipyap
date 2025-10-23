@@ -32,7 +32,12 @@ import {
 } from 'firebase/firestore';
 import { getFirebaseDb } from './firebase';
 import type { Message, CreateMessageInput } from '@/types/models';
-import { updateConversationLastMessage, checkConversationExists, createConversationWithFirstMessage } from './conversationService';
+import {
+  updateConversationLastMessage,
+  checkConversationExists,
+  createConversationWithFirstMessage,
+  getConversation,
+} from './conversationService';
 import { RetryQueue, RetryQueueItem } from './retryQueueService';
 
 /**
@@ -65,6 +70,7 @@ export interface DraftConversationParams {
  * @remarks
  * - Creates message in `/conversations/{conversationId}/messages` subcollection
  * - Automatically updates parent conversation's lastMessage and lastMessageTimestamp
+ * - Automatically unarchives conversation for recipients who have it archived (ensures users see new messages)
  * - Initializes message with 'sending' status and AI metadata (aiProcessed: false)
  * - Text must be between 1-1000 characters
  * - If conversation doesn't exist and draftParams provided, creates conversation atomically with first message
@@ -119,7 +125,9 @@ export async function sendMessage(
     // If conversation doesn't exist, create it atomically with the first message
     if (!conversationExists) {
       if (!draftParams) {
-        throw new Error('Conversation does not exist. Cannot send message to non-existent conversation.');
+        throw new Error(
+          'Conversation does not exist. Cannot send message to non-existent conversation.'
+        );
       }
 
       // Create conversation with first message atomically
@@ -228,6 +236,69 @@ export async function sendMessage(
       participantIds,
       senderId
     );
+
+    // Auto-unarchive conversation for recipients who have it archived
+    // This ensures users don't miss new messages in archived conversations
+    try {
+      const conversation = await getConversation(conversationId);
+      if (conversation) {
+        const unarchiveUpdates: Record<string, boolean> = {};
+        let needsUpdate = false;
+
+        // Check each participant (excluding sender) for archive status
+        for (const participantId of participantIds) {
+          if (participantId !== senderId && conversation.archivedBy[participantId]) {
+            // Participant has this conversation archived - unarchive it
+            unarchiveUpdates[`archivedBy.${participantId}`] = false;
+            needsUpdate = true;
+          }
+        }
+
+        // If any recipients had it archived, update the conversation
+        if (needsUpdate) {
+          const conversationRef = doc(db, 'conversations', conversationId);
+          await updateDoc(conversationRef, {
+            ...unarchiveUpdates,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
+    } catch (unarchiveError) {
+      // Log error but don't block message send - auto-unarchive is a nice-to-have feature
+      console.error('Error auto-unarchiving conversation:', unarchiveError);
+    }
+
+    // Auto-restore deleted conversation for recipients who have it deleted
+    // This ensures users can receive messages even after deleting conversation
+    // (matches WhatsApp/Signal/Telegram behavior - deleted conversations reappear on new messages)
+    try {
+      const conversation = await getConversation(conversationId);
+      if (conversation) {
+        const restoreUpdates: Record<string, boolean> = {};
+        let needsUpdate = false;
+
+        // Check each participant (excluding sender) for deleted status
+        for (const participantId of participantIds) {
+          if (participantId !== senderId && conversation.deletedBy?.[participantId]) {
+            // Participant has this conversation deleted - restore it
+            restoreUpdates[`deletedBy.${participantId}`] = false;
+            needsUpdate = true;
+          }
+        }
+
+        // If any recipients had it deleted, update the conversation
+        if (needsUpdate) {
+          const conversationRef = doc(db, 'conversations', conversationId);
+          await updateDoc(conversationRef, {
+            ...restoreUpdates,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
+    } catch (restoreError) {
+      // Log error but don't block message send - auto-restore is a nice-to-have feature
+      console.error('Error auto-restoring deleted conversation:', restoreError);
+    }
 
     // Return message with ID and timestamp (with delivered status)
     return {
@@ -634,7 +705,9 @@ export async function markMessageAsRead(
 
     // STEP 5: Only mark as read if currently delivered (sequencing)
     if (message.status !== 'delivered') {
-      console.warn(`Message ${messageId} status is '${message.status}', not 'delivered' - skipping read receipt`);
+      console.warn(
+        `Message ${messageId} status is '${message.status}', not 'delivered' - skipping read receipt`
+      );
       return; // Don't skip the 'delivered' status or downgrade from 'read'
     }
 
@@ -747,7 +820,11 @@ function initializeRetryQueue(): void {
 
     try {
       // Try atomic transaction first
-      await batchUpdateReadReceiptsWithTransaction(data.conversationId, data.messageIds, data.userId);
+      await batchUpdateReadReceiptsWithTransaction(
+        data.conversationId,
+        data.messageIds,
+        data.userId
+      );
       return true; // Success
     } catch (error) {
       console.error('Batch update failed, attempting fallback:', error);
@@ -883,16 +960,14 @@ async function batchUpdateReadReceiptsWithTransaction(
 
   await runTransaction(db, async (transaction) => {
     // Read all documents first (required for transactions)
-    const messageRefs = messageIds.map(id =>
+    const messageRefs = messageIds.map((id) =>
       doc(db, 'conversations', conversationId, 'messages', id)
     );
 
-    const messageDocs = await Promise.all(
-      messageRefs.map(ref => transaction.get(ref))
-    );
+    const messageDocs = await Promise.all(messageRefs.map((ref) => transaction.get(ref)));
 
     // Check if all documents exist
-    const missingDocs = messageDocs.filter(doc => !doc.exists());
+    const missingDocs = messageDocs.filter((doc) => !doc.exists());
     if (missingDocs.length > 0) {
       console.warn(`${missingDocs.length} messages not found, skipping update`);
     }
@@ -1034,7 +1109,6 @@ export async function markMessagesAsReadBatch(
     metric.success = true;
     metric.endTime = Date.now();
     batchUpdateMetrics.push(metric);
-
   } catch (error) {
     console.error('Error marking messages as read in batch:', error);
 
@@ -1090,6 +1164,6 @@ export function getBatchUpdateMetrics(): BatchUpdateMetrics[] {
 export function getBatchUpdateSuccessRate(): number {
   if (batchUpdateMetrics.length === 0) return 100;
 
-  const successful = batchUpdateMetrics.filter(m => m.success).length;
+  const successful = batchUpdateMetrics.filter((m) => m.success).length;
   return Math.round((successful / batchUpdateMetrics.length) * 100);
 }

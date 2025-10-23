@@ -17,6 +17,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { router } from 'expo-router';
 import { NavigationHeader } from '../../_components/NavigationHeader';
@@ -24,11 +25,17 @@ import { RecipientTokenField } from '@/components/conversation/RecipientTokenFie
 import { UserSearchDropdown } from '@/components/conversation/UserSearchDropdown';
 import { ContactPickerModal } from '@/components/conversation/ContactPickerModal';
 import { GroupNameInput } from '@/components/conversation/GroupNameInput';
-import { searchUsers } from '@/services/userService';
+import { GroupPhotoUpload } from '@/components/conversation/GroupPhotoUpload';
 import { userCacheService } from '@/services/userCacheService';
-import { createConversationWithFirstMessage } from '@/services/conversationService';
+import {
+  createConversationWithFirstMessage,
+  uploadGroupPhoto,
+} from '@/services/conversationService';
 import { useAuth } from '@/hooks/useAuth';
-import { useConversationCreation, ConversationCreationProvider } from '@/contexts/ConversationCreationContext';
+import {
+  useConversationCreation,
+  ConversationCreationProvider,
+} from '@/contexts/ConversationCreationContext';
 import type { User } from '@/types/user';
 
 /**
@@ -57,7 +64,6 @@ function NewConversationScreenContent() {
     recipients,
     setRecipients,
     addRecipient,
-    removeRecipient,
     searchQuery,
     setSearchQuery,
     groupName,
@@ -75,9 +81,11 @@ function NewConversationScreenContent() {
   const [isPending, setIsPending] = useState(false); // Track debounce state
   const [showContactPicker, setShowContactPicker] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [groupPhotoUri, setGroupPhotoUri] = useState<string | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   // Debounce timer ref
-  const searchTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Determine if this is a group conversation
   const isGroupConversation = recipients.length >= 2;
@@ -86,94 +94,103 @@ function NewConversationScreenContent() {
   /**
    * Handle search query changes with debouncing
    */
-  const handleSearchQueryChange = useCallback((query: string) => {
-    setSearchQuery(query);
-    setError(null);
+  const handleSearchQueryChange = useCallback(
+    (query: string) => {
+      setSearchQuery(query);
+      setError(null);
 
-    // Clear previous timer
-    if (searchTimerRef.current) {
-      clearTimeout(searchTimerRef.current);
-    }
-
-    if (query.trim().length < 2) {
-      setSearchResults([]);
-      setIsSearching(false);
-      setIsPending(false); // Clear pending state
-      return;
-    }
-
-    // Set pending state immediately (shows loading during debounce)
-    setIsPending(true);
-
-    // Debounce the actual search
-    searchTimerRef.current = setTimeout(async () => {
-      setIsPending(false); // Clear pending
-      setIsSearching(true); // Start actual search
-
-      try {
-        // Use cached search for better performance
-        const results = await userCacheService.searchUsers(query);
-        // Filter out current user from results
-        const filteredResults = results.filter((user) => user.uid !== currentUserId);
-        setSearchResults(filteredResults);
-      } catch (err) {
-        console.error('Error searching users:', err);
-        setError('Search failed. Please try again.');
-        setSearchResults([]);
-      } finally {
-        setIsSearching(false);
+      // Clear previous timer
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current);
       }
-    }, 300); // 300ms debounce
-  }, [currentUserId]);
+
+      if (query.trim().length < 2) {
+        setSearchResults([]);
+        setIsSearching(false);
+        setIsPending(false); // Clear pending state
+        return;
+      }
+
+      // Set pending state immediately (shows loading during debounce)
+      setIsPending(true);
+
+      // Debounce the actual search
+      searchTimerRef.current = setTimeout(async () => {
+        setIsPending(false); // Clear pending
+        setIsSearching(true); // Start actual search
+
+        try {
+          // Use cached search for better performance
+          const results = await userCacheService.searchUsers(query);
+          // Filter out current user from results
+          const filteredResults = results.filter((user) => user.uid !== currentUserId);
+          setSearchResults(filteredResults);
+        } catch (err) {
+          console.error('Error searching users:', err);
+          setError('Search failed. Please try again.');
+          setSearchResults([]);
+        } finally {
+          setIsSearching(false);
+        }
+      }, 300); // 300ms debounce
+    },
+    [currentUserId]
+  );
 
   /**
    * Handle selecting a user from search or contact picker
    */
-  const handleSelectUser = useCallback((user: User) => {
-    // Check if already selected
-    if (recipients.some(r => r.uid === user.uid)) {
-      return;
-    }
+  const handleSelectUser = useCallback(
+    (user: User) => {
+      // Check if already selected
+      if (recipients.some((r) => r.uid === user.uid)) {
+        return;
+      }
 
-    // Check max recipients
-    if (recipients.length >= 10) {
-      setError('Maximum 10 recipients allowed');
-      return;
-    }
+      // Check max recipients (49 + creator = 50 total)
+      if (recipients.length >= 49) {
+        setError('Maximum 50 participants allowed (including you)');
+        return;
+      }
 
-    // Add to recipients using context
-    addRecipient(user);
+      // Add to recipients using context
+      addRecipient(user);
 
-    // Clear any pending search timer
-    if (searchTimerRef.current) {
-      clearTimeout(searchTimerRef.current);
-      searchTimerRef.current = null;
-    }
+      // Clear any pending search timer
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current);
+        searchTimerRef.current = null;
+      }
 
-    // Clear search
-    setSearchQuery('');
-    setSearchResults([]);
-    setIsSearching(false); // Ensure search indicator is cleared
-    setError(null);
-  }, [recipients, addRecipient, setSearchQuery]);
+      // Clear search
+      setSearchQuery('');
+      setSearchResults([]);
+      setIsSearching(false); // Ensure search indicator is cleared
+      setError(null);
+    },
+    [recipients, addRecipient, setSearchQuery]
+  );
 
   /**
    * Handle selecting multiple users from contact picker
    */
-  const handleSelectMultipleUsers = useCallback((users: User[]) => {
-    // Filter out already selected and respect max limit
-    const newRecipients = [...recipients];
+  const handleSelectMultipleUsers = useCallback(
+    (users: User[]) => {
+      // Filter out already selected and respect max limit
+      const newRecipients = [...recipients];
 
-    for (const user of users) {
-      if (newRecipients.length >= 10) break;
-      if (!newRecipients.some(r => r.uid === user.uid)) {
-        newRecipients.push(user);
+      for (const user of users) {
+        if (newRecipients.length >= 49) break; // 49 + creator = 50 total
+        if (!newRecipients.some((r) => r.uid === user.uid)) {
+          newRecipients.push(user);
+        }
       }
-    }
 
-    setRecipients(newRecipients);
-    setShowContactPicker(false);
-  }, [recipients]);
+      setRecipients(newRecipients);
+      setShowContactPicker(false);
+    },
+    [recipients]
+  );
 
   /**
    * Handle creating the conversation and navigating to chat
@@ -182,6 +199,18 @@ function NewConversationScreenContent() {
     // Validation
     if (recipients.length === 0) {
       setError('Please add at least one recipient');
+      return;
+    }
+
+    // For group conversations, validate minimum participants (3 total including creator)
+    if (isGroupConversation && recipients.length < 2) {
+      setError('Groups require at least 2 other participants (3 total including you)');
+      return;
+    }
+
+    // Validate maximum participants (50 total)
+    if (recipients.length > 49) {
+      setError('Maximum 50 participants allowed (including you)');
       return;
     }
 
@@ -205,7 +234,29 @@ function NewConversationScreenContent() {
 
     try {
       // Prepare participant IDs
-      const participantIds = [currentUserId, ...recipients.map(r => r.uid)];
+      const participantIds = [currentUserId, ...recipients.map((r) => r.uid)];
+
+      // Upload group photo if selected
+      let groupPhotoURL: string | undefined;
+      if (isGroupConversation && groupPhotoUri) {
+        try {
+          setIsUploadingPhoto(true);
+          // Generate temporary group ID for photo upload
+          const tempGroupId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          groupPhotoURL = await uploadGroupPhoto(groupPhotoUri, tempGroupId);
+        } catch (photoError) {
+          console.error('Failed to upload group photo:', photoError);
+          // Show alert to user about photo upload failure
+          Alert.alert(
+            'Photo Upload Failed',
+            'Unable to upload the group photo. The group will be created without a photo. You can add one later in group settings.',
+            [{ text: 'OK' }]
+          );
+          // Continue without photo if upload fails
+        } finally {
+          setIsUploadingPhoto(false);
+        }
+      }
 
       // Create conversation with first message
       const result = await createConversationWithFirstMessage({
@@ -214,6 +265,7 @@ function NewConversationScreenContent() {
         messageText: messageText.trim(),
         senderId: currentUserId,
         ...(isGroupConversation && { groupName: groupName.trim() }),
+        ...(isGroupConversation && groupPhotoURL && { groupPhotoURL }),
       });
 
       // Clear all state before navigation using context
@@ -238,10 +290,13 @@ function NewConversationScreenContent() {
   /**
    * Handle typing the first message
    */
-  const handleMessageChange = useCallback((text: string) => {
-    setMessageText(text);
-    setError(null);
-  }, [setMessageText]);
+  const handleMessageChange = useCallback(
+    (text: string) => {
+      setMessageText(text);
+      setError(null);
+    },
+    [setMessageText]
+  );
 
   // Cleanup on unmount
   useEffect(() => {
@@ -258,7 +313,7 @@ function NewConversationScreenContent() {
   }, [resetState]);
 
   // Selected user IDs for filtering
-  const selectedUserIds = recipients.map(r => r.uid);
+  const selectedUserIds = recipients.map((r) => r.uid);
 
   return (
     <KeyboardAvoidingView
@@ -282,8 +337,11 @@ function NewConversationScreenContent() {
         rightAction={{
           label: isCreating ? 'Creating...' : 'Create',
           onPress: handleCreateConversation,
-          disabled: isCreating || recipients.length === 0 || !messageText.trim() ||
-                   (isGroupConversation && !groupName.trim()),
+          disabled:
+            isCreating ||
+            recipients.length === 0 ||
+            !messageText.trim() ||
+            (isGroupConversation && !groupName.trim()),
         }}
       />
 
@@ -299,7 +357,7 @@ function NewConversationScreenContent() {
           onSearchQueryChange={handleSearchQueryChange}
           onAddPress={() => setShowContactPicker(true)}
           searchQuery={searchQuery}
-          maxRecipients={10}
+          maxRecipients={49}
           placeholder="Search users..."
           isDisabled={isCreating}
           error={error || undefined}
@@ -316,6 +374,18 @@ function NewConversationScreenContent() {
           placeholder="Group name (required)"
           testID="group-name"
         />
+
+        {/* Group Photo Upload (conditional) */}
+        {isGroupConversation && (
+          <GroupPhotoUpload
+            photoUri={groupPhotoUri}
+            onPhotoSelect={setGroupPhotoUri}
+            onPhotoRemove={() => setGroupPhotoUri(null)}
+            isDisabled={isCreating}
+            isUploading={isUploadingPhoto}
+            testID="group-photo"
+          />
+        )}
 
         {/* User Search Dropdown */}
         {searchQuery.trim().length >= 2 && (
@@ -351,9 +421,8 @@ function NewConversationScreenContent() {
             {recipients.length === 0
               ? 'Add recipients above, then type your first message'
               : isGroupConversation
-              ? `Starting group chat with ${recipients.length} people`
-              : `Starting chat with ${recipients[0].displayName}`
-            }
+                ? `Starting group chat with ${recipients.length} people`
+                : `Starting chat with ${recipients[0].displayName}`}
           </Text>
         </View>
       </ScrollView>
@@ -364,7 +433,7 @@ function NewConversationScreenContent() {
         onClose={() => setShowContactPicker(false)}
         onSelectUsers={handleSelectMultipleUsers}
         selectedUserIds={selectedUserIds}
-        maxSelection={10 - recipients.length}
+        maxSelection={49 - recipients.length}
         testID="contact-picker"
       />
 

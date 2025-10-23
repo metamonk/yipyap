@@ -15,6 +15,9 @@ import {
   RefreshControl,
   StyleSheet,
   TouchableOpacity,
+  Alert,
+  BackHandler,
+  Platform,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,6 +32,12 @@ import { useAllConversationMessages } from '@/hooks/useAllConversationMessages';
 import { useMessageSearch } from '@/hooks/useMessageSearch';
 import { ConversationListItem } from '@/components/conversation/ConversationListItem';
 import { getUserProfile } from '@/services/userService';
+import {
+  archiveConversation as archiveConversationService,
+  deleteConversation as deleteConversationService,
+  batchArchiveConversations,
+  batchDeleteConversations,
+} from '@/services/conversationService';
 import type { Conversation, Message, SearchResult, User } from '@/types/models';
 
 /**
@@ -83,6 +92,11 @@ export default function ConversationListScreen() {
   const [showSearch, setShowSearch] = useState(false);
   const [searchEnabled, setSearchEnabled] = useState(false);
 
+  // Selection mode state (Story 4.7)
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedConversationIds, setSelectedConversationIds] = useState<Set<string>>(new Set());
+  const [isBatchOperationInProgress, setIsBatchOperationInProgress] = useState(false);
+
   // Get conversation IDs for loading messages
   // Memoize to prevent infinite re-renders in useAllConversationMessages
   const conversationIds = React.useMemo(
@@ -120,9 +134,7 @@ export default function ConversationListScreen() {
         });
 
         // Check which ones we already have
-        const missingIds = Array.from(participantIds).filter(
-          id => !participantData[id]
-        );
+        const missingIds = Array.from(participantIds).filter((id) => !participantData[id]);
 
         if (missingIds.length === 0) {
           return; // All data already fetched
@@ -145,9 +157,9 @@ export default function ConversationListScreen() {
 
         // Update state only if we fetched new data
         if (Object.keys(fetchedUsers).length > 0) {
-          setParticipantData(prev => ({
+          setParticipantData((prev) => ({
             ...prev,
-            ...fetchedUsers
+            ...fetchedUsers,
           }));
         }
       } catch (err) {
@@ -184,6 +196,236 @@ export default function ConversationListScreen() {
     // Navigate to unified new conversation screen
     router.push('/(tabs)/conversations/new');
   };
+
+  /**
+   * Navigate to archived conversations screen
+   */
+  const handleArchivedPress = () => {
+    router.push('/(tabs)/conversations/archived');
+  };
+
+  /**
+   * Handle archive action
+   */
+  const handleArchive = async (conversationId: string, archive: boolean) => {
+    try {
+      await archiveConversationService(conversationId, currentUserId, archive);
+      // Conversation will automatically disappear from list via real-time listener
+    } catch (err) {
+      console.error('Error archiving conversation:', err);
+      Alert.alert('Error', 'Failed to archive conversation. Please try again.');
+    }
+  };
+
+  /**
+   * Handle delete action with confirmation dialog
+   */
+  const handleDelete = async (conversationId: string) => {
+    Alert.alert(
+      'Delete Conversation',
+      'Are you sure you want to delete this conversation? This action cannot be undone.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteConversationService(conversationId, currentUserId);
+              // Conversation will automatically disappear from list via real-time listener
+            } catch (err) {
+              console.error('Error deleting conversation:', err);
+              Alert.alert('Error', 'Failed to delete conversation. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  /**
+   * Enter selection mode with the specified conversation initially selected
+   */
+  const enterSelectionMode = (conversationId: string) => {
+    setIsSelectionMode(true);
+    setSelectedConversationIds(new Set([conversationId]));
+  };
+
+  /**
+   * Exit selection mode and clear all selections
+   */
+  const exitSelectionMode = () => {
+    setIsSelectionMode(false);
+    setSelectedConversationIds(new Set());
+  };
+
+  /**
+   * Toggle selection state for the specified conversation
+   */
+  const toggleSelection = (conversationId: string) => {
+    setSelectedConversationIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(conversationId)) {
+        next.delete(conversationId);
+      } else {
+        next.add(conversationId);
+      }
+      return next;
+    });
+  };
+
+  /**
+   * Select all conversations in the list (optional enhancement)
+   */
+  const selectAll = () => {
+    const allIds = new Set(conversations.map((conv) => conv.id));
+    setSelectedConversationIds(allIds);
+  };
+
+  /**
+   * Handle batch archive action (Story 4.7 - Task 7)
+   * Archives multiple conversations with optimistic UI update
+   */
+  const handleBatchArchive = async () => {
+    const conversationIdsToArchive = Array.from(selectedConversationIds);
+    const count = conversationIdsToArchive.length;
+
+    if (count === 0) {
+      return;
+    }
+
+    setIsBatchOperationInProgress(true);
+
+    try {
+      // Call batch archive service
+      await batchArchiveConversations(conversationIdsToArchive, currentUserId, true);
+
+      // Show success feedback
+      Alert.alert('Success', `${count} conversation${count > 1 ? 's' : ''} archived successfully`);
+
+      // Exit selection mode
+      exitSelectionMode();
+    } catch (err) {
+      console.error('Error batch archiving conversations:', err);
+      Alert.alert(
+        'Error',
+        err instanceof Error ? err.message : 'Failed to archive conversations. Please try again.'
+      );
+    } finally {
+      setIsBatchOperationInProgress(false);
+    }
+  };
+
+  /**
+   * Handle batch delete action (Story 4.7 - Task 8)
+   * Deletes multiple conversations with confirmation dialog
+   */
+  const handleBatchDelete = async () => {
+    const conversationIdsToDelete = Array.from(selectedConversationIds);
+    const count = conversationIdsToDelete.length;
+
+    if (count === 0) {
+      return;
+    }
+
+    // Show confirmation dialog
+    Alert.alert(
+      `Delete ${count} Conversation${count > 1 ? 's' : ''}`,
+      `Are you sure you want to delete ${count} conversation${count > 1 ? 's' : ''}? This action cannot be undone.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setIsBatchOperationInProgress(true);
+
+            try {
+              // Call batch delete service
+              await batchDeleteConversations(conversationIdsToDelete, currentUserId);
+
+              // Show success feedback
+              Alert.alert(
+                'Success',
+                `${count} conversation${count > 1 ? 's' : ''} deleted successfully`
+              );
+
+              // Exit selection mode
+              exitSelectionMode();
+            } catch (err) {
+              console.error('Error batch deleting conversations:', err);
+              Alert.alert(
+                'Error',
+                err instanceof Error
+                  ? err.message
+                  : 'Failed to delete conversations. Please try again.'
+              );
+            } finally {
+              setIsBatchOperationInProgress(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  /**
+   * Handle back button press (Story 4.7 - Task 9)
+   * Exit selection mode when back is pressed while in selection mode
+   */
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (isSelectionMode) {
+          exitSelectionMode();
+          return true; // Prevent default back navigation
+        }
+        return false; // Allow default back navigation
+      });
+
+      return () => backHandler.remove();
+    }
+  }, [isSelectionMode]);
+
+  /**
+   * Auto-exit selection mode when all conversations are gone (Story 4.7 - Task 12)
+   * This handles edge case where selected conversations disappear from list
+   */
+  useEffect(() => {
+    if (isSelectionMode && conversations.length === 0) {
+      exitSelectionMode();
+    }
+  }, [isSelectionMode, conversations.length]);
+
+  /**
+   * Remove deleted/archived conversations from selection (Story 4.7 - Task 12)
+   * Ensures selectedConversationIds only contains valid conversation IDs
+   */
+  useEffect(() => {
+    if (isSelectionMode && selectedConversationIds.size > 0) {
+      const currentConversationIds = new Set(conversations.map((c) => c.id));
+      const validSelectedIds = Array.from(selectedConversationIds).filter((id) =>
+        currentConversationIds.has(id)
+      );
+
+      // If some selections are no longer valid, update the selection
+      if (validSelectedIds.length !== selectedConversationIds.size) {
+        if (validSelectedIds.length === 0) {
+          // All selected conversations disappeared, exit selection mode
+          exitSelectionMode();
+        } else {
+          // Some conversations disappeared, update selection
+          setSelectedConversationIds(new Set(validSelectedIds));
+        }
+      }
+    }
+  }, [isSelectionMode, conversations, selectedConversationIds]);
 
   /**
    * Toggle search mode
@@ -291,6 +533,13 @@ export default function ConversationListScreen() {
         otherParticipantPhoto={photoURL}
         otherParticipantId={item.type === 'direct' ? otherParticipantId : undefined}
         onPress={handleConversationPress}
+        onArchive={handleArchive}
+        onDelete={handleDelete}
+        // Selection mode props (Story 4.7)
+        isSelectionMode={isSelectionMode}
+        isSelected={selectedConversationIds.has(item.id)}
+        onLongPress={() => enterSelectionMode(item.id)}
+        onToggleSelect={() => toggleSelection(item.id)}
       />
     );
   };
@@ -303,7 +552,6 @@ export default function ConversationListScreen() {
   // Show loading spinner on initial load or when no user is authenticated
 
   if ((loading && !refreshing) || !currentUserId) {
-
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
@@ -328,17 +576,36 @@ export default function ConversationListScreen() {
 
   return (
     <View style={styles.container}>
-      <NavigationHeader
-        title="Messages"
-        rightAction={{
-          label: '+ New',
-          onPress: handleNewConversation,
-        }}
-        leftAction={{
-          icon: showSearch ? 'close' : 'search',
-          onPress: handleSearchToggle,
-        }}
-      />
+      {/* Header: Normal mode vs Selection mode (Story 4.7) */}
+      {isSelectionMode ? (
+        <NavigationHeader
+          title={`${selectedConversationIds.size} selected`}
+          leftAction={{
+            label: 'Cancel',
+            onPress: exitSelectionMode,
+          }}
+          rightAction={
+            selectedConversationIds.size > 0
+              ? {
+                  label: 'Select All',
+                  onPress: selectAll,
+                }
+              : undefined
+          }
+        />
+      ) : (
+        <NavigationHeader
+          title="Messages"
+          rightAction={{
+            label: '+ New',
+            onPress: handleNewConversation,
+          }}
+          leftAction={{
+            icon: showSearch ? 'close' : 'search',
+            onPress: handleSearchToggle,
+          }}
+        />
+      )}
 
       {/* Search Bar (conditionally shown) */}
       {showSearch && (
@@ -361,6 +628,14 @@ export default function ConversationListScreen() {
                 : 'Viewing cached conversations'}
           </Text>
         </View>
+      )}
+
+      {/* Archived Link (shown when not searching) */}
+      {!showSearch && (
+        <TouchableOpacity style={styles.archivedLink} onPress={handleArchivedPress}>
+          <Ionicons name="archive-outline" size={20} color="#007AFF" />
+          <Text style={styles.archivedLinkText}>Archived</Text>
+        </TouchableOpacity>
       )}
 
       {/* Search Results or Conversation List */}
@@ -414,6 +689,54 @@ export default function ConversationListScreen() {
           ListEmptyComponent={<EmptyState />}
           contentContainerStyle={conversations.length === 0 && styles.emptyListContent}
         />
+      )}
+
+      {/* Bottom Action Bar (Story 4.7) - shown in selection mode */}
+      {isSelectionMode && (
+        <View style={styles.bottomActionBar}>
+          <TouchableOpacity
+            style={[
+              styles.actionButton,
+              styles.archiveButton,
+              (selectedConversationIds.size === 0 || isBatchOperationInProgress) &&
+                styles.disabledButton,
+            ]}
+            onPress={handleBatchArchive}
+            disabled={selectedConversationIds.size === 0 || isBatchOperationInProgress}
+            activeOpacity={0.7}
+          >
+            {isBatchOperationInProgress ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Ionicons name="archive-outline" size={20} color="#FFFFFF" />
+                <Text style={styles.actionButtonText}>
+                  Archive ({selectedConversationIds.size})
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.actionButton,
+              styles.deleteButton,
+              (selectedConversationIds.size === 0 || isBatchOperationInProgress) &&
+                styles.disabledButton,
+            ]}
+            onPress={handleBatchDelete}
+            disabled={selectedConversationIds.size === 0 || isBatchOperationInProgress}
+            activeOpacity={0.7}
+          >
+            {isBatchOperationInProgress ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+                <Text style={styles.actionButtonText}>Delete ({selectedConversationIds.size})</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
       )}
     </View>
   );
@@ -483,5 +806,52 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#856404',
     textAlign: 'center',
+  },
+  archivedLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#F2F2F7',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5',
+  },
+  archivedLinkText: {
+    fontSize: 14,
+    color: '#007AFF',
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  bottomActionBar: {
+    flexDirection: 'row',
+    padding: 12,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5E5',
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 8,
+  },
+  archiveButton: {
+    backgroundColor: '#007AFF',
+  },
+  deleteButton: {
+    backgroundColor: '#FF3B30',
+  },
+  disabledButton: {
+    opacity: 0.4,
+  },
+  actionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

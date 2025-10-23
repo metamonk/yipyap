@@ -10,14 +10,14 @@
  * - Protects (tabs) routes from unauthorized access
  */
 
-import { StyleSheet } from 'react-native';
-import { Stack, useSegments } from 'expo-router';
+import { Stack } from 'expo-router';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initializeFirebase } from '@/services/firebase';
-import { useAuth } from '@/hooks/useAuth';
 import { useConnectionState } from '@/hooks/useConnectionState';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useNotificationPermissions } from '@/hooks/useNotificationPermissions';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
+import { usePresence } from '@/hooks/usePresence';
 import { OfflineBanner } from '@/components/common/OfflineBanner';
 import { NotificationBanner } from '@/components/common/NotificationBanner';
 
@@ -30,17 +30,17 @@ initializeFirebase();
  * Root layout component that sets up navigation with auth protection
  */
 export default function RootLayout() {
-
   const { connected } = useConnectionState();
   const { lastNotification, clearLastNotification } = useNotifications();
   useNotificationPermissions();
   useOfflineSync();
+  usePresence();
 
   // Note: Navigation is now handled by app/index.tsx
   // This layout just provides the Stack navigator structure
 
   return (
-    <>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <OfflineBanner isOffline={!connected} />
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -55,6 +55,6 @@ export default function RootLayout() {
         }}
         onClose={clearLastNotification}
       />
-    </>
+    </GestureHandlerRootView>
   );
 }

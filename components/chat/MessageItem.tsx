@@ -7,10 +7,12 @@
  * appear left-aligned with gray background and include sender info.
  */
 
-import React, { FC, memo, useEffect, useMemo } from 'react';
+import React, { FC, memo, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { Avatar } from '@/components/common/Avatar';
 import { MessageStatus } from '@/components/chat/MessageStatus';
+import { ReadReceiptModal } from '@/components/chat/ReadReceiptModal';
+import { PresenceIndicator } from '@/components/PresenceIndicator';
 import { formatMessageTime } from '@/utils/dateHelpers';
 import type { Message } from '@/types/models';
 
@@ -30,6 +32,12 @@ export interface MessageItemProps {
   /** Profile photo URL of the message sender (null if no photo) */
   senderPhotoURL: string | null;
 
+  /** Whether this is a group conversation (determines if sender attribution is always shown) */
+  isGroupChat?: boolean;
+
+  /** Array of participant IDs in the conversation (for read receipt modal in groups) */
+  participantIds?: string[];
+
   /** Callback when retry button is tapped (for failed messages) */
   onRetry?: () => void;
 
@@ -45,6 +53,8 @@ export interface MessageItemProps {
  * @remarks
  * - Sent messages: Right-aligned, blue background, white text
  * - Received messages: Left-aligned, gray background, black text, includes avatar and sender name
+ * - Group messages: ALWAYS show sender name and avatar for attribution (AC: 2, 5)
+ * - 1:1 messages: Only show sender info for received messages
  * - All messages display timestamp below the message text
  * - Uses memo() for performance optimization in FlatList
  *
@@ -55,13 +65,40 @@ export interface MessageItemProps {
  *   isOwnMessage={true}
  *   senderDisplayName="John Doe"
  *   senderPhotoURL="https://example.com/photo.jpg"
+ *   isGroupChat={true}
  * />
  * ```
  */
 export const MessageItem: FC<MessageItemProps> = memo(
-  ({ message, isOwnMessage, senderDisplayName, senderPhotoURL, onRetry, isRetrying = false }) => {
+  ({
+    message,
+    isOwnMessage,
+    senderDisplayName,
+    senderPhotoURL,
+    isGroupChat = false,
+    participantIds = [],
+    onRetry,
+    isRetrying = false,
+  }) => {
+    // State for read receipt modal
+    const [showReadReceiptModal, setShowReadReceiptModal] = useState(false);
+
     // Animation for retry indication
     const opacityAnim = useMemo(() => new Animated.Value(1), []);
+
+    // Determine if sender attribution should be shown
+    // For group chats: Show sender name and avatar for OTHER users only (not own messages)
+    // For 1:1 chats: Only show for received messages
+    // Own messages NEVER show avatar to avoid redundancy
+    const showSenderInfo = !isOwnMessage;
+    const showAvatar = !isOwnMessage;
+
+    // Handler to open read receipt modal
+    const handleReadReceiptPress = () => {
+      if (isGroupChat && participantIds.length > 0) {
+        setShowReadReceiptModal(true);
+      }
+    };
 
     useEffect(() => {
       if (isRetrying) {
@@ -99,23 +136,29 @@ export const MessageItem: FC<MessageItemProps> = memo(
         style={[
           styles.container,
           isOwnMessage ? styles.sentMessage : styles.receivedMessage,
-          { opacity: opacityAnim }
+          { opacity: opacityAnim },
         ]}
         testID="message-container"
         accessibilityLabel={isRetrying ? 'Message syncing' : undefined}
         accessibilityHint={isRetrying ? 'This message is being synchronized' : undefined}
       >
-        {/* Avatar for received messages */}
-        {!isOwnMessage && (
+        {/* Avatar - shown for all messages in group, only received in 1:1 */}
+        {showAvatar && (
           <View style={styles.avatarContainer}>
             <Avatar photoURL={senderPhotoURL} displayName={senderDisplayName} size={32} />
+            {/* Show presence indicator only in group chats for better context */}
+            {isGroupChat && (
+              <View style={styles.avatarPresenceIndicator}>
+                <PresenceIndicator userId={message.senderId} size="small" hideWhenOffline={true} />
+              </View>
+            )}
           </View>
         )}
 
         {/* Message content */}
         <View style={styles.messageContent}>
-          {/* Sender name for received messages */}
-          {!isOwnMessage && <Text style={styles.senderName}>{senderDisplayName}</Text>}
+          {/* Sender name - shown for received messages, hidden for own messages */}
+          {showSenderInfo && <Text style={styles.senderName}>{senderDisplayName}</Text>}
 
           {/* Message bubble */}
           <View style={[styles.bubble, isOwnMessage ? styles.sentBubble : styles.receivedBubble]}>
@@ -140,12 +183,29 @@ export const MessageItem: FC<MessageItemProps> = memo(
             </View>
 
             {/* Message status indicator (only for sent messages) */}
-            {isOwnMessage && <MessageStatus status={message.status} onRetry={onRetry} />}
+            {isOwnMessage && (
+              <MessageStatus
+                status={message.status}
+                onRetry={onRetry}
+                isGroupChat={isGroupChat}
+                readByCount={message.readBy?.length || 0}
+                onReadReceiptPress={handleReadReceiptPress}
+              />
+            )}
           </View>
         </View>
 
-        {/* Spacer for sent messages to push content right */}
-        {isOwnMessage && <View style={styles.spacer} />}
+        {/* No spacer needed - own messages go to edge without gap */}
+
+        {/* Read receipt detail modal (for group chats) */}
+        {isGroupChat && (
+          <ReadReceiptModal
+            visible={showReadReceiptModal}
+            onClose={() => setShowReadReceiptModal(false)}
+            message={message}
+            participantIds={participantIds}
+          />
+        )}
       </Animated.View>
     );
   }
@@ -168,8 +228,14 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   avatarContainer: {
+    position: 'relative',
     marginRight: 8,
     alignSelf: 'flex-end',
+  },
+  avatarPresenceIndicator: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
   },
   messageContent: {
     maxWidth: '70%',
@@ -186,11 +252,11 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   sentBubble: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#007AFF', // Blue accent for own messages (AC: 5, 9)
     borderBottomRightRadius: 4,
   },
   receivedBubble: {
-    backgroundColor: '#E5E5EA',
+    backgroundColor: '#E5E5EA', // Gray background for others' messages (AC: 5, 9)
     borderBottomLeftRadius: 4,
   },
   messageText: {

@@ -7,7 +7,7 @@
  */
 
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { render } from '@testing-library/react-native';
 import { CompositeAvatar } from '@/components/common/CompositeAvatar';
 
 // Mock the Avatar component
@@ -20,12 +20,10 @@ jest.mock('@/components/common/Avatar', () => ({
         accessibilityLabel={`Avatar for ${displayName}`}
         style={{ width: size, height: size }}
       >
-        {photoURL && (
-          <MockAvatar testID={`avatar-photo-${displayName}`} />
-        )}
+        {photoURL && <MockAvatar testID={`avatar-photo-${displayName}`} />}
       </MockAvatar>
     );
-  })
+  }),
 }));
 
 describe('CompositeAvatar', () => {
@@ -33,7 +31,7 @@ describe('CompositeAvatar', () => {
     { photoURL: 'https://example.com/user1.jpg', displayName: 'User One' },
     { photoURL: 'https://example.com/user2.jpg', displayName: 'User Two' },
     { photoURL: null, displayName: 'User Three' },
-    { photoURL: 'https://example.com/user4.jpg', displayName: 'User Four' }
+    { photoURL: 'https://example.com/user4.jpg', displayName: 'User Four' },
   ];
 
   afterEach(() => {
@@ -42,9 +40,7 @@ describe('CompositeAvatar', () => {
 
   describe('Rendering behavior', () => {
     it('should render default avatar when no participants', () => {
-      const { getByTestId } = render(
-        <CompositeAvatar participants={[]} size={48} />
-      );
+      const { getByTestId } = render(<CompositeAvatar participants={[]} size={48} />);
 
       expect(getByTestId('avatar-Group')).toBeTruthy();
     });
@@ -71,11 +67,7 @@ describe('CompositeAvatar', () => {
 
     it('should respect maxDisplay parameter', () => {
       const { getByTestId, queryByTestId } = render(
-        <CompositeAvatar
-          participants={mockParticipants}
-          size={48}
-          maxDisplay={2}
-        />
+        <CompositeAvatar participants={mockParticipants} size={48} maxDisplay={2} />
       );
 
       // Should only show first 2
@@ -104,10 +96,7 @@ describe('CompositeAvatar', () => {
       const expectedAvatarSize = size * 0.6; // 36
 
       const { getByTestId } = render(
-        <CompositeAvatar
-          participants={mockParticipants.slice(0, 2)}
-          size={size}
-        />
+        <CompositeAvatar participants={mockParticipants.slice(0, 2)} size={size} />
       );
 
       const avatar1 = getByTestId('avatar-User One');
@@ -120,9 +109,7 @@ describe('CompositeAvatar', () => {
     });
 
     it('should use default size of 48', () => {
-      const { getByTestId } = render(
-        <CompositeAvatar participants={[mockParticipants[0]]} />
-      );
+      const { getByTestId } = render(<CompositeAvatar participants={[mockParticipants[0]]} />);
 
       const avatar = getByTestId('avatar-User One');
       expect(avatar.props.style.width).toBe(48);
@@ -132,10 +119,7 @@ describe('CompositeAvatar', () => {
     it('should use full size for single participant', () => {
       const size = 60;
       const { getByTestId } = render(
-        <CompositeAvatar
-          participants={[mockParticipants[0]]}
-          size={size}
-        />
+        <CompositeAvatar participants={[mockParticipants[0]]} size={size} />
       );
 
       const avatar = getByTestId('avatar-User One');
@@ -146,7 +130,7 @@ describe('CompositeAvatar', () => {
 
   describe('Photo URL handling', () => {
     it('should handle participants with photos', () => {
-      const participantsWithPhotos = mockParticipants.filter(p => p.photoURL);
+      const participantsWithPhotos = mockParticipants.filter((p) => p.photoURL);
       const { getByTestId } = render(
         <CompositeAvatar participants={participantsWithPhotos} size={48} />
       );
@@ -158,7 +142,7 @@ describe('CompositeAvatar', () => {
     it('should handle participants without photos', () => {
       const participantsWithoutPhotos = [
         { photoURL: null, displayName: 'No Photo User' },
-        { photoURL: undefined, displayName: 'Undefined Photo User' }
+        { photoURL: undefined, displayName: 'Undefined Photo User' },
       ];
 
       const { getByTestId, queryByTestId } = render(
@@ -174,7 +158,7 @@ describe('CompositeAvatar', () => {
     it('should handle mixed photo availability', () => {
       const mixedParticipants = [
         { photoURL: 'https://example.com/user.jpg', displayName: 'With Photo' },
-        { photoURL: null, displayName: 'Without Photo' }
+        { photoURL: null, displayName: 'Without Photo' },
       ];
 
       const { getByTestId, queryByTestId } = render(
@@ -188,9 +172,7 @@ describe('CompositeAvatar', () => {
 
   describe('Edge cases', () => {
     it('should handle empty string display names', () => {
-      const emptyNameParticipants = [
-        { photoURL: null, displayName: '' }
-      ];
+      const emptyNameParticipants = [{ photoURL: null, displayName: '' }];
 
       const { getByTestId } = render(
         <CompositeAvatar participants={emptyNameParticipants} size={48} />
@@ -202,7 +184,7 @@ describe('CompositeAvatar', () => {
     it('should handle very long participant lists', () => {
       const manyParticipants = Array.from({ length: 20 }, (_, i) => ({
         photoURL: null,
-        displayName: `User ${i + 1}`
+        displayName: `User ${i + 1}`,
       }));
 
       const { getByTestId, queryByTestId } = render(
@@ -221,7 +203,7 @@ describe('CompositeAvatar', () => {
       const duplicateParticipants = [
         { photoURL: 'https://example.com/1.jpg', displayName: 'John' },
         { photoURL: 'https://example.com/2.jpg', displayName: 'John' },
-        { photoURL: null, displayName: 'John' }
+        { photoURL: null, displayName: 'John' },
       ];
 
       const { getAllByTestId } = render(
@@ -237,7 +219,7 @@ describe('CompositeAvatar', () => {
       const specialCharParticipants = [
         { photoURL: null, displayName: 'User @123' },
         { photoURL: null, displayName: 'User #$%' },
-        { photoURL: null, displayName: '用户' }
+        { photoURL: null, displayName: '用户' },
       ];
 
       const { getByTestId } = render(
@@ -253,9 +235,7 @@ describe('CompositeAvatar', () => {
   describe('Performance', () => {
     it('should be memoized', () => {
       const participants = mockParticipants.slice(0, 2);
-      const { rerender } = render(
-        <CompositeAvatar participants={participants} size={48} />
-      );
+      const { rerender } = render(<CompositeAvatar participants={participants} size={48} />);
 
       // Get the Avatar mock to check call count
       const AvatarMock = require('@/components/common/Avatar').Avatar;

@@ -39,95 +39,85 @@ interface RecipientChipProps {
  * />
  * ```
  */
-export const RecipientChip: React.FC<RecipientChipProps> = React.memo(({
-  user,
-  onRemove,
-  index,
-  testID,
-}) => {
-  const scaleAnim = React.useRef(new Animated.Value(0)).current;
-  const opacityAnim = React.useRef(new Animated.Value(0)).current;
+export const RecipientChip: React.FC<RecipientChipProps> = React.memo(
+  ({ user, onRemove, index: _index, testID }) => {
+    const [scaleAnim] = React.useState(() => new Animated.Value(0));
+    const [opacityAnim] = React.useState(() => new Animated.Value(0));
 
-  useEffect(() => {
-    // Entry animation
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacityAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [scaleAnim, opacityAnim]);
+    useEffect(() => {
+      // Entry animation
+      Animated.parallel([
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          tension: 50,
+          friction: 7,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, [scaleAnim, opacityAnim]);
 
-  const handleRemove = () => {
-    // Announce removal for accessibility
-    AccessibilityInfo.announceForAccessibility(
-      `Removed ${user.displayName} from recipients`
+    const handleRemove = () => {
+      // Announce removal for accessibility
+      AccessibilityInfo.announceForAccessibility(`Removed ${user.displayName} from recipients`);
+
+      // Exit animation
+      Animated.parallel([
+        Animated.timing(scaleAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 0,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        onRemove(user);
+      });
+    };
+
+    // Truncate long names
+    const displayName =
+      user.displayName.length > 15 ? `${user.displayName.substring(0, 12)}...` : user.displayName;
+
+    return (
+      <Animated.View
+        style={[
+          styles.container,
+          {
+            transform: [{ scale: scaleAnim }],
+            opacity: opacityAnim,
+          },
+        ]}
+        testID={testID}
+      >
+        <View style={styles.chipContent}>
+          <Avatar photoURL={user.photoURL || null} displayName={user.displayName} size={24} />
+          <Text style={styles.name} numberOfLines={1}>
+            {displayName}
+          </Text>
+          <TouchableOpacity
+            onPress={handleRemove}
+            style={styles.removeButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel={`Remove ${user.displayName}`}
+            accessibilityRole="button"
+            accessibilityHint="Double tap to remove this recipient"
+            testID={`${testID}-remove`}
+          >
+            <Ionicons name="close-circle" size={18} color="#8E8E93" />
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
     );
-
-    // Exit animation
-    Animated.parallel([
-      Animated.timing(scaleAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacityAnim, {
-        toValue: 0,
-        duration: 150,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      onRemove(user);
-    });
-  };
-
-  // Truncate long names
-  const displayName = user.displayName.length > 15
-    ? `${user.displayName.substring(0, 12)}...`
-    : user.displayName;
-
-  return (
-    <Animated.View
-      style={[
-        styles.container,
-        {
-          transform: [{ scale: scaleAnim }],
-          opacity: opacityAnim,
-        },
-      ]}
-      testID={testID}
-    >
-      <View style={styles.chipContent}>
-        <Avatar
-          photoURL={user.photoURL || null}
-          displayName={user.displayName}
-          size={24}
-        />
-        <Text style={styles.name} numberOfLines={1}>
-          {displayName}
-        </Text>
-        <TouchableOpacity
-          onPress={handleRemove}
-          style={styles.removeButton}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityLabel={`Remove ${user.displayName}`}
-          accessibilityRole="button"
-          accessibilityHint="Double tap to remove this recipient"
-          testID={`${testID}-remove`}
-        >
-          <Ionicons name="close-circle" size={18} color="#8E8E93" />
-        </TouchableOpacity>
-      </View>
-    </Animated.View>
-  );
-});
+  }
+);
 
 RecipientChip.displayName = 'RecipientChip';
 

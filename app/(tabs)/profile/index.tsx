@@ -4,7 +4,7 @@
  * Displays user profile information with option to edit
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,9 +17,11 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationHeader } from '../../_components/NavigationHeader';
+import { PresenceIndicator } from '@/components/PresenceIndicator';
 import { getFirebaseAuth } from '@/services/firebase';
 import { getUserProfile } from '@/services/userService';
-import { User } from '@/types/user';
+import { useUserStore } from '@/stores/userStore';
+import { useFocusEffect } from 'expo-router';
 
 /**
  * Profile View Screen Component
@@ -28,31 +30,39 @@ import { User } from '@/types/user';
 export default function ProfileScreen() {
   const router = useRouter();
   const auth = getFirebaseAuth();
-  const currentUser = auth.currentUser;
+  const authUser = auth.currentUser;
 
-  const [profile, setProfile] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { currentUser: profile, isLoading, setCurrentUser, setLoading } = useUserStore();
 
+  const loadProfile = async () => {
+    if (!authUser) {
+      Alert.alert('Error', 'You must be logged in to view your profile.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const userProfile = await getUserProfile(authUser.uid);
+      setCurrentUser(userProfile);
+    } catch (error) {
+      console.error('Error loading profile:', error);
+      Alert.alert('Error', 'Failed to load profile. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load profile on mount
   useEffect(() => {
-    const loadProfile = async () => {
-      if (!currentUser) {
-        Alert.alert('Error', 'You must be logged in to view your profile.');
-        return;
-      }
-
-      try {
-        const userProfile = await getUserProfile(currentUser.uid);
-        setProfile(userProfile);
-      } catch (error) {
-        console.error('Error loading profile:', error);
-        Alert.alert('Error', 'Failed to load profile. Please try again.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     loadProfile();
-  }, [currentUser]);
+  }, [authUser?.uid]);
+
+  // Reload profile when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadProfile();
+    }, [authUser?.uid])
+  );
 
   if (isLoading) {
     return (
@@ -83,15 +93,20 @@ export default function ProfileScreen() {
       <View style={styles.content}>
         {/* Profile Photo */}
         <View style={styles.photoSection}>
-          {profile.photoURL ? (
-            <Image source={{ uri: profile.photoURL }} style={styles.profilePhoto} />
-          ) : (
-            <View style={styles.photoPlaceholder}>
-              <Text style={styles.photoPlaceholderText}>
-                {profile.displayName.charAt(0).toUpperCase()}
-              </Text>
+          <View style={styles.photoContainer}>
+            {profile.photoURL ? (
+              <Image source={{ uri: profile.photoURL }} style={styles.profilePhoto} />
+            ) : (
+              <View style={styles.photoPlaceholder}>
+                <Text style={styles.photoPlaceholderText}>
+                  {profile.displayName.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
+            <View style={styles.presenceIndicatorContainer}>
+              <PresenceIndicator userId={profile.uid} size="large" showPulse={true} />
             </View>
-          )}
+          </View>
         </View>
 
         {/* Profile Info */}
@@ -154,6 +169,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 32,
   },
+  photoContainer: {
+    position: 'relative',
+  },
   profilePhoto: {
     width: 120,
     height: 120,
@@ -166,6 +184,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#007AFF',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  presenceIndicatorContainer: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
   },
   photoPlaceholderText: {
     fontSize: 48,

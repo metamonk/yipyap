@@ -15,8 +15,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Text,
-  Keyboard,
-  Platform,
   AccessibilityInfo,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -82,23 +80,29 @@ export const RecipientTokenField: React.FC<RecipientTokenFieldProps> = ({
     }
   }, [recipients.length]);
 
-  const handleRemoveRecipient = useCallback((user: User) => {
-    const newRecipients = recipients.filter((r) => r.uid !== user.uid);
-    onRecipientsChange(newRecipients);
+  const handleRemoveRecipient = useCallback(
+    (user: User) => {
+      const newRecipients = recipients.filter((r) => r.uid !== user.uid);
+      onRecipientsChange(newRecipients);
 
-    // Focus input after removing a chip
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 100);
-  }, [recipients, onRecipientsChange]);
+      // Focus input after removing a chip
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+    },
+    [recipients, onRecipientsChange]
+  );
 
-  const handleKeyPress = useCallback(({ nativeEvent }: any) => {
-    // Handle backspace to remove last recipient when input is empty
-    if (nativeEvent.key === 'Backspace' && !searchQuery && recipients.length > 0) {
-      const lastRecipient = recipients[recipients.length - 1];
-      handleRemoveRecipient(lastRecipient);
-    }
-  }, [searchQuery, recipients, handleRemoveRecipient]);
+  const handleKeyPress = useCallback(
+    ({ nativeEvent }: { nativeEvent: { key: string } }) => {
+      // Handle backspace to remove last recipient when input is empty
+      if (nativeEvent.key === 'Backspace' && !searchQuery && recipients.length > 0) {
+        const lastRecipient = recipients[recipients.length - 1];
+        handleRemoveRecipient(lastRecipient);
+      }
+    },
+    [searchQuery, recipients, handleRemoveRecipient]
+  );
 
   const handleInputFocus = () => {
     // Scroll to end when input is focused
@@ -120,9 +124,10 @@ export const RecipientTokenField: React.FC<RecipientTokenFieldProps> = ({
   // Accessibility announcement for recipient count
   useEffect(() => {
     if (recipients.length > 0) {
-      const message = recipients.length === 1
-        ? `1 recipient selected`
-        : `${recipients.length} recipients selected`;
+      const message =
+        recipients.length === 1
+          ? `1 recipient selected`
+          : `${recipients.length} recipients selected`;
       AccessibilityInfo.announceForAccessibility(message);
     }
   }, [recipients.length]);
@@ -157,10 +162,7 @@ export const RecipientTokenField: React.FC<RecipientTokenFieldProps> = ({
             {!isMaxReached && (
               <TextInput
                 ref={inputRef}
-                style={[
-                  styles.input,
-                  recipients.length === 0 && styles.inputEmpty,
-                ]}
+                style={[styles.input, recipients.length === 0 && styles.inputEmpty]}
                 placeholder={showPlaceholder ? placeholder : ''}
                 placeholderTextColor="#8E8E93"
                 value={searchQuery}
@@ -183,9 +185,7 @@ export const RecipientTokenField: React.FC<RecipientTokenFieldProps> = ({
             )}
 
             {isMaxReached && (
-              <Text style={styles.maxReachedText}>
-                Maximum {maxRecipients} recipients
-              </Text>
+              <Text style={styles.maxReachedText}>Maximum {maxRecipients} recipients</Text>
             )}
           </View>
         </ScrollView>

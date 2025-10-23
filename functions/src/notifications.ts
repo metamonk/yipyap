@@ -43,7 +43,7 @@ type PushTokenType = 'expo' | 'fcm' | 'apns';
  * @returns The detected token type
  * @remarks Reserved for future multi-platform token support
  */
- 
+
 function detectTokenType(token: string): PushTokenType {
   if (!token || typeof token !== 'string') {
     return 'fcm'; // Default fallback
@@ -207,6 +207,7 @@ interface ConversationData {
   groupName?: string;
   unreadCount: Record<string, number>;
   mutedBy?: Record<string, boolean>;
+  deletedBy?: Record<string, boolean>;
 }
 
 /**
@@ -231,7 +232,7 @@ interface MessageData {
  * @returns Promise resolving to send results
  * @remarks Reserved for future Expo push notification support
  */
- 
+
 async function sendExpoNotifications(
   expoTokens: string[],
   title: string,
@@ -263,7 +264,7 @@ async function sendExpoNotifications(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        Accept: 'application/json',
       },
       body: JSON.stringify(messages),
     });
@@ -356,9 +357,7 @@ export const sendMessageNotification = functions.firestore
       }
 
       // Get recipient IDs (all participants except sender)
-      const recipientIds = conversation.participantIds.filter(
-        (id) => id !== message.senderId
-      );
+      const recipientIds = conversation.participantIds.filter((id) => id !== message.senderId);
 
       if (recipientIds.length === 0) {
         console.warn('[sendMessageNotification] No recipients for message:', messageId);
@@ -377,19 +376,18 @@ export const sendMessageNotification = functions.firestore
       // Prepare notification data
       const notificationType = conversation.type === 'group' ? 'group' : 'message';
       const conversationName =
-        conversation.type === 'group'
-          ? conversation.groupName || 'Group Chat'
-          : sender.displayName;
+        conversation.type === 'group' ? conversation.groupName || 'Group Chat' : sender.displayName;
 
       // Send notification to each recipient
       const sendPromises = recipients.map(async (recipient) => {
         try {
+          // Note: We don't check deletedBy here because the message service auto-restores
+          // deleted conversations when new messages arrive (matches WhatsApp/Signal behavior).
+          // By the time this notification runs, deletedBy will already be cleared for recipients.
+
           // Check if conversation is muted for this user
           if (conversation.mutedBy?.[recipient.uid] === true) {
-            console.warn(
-              '[sendMessageNotification] Conversation muted for user:',
-              recipient.uid
-            );
+            console.warn('[sendMessageNotification] Conversation muted for user:', recipient.uid);
             return null;
           }
 
@@ -430,8 +428,7 @@ export const sendMessageNotification = functions.firestore
           const badgeCount = (conversation.unreadCount?.[recipient.uid] || 0) + 1;
 
           // Determine if we should show preview
-          const showPreview =
-            recipient.settings?.notifications?.showPreview !== false;
+          const showPreview = recipient.settings?.notifications?.showPreview !== false;
 
           // Sanitize notification content
           const sanitizedSenderName = sanitizeNotificationText(sender.displayName, 100);
@@ -451,10 +448,15 @@ export const sendMessageNotification = functions.firestore
             timestamp: message.timestamp.toMillis().toString(),
           };
 
-          const soundSetting = recipient.settings?.notifications?.sound !== false ? 'default' : undefined;
+          const soundSetting =
+            recipient.settings?.notifications?.sound !== false ? 'default' : undefined;
 
           // Send to Expo tokens
-          let expoResults = { success: 0, failure: 0, errors: [] as Array<{ token: string; error: string }> };
+          let expoResults = {
+            success: 0,
+            failure: 0,
+            errors: [] as Array<{ token: string; error: string }>,
+          };
           if (expoTokens.length > 0) {
             expoResults = await sendExpoNotifications(
               expoTokens,
@@ -472,7 +474,11 @@ export const sendMessageNotification = functions.firestore
             // Clean up invalid Expo tokens
             if (expoResults.errors.length > 0) {
               const invalidExpoTokens = expoResults.errors
-                .filter((err) => err.error.includes('DeviceNotRegistered') || err.error.includes('InvalidCredentials'))
+                .filter(
+                  (err) =>
+                    err.error.includes('DeviceNotRegistered') ||
+                    err.error.includes('InvalidCredentials')
+                )
                 .map((err) => err.token);
 
               if (invalidExpoTokens.length > 0) {
@@ -482,7 +488,11 @@ export const sendMessageNotification = functions.firestore
           }
 
           // Send to native FCM/APNs tokens
-          let nativeResults: admin.messaging.BatchResponse = { successCount: 0, failureCount: 0, responses: [] };
+          let nativeResults: admin.messaging.BatchResponse = {
+            successCount: 0,
+            failureCount: 0,
+            responses: [],
+          };
           if (nativeTokens.length > 0) {
             const payload: admin.messaging.MulticastMessage = {
               tokens: nativeTokens,
@@ -546,11 +556,7 @@ export const sendMessageNotification = functions.firestore
             native: nativeResults,
           };
         } catch (error) {
-          console.error(
-            '[sendMessageNotification] Error sending to user:',
-            recipient.uid,
-            error
-          );
+          console.error('[sendMessageNotification] Error sending to user:', recipient.uid, error);
           return null;
         }
       });
@@ -637,9 +643,7 @@ async function cleanupInvalidTokens(userId: string, invalidTokens: string[]): Pr
     const currentTokens = userData.fcmTokens || [];
 
     // Filter out invalid tokens
-    const validTokens = currentTokens.filter(
-      (t) => !invalidTokens.includes(t.token)
-    );
+    const validTokens = currentTokens.filter((t) => !invalidTokens.includes(t.token));
 
     await userRef.update({
       fcmTokens: validTokens,

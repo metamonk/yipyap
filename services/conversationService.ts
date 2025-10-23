@@ -26,10 +26,18 @@ import {
   onSnapshot,
   Unsubscribe,
   runTransaction,
+  arrayUnion,
+  arrayRemove,
+  writeBatch,
 } from 'firebase/firestore';
 import { getFirebaseDb } from './firebase';
 import { GROUP_SIZE_LIMIT } from '@/constants/groupLimits';
-import type { Conversation, CreateConversationInput, CreateConversationWithMessageParams, CreateConversationResult } from '@/types/models';
+import type {
+  Conversation,
+  CreateConversationInput,
+  CreateConversationWithMessageParams,
+  CreateConversationResult,
+} from '@/types/models';
 import { PerformanceMonitor } from '@/utils/performanceMonitor';
 
 /**
@@ -132,7 +140,45 @@ export async function createConversation(input: CreateConversationInput): Promis
     if (type === 'direct') {
       const existingConversation = await getDoc(conversationRef);
       if (existingConversation.exists()) {
-        return existingConversation.data() as Conversation;
+        const conversation = existingConversation.data() as Conversation;
+
+        // If conversation was previously deleted or archived by any participant, restore it
+        // This ensures "create new conversation" flow gives users a fresh start
+        const hasAnyDeleted = Object.values(conversation.deletedBy || {}).some((v) => v === true);
+        const hasAnyArchived = Object.values(conversation.archivedBy || {}).some((v) => v === true);
+
+        if (hasAnyDeleted || hasAnyArchived) {
+          // Clear deletedBy and archivedBy for all participants (fresh start)
+          const updates: Record<string, boolean | object> = {
+            updatedAt: serverTimestamp(),
+          };
+
+          participantIds.forEach((uid) => {
+            if (conversation.deletedBy?.[uid]) {
+              updates[`deletedBy.${uid}`] = false;
+            }
+            if (conversation.archivedBy?.[uid]) {
+              updates[`archivedBy.${uid}`] = false;
+            }
+          });
+
+          await updateDoc(conversationRef, updates);
+
+          // Return updated conversation with cleared flags
+          return {
+            ...conversation,
+            deletedBy: {
+              ...conversation.deletedBy,
+              ...Object.fromEntries(participantIds.map((uid) => [uid, false])),
+            },
+            archivedBy: {
+              ...conversation.archivedBy,
+              ...Object.fromEntries(participantIds.map((uid) => [uid, false])),
+            },
+          };
+        }
+
+        return conversation;
       }
     }
 
@@ -153,7 +199,7 @@ export async function createConversation(input: CreateConversationInput): Promis
     const now = Timestamp.now();
 
     // For group conversations, initialize adminIds (defaults to creatorId if not provided)
-    const groupAdminIds = type === 'group' ? (adminIds || (creatorId ? [creatorId] : [])) : undefined;
+    const groupAdminIds = type === 'group' ? adminIds || (creatorId ? [creatorId] : []) : undefined;
 
     const conversationData: Omit<
       Conversation,
@@ -348,12 +394,15 @@ export async function createConversationWithFirstMessage(
           lastMessageTimestamp: serverTimestamp(),
           updatedAt: serverTimestamp(),
           // Increment unread count for all participants except sender
-          ...participantIds.reduce((acc, participantId) => {
-            if (participantId !== senderId) {
-              acc[`unreadCount.${participantId}`] = increment(1);
-            }
-            return acc;
-          }, {} as Record<string, ReturnType<typeof increment>>),
+          ...participantIds.reduce(
+            (acc, participantId) => {
+              if (participantId !== senderId) {
+                acc[`unreadCount.${participantId}`] = increment(1);
+              }
+              return acc;
+            },
+            {} as Record<string, ReturnType<typeof increment>>
+          ),
         });
 
         return { conversationId, messageId };
@@ -519,12 +568,12 @@ export async function getUserConversations(userId: string): Promise<Conversation
 
     const snapshot = await getDocs(q);
 
-    // Filter out deleted conversations and map to Conversation type
+    // Filter out deleted and archived conversations
     const conversations: Conversation[] = [];
     snapshot.forEach((doc) => {
       const data = doc.data() as Conversation;
-      // Only include if not marked as deleted by this user
-      if (!data.deletedBy[userId]) {
+      // Only include if not marked as deleted or archived by this user
+      if (!data.deletedBy[userId] && !data.archivedBy[userId]) {
         conversations.push(data);
       }
     });
@@ -674,7 +723,6 @@ export function subscribeToConversations(
   callback: (conversations: Conversation[]) => void
 ): Unsubscribe {
   try {
-
     const db = getFirebaseDb();
     const conversationsRef = collection(db, 'conversations');
 
@@ -689,12 +737,11 @@ export function subscribeToConversations(
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-
         const conversations: Conversation[] = [];
         snapshot.forEach((doc) => {
           const data = doc.data() as Conversation;
-          // Only include if not marked as deleted by this user
-          if (!data.deletedBy[userId]) {
+          // Only include if not marked as deleted or archived by this user
+          if (!data.deletedBy[userId] && !data.archivedBy[userId]) {
             conversations.push(data);
           }
         });
@@ -712,6 +759,83 @@ export function subscribeToConversations(
   } catch (error) {
     console.error('[subscribeToConversations] Error setting up subscription:', error);
     throw new Error('Failed to subscribe to conversations. Please try again.');
+  }
+}
+
+/**
+ * Subscribes to real-time updates for user's archived conversations
+ *
+ * @param userId - User ID to fetch archived conversations for
+ * @param callback - Function called with updated archived conversations array
+ * @returns Unsubscribe function to stop listening to updates
+ * @throws {FirestoreError} When Firestore operation fails
+ *
+ * @remarks
+ * Sets up a real-time listener for all conversations where the user is a participant
+ * and has archived the conversation. The callback is invoked whenever archived
+ * conversations are added, modified, or removed.
+ * Filters out conversations marked as deleted by the user.
+ * Returns conversations ordered by most recent activity first.
+ *
+ * IMPORTANT: Call the returned unsubscribe function when the component unmounts
+ * to prevent memory leaks.
+ *
+ * Note: Due to Firestore limitations, we cannot use map field queries with != operator
+ * in the same query. Therefore, deletedBy filtering is done in the callback.
+ *
+ * @example
+ * ```typescript
+ * const unsubscribe = subscribeToArchivedConversations('user123', (conversations) => {
+ *   console.log(`User has ${conversations.length} archived conversations`);
+ *   setArchivedConversations(conversations);
+ * });
+ *
+ * // Later, when component unmounts
+ * unsubscribe();
+ * ```
+ */
+export function subscribeToArchivedConversations(
+  userId: string,
+  callback: (conversations: Conversation[]) => void
+): Unsubscribe {
+  try {
+    const db = getFirebaseDb();
+    const conversationsRef = collection(db, 'conversations');
+
+    // Query conversations where user is a participant, ordered by last message
+    // Note: We filter by archivedBy in the query (where possible) and deletedBy in the callback
+    const q = query(
+      conversationsRef,
+      where('participantIds', 'array-contains', userId),
+      orderBy('lastMessageTimestamp', 'desc')
+    );
+
+    // Set up real-time listener
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const conversations: Conversation[] = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data() as Conversation;
+          // Only include if marked as archived AND not deleted by this user
+          if (data.archivedBy[userId] && !data.deletedBy[userId]) {
+            conversations.push(data);
+          }
+        });
+
+        callback(conversations);
+      },
+      (error) => {
+        console.error('[subscribeToArchivedConversations] Error in subscription:', error);
+        // Pass empty array on error to prevent app crash
+        callback([]);
+      }
+    );
+
+    return unsubscribe;
+  } catch (error) {
+    console.error('[subscribeToArchivedConversations] Error setting up subscription:', error);
+    throw new Error('Failed to subscribe to archived conversations. Please try again.');
   }
 }
 
@@ -892,6 +1016,202 @@ export async function updateGroupSettings(
 }
 
 /**
+ * Updates the group name for a group conversation
+ *
+ * @param conversationId - The ID of the group conversation
+ * @param groupName - The new group name (required, max 50 characters)
+ * @param userId - The ID of the user performing the action (must be group creator/admin)
+ * @returns Promise that resolves when group name is updated
+ * @throws {Error} When conversation not found, user lacks permission, or validation fails
+ *
+ * @remarks
+ * - Only group admins can update the group name
+ * - Group name is required and must be between 1-50 characters
+ * - Real-time listeners will automatically propagate changes to all participants
+ * - This is a convenience wrapper around updateGroupSettings()
+ *
+ * @example
+ * ```typescript
+ * await updateGroupName('conv123', 'My Awesome Group', 'user123');
+ * ```
+ */
+export async function updateGroupName(
+  conversationId: string,
+  groupName: string,
+  userId: string
+): Promise<void> {
+  // Validate group name
+  if (!groupName || groupName.trim().length === 0) {
+    throw new Error('Group name is required.');
+  }
+
+  if (groupName.length > 50) {
+    throw new Error('Group name must be 50 characters or less.');
+  }
+
+  // Use updateGroupSettings to perform the actual update
+  await updateGroupSettings(conversationId, { groupName: groupName.trim() }, userId);
+}
+
+/**
+ * Adds new participants to a group conversation
+ *
+ * @param conversationId - The ID of the group conversation
+ * @param newParticipantIds - Array of user IDs to add to the group
+ * @param userId - The ID of the user performing the action (must be group creator)
+ * @returns Promise that resolves when participants are added
+ * @throws {Error} When conversation not found, user lacks permission, or limit exceeded
+ *
+ * @remarks
+ * - Only the group creator can add participants
+ * - Validates that total participants don't exceed GROUP_SIZE_LIMIT (50)
+ * - Uses arrayUnion() to atomically add participants
+ * - New participants immediately get access to full message history
+ * - Updates conversation's updatedAt timestamp
+ *
+ * @example
+ * ```typescript
+ * await addParticipants('conv123', ['user456', 'user789'], 'creator123');
+ * ```
+ */
+export async function addParticipants(
+  conversationId: string,
+  newParticipantIds: string[],
+  userId: string
+): Promise<void> {
+  try {
+    const db = getFirebaseDb();
+
+    if (newParticipantIds.length === 0) {
+      throw new Error('No participants provided.');
+    }
+
+    // Verify conversation exists and user has permission
+    const conversation = await getConversation(conversationId);
+    if (!conversation) {
+      throw new Error('Conversation not found.');
+    }
+
+    if (conversation.type !== 'group') {
+      throw new Error('Can only add participants to group conversations.');
+    }
+
+    // Check if user is the creator (only creator can add participants per Story 4.3 AC #9)
+    if (conversation.creatorId !== userId) {
+      throw new Error('Only the group creator can add participants.');
+    }
+
+    // Validate total participant count won't exceed limit
+    const currentCount = conversation.participantIds.length;
+    const newCount = currentCount + newParticipantIds.length;
+
+    if (newCount > GROUP_SIZE_LIMIT) {
+      throw new Error(
+        `Cannot add ${newParticipantIds.length} participants. Group would exceed limit of ${GROUP_SIZE_LIMIT} members (current: ${currentCount}).`
+      );
+    }
+
+    // Use arrayUnion to atomically add new participants
+    const conversationRef = doc(db, 'conversations', conversationId);
+    await updateDoc(conversationRef, {
+      participantIds: arrayUnion(...newParticipantIds),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('Error adding participants:', error);
+
+    if (error instanceof Error) {
+      throw error;
+    }
+
+    const firestoreError = error as FirestoreError;
+    if (firestoreError.code === 'permission-denied') {
+      throw new Error('Permission denied. Only the group creator can add participants.');
+    }
+
+    throw new Error('Failed to add participants. Please try again.');
+  }
+}
+
+/**
+ * Removes a participant from a group conversation
+ *
+ * @param conversationId - The ID of the group conversation
+ * @param participantId - The user ID to remove from the group
+ * @param userId - The ID of the user performing the action (must be group creator)
+ * @returns Promise that resolves when participant is removed
+ * @throws {Error} When conversation not found, user lacks permission, or trying to remove creator
+ *
+ * @remarks
+ * - Only the group creator can remove participants
+ * - Creator cannot remove themselves from the group
+ * - Uses arrayRemove() to atomically remove the participant
+ * - Implements soft delete via deletedBy map so removed user loses access immediately
+ * - Real-time listeners will automatically handle participant access revocation
+ * - Updates conversation's updatedAt timestamp
+ *
+ * @example
+ * ```typescript
+ * await removeParticipant('conv123', 'user456', 'creator123');
+ * ```
+ */
+export async function removeParticipant(
+  conversationId: string,
+  participantId: string,
+  userId: string
+): Promise<void> {
+  try {
+    const db = getFirebaseDb();
+
+    // Verify conversation exists and user has permission
+    const conversation = await getConversation(conversationId);
+    if (!conversation) {
+      throw new Error('Conversation not found.');
+    }
+
+    if (conversation.type !== 'group') {
+      throw new Error('Can only remove participants from group conversations.');
+    }
+
+    // Check if user is the creator (only creator can remove participants per Story 4.3 AC #9)
+    if (conversation.creatorId !== userId) {
+      throw new Error('Only the group creator can remove participants.');
+    }
+
+    // Prevent removing the creator
+    if (participantId === conversation.creatorId) {
+      throw new Error('Cannot remove the group creator from the group.');
+    }
+
+    // Verify participant is actually in the group
+    if (!conversation.participantIds.includes(participantId)) {
+      throw new Error('User is not a participant in this group.');
+    }
+
+    // Use arrayRemove to remove participant and set deletedBy flag for soft delete
+    const conversationRef = doc(db, 'conversations', conversationId);
+    await updateDoc(conversationRef, {
+      participantIds: arrayRemove(participantId),
+      [`deletedBy.${participantId}`]: true,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('Error removing participant:', error);
+
+    if (error instanceof Error) {
+      throw error;
+    }
+
+    const firestoreError = error as FirestoreError;
+    if (firestoreError.code === 'permission-denied') {
+      throw new Error('Permission denied. Only the group creator can remove participants.');
+    }
+
+    throw new Error('Failed to remove participant. Please try again.');
+  }
+}
+
+/**
  * Removes a user from a group conversation (leave group)
  *
  * @param conversationId - Conversation ID to leave
@@ -1023,7 +1343,9 @@ export async function removeMember(
     }
 
     // Remove member from participantIds
-    const updatedParticipantIds = conversation.participantIds.filter((id) => id !== memberIdToRemove);
+    const updatedParticipantIds = conversation.participantIds.filter(
+      (id) => id !== memberIdToRemove
+    );
 
     // Update conversation
     const conversationRef = doc(db, 'conversations', conversationId);
@@ -1117,5 +1439,373 @@ export async function muteConversation(
     }
 
     throw new Error('Failed to update mute settings. Please try again.');
+  }
+}
+
+/**
+ * Archives or unarchives a conversation for a specific user
+ *
+ * @param conversationId - Conversation ID to archive/unarchive
+ * @param userId - User ID archiving/unarchiving the conversation
+ * @param archive - True to archive, false to unarchive
+ * @returns Promise resolving when update is complete
+ * @throws {Error} When user is not a participant or update fails
+ *
+ * @remarks
+ * - Updates the archivedBy map in the conversation document
+ * - Only participants can archive/unarchive conversations
+ * - Archived conversations are hidden from main conversation list
+ * - New messages in archived conversations will automatically unarchive them
+ * - Archived conversations still receive push notifications (use muteConversation to disable)
+ *
+ * @example
+ * ```typescript
+ * // Archive conversation
+ * await archiveConversation('user123_user456', 'user123', true);
+ *
+ * // Unarchive conversation
+ * await archiveConversation('user123_user456', 'user123', false);
+ * ```
+ */
+export async function archiveConversation(
+  conversationId: string,
+  userId: string,
+  archive: boolean
+): Promise<void> {
+  try {
+    const db = getFirebaseDb();
+
+    // Get conversation to check if user is a participant
+    const conversation = await getConversation(conversationId);
+    if (!conversation) {
+      throw new Error('Conversation not found.');
+    }
+
+    if (!conversation.participantIds.includes(userId)) {
+      throw new Error('You must be a participant in this conversation to archive it.');
+    }
+
+    // Update archivedBy field for this user
+    const conversationRef = doc(db, 'conversations', conversationId);
+    await updateDoc(conversationRef, {
+      [`archivedBy.${userId}`]: archive,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('Error archiving conversation:', error);
+
+    // Re-throw custom error messages (from validation logic)
+    if (error instanceof Error && error.message.includes('Conversation not found')) {
+      throw error;
+    }
+
+    if (error instanceof Error && error.message.includes('must be a participant')) {
+      throw error;
+    }
+
+    const firestoreError = error as FirestoreError;
+    if (firestoreError.code === 'not-found') {
+      throw new Error('Conversation not found.');
+    }
+
+    if (firestoreError.code === 'permission-denied') {
+      throw new Error('Permission denied. Unable to update archive settings.');
+    }
+
+    throw new Error('Failed to update archive settings. Please try again.');
+  }
+}
+
+/**
+ * Deletes a conversation for a specific user (soft delete)
+ *
+ * @param conversationId - Conversation ID to delete
+ * @param userId - User ID deleting the conversation
+ * @returns Promise resolving when update is complete
+ * @throws {Error} When user is not a participant or update fails
+ *
+ * @remarks
+ * - Updates the deletedBy map in the conversation document (soft delete)
+ * - Only participants can delete conversations
+ * - Deleted conversations are hidden from main conversation list and archived list
+ * - Messages remain in Firestore for other participants (per-user deletion)
+ * - Deletion is permanent for the user (no undo functionality)
+ * - Deleted conversations do not send push notifications to the deleting user
+ * - This is a soft delete - conversation document remains for other participants
+ *
+ * @example
+ * ```typescript
+ * // Delete conversation for user123
+ * await deleteConversation('user123_user456', 'user123');
+ * // Conversation is now hidden from user123's view but remains for user456
+ * ```
+ */
+export async function deleteConversation(conversationId: string, userId: string): Promise<void> {
+  try {
+    const db = getFirebaseDb();
+
+    // Get conversation to check if user is a participant
+    const conversation = await getConversation(conversationId);
+    if (!conversation) {
+      throw new Error('Conversation not found.');
+    }
+
+    if (!conversation.participantIds.includes(userId)) {
+      throw new Error('You must be a participant in this conversation to delete it.');
+    }
+
+    // Update deletedBy field for this user (soft delete)
+    const conversationRef = doc(db, 'conversations', conversationId);
+    await updateDoc(conversationRef, {
+      [`deletedBy.${userId}`]: true,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('Error deleting conversation:', error);
+
+    // Re-throw custom error messages (from validation logic)
+    if (error instanceof Error && error.message.includes('Conversation not found')) {
+      throw error;
+    }
+
+    if (error instanceof Error && error.message.includes('must be a participant')) {
+      throw error;
+    }
+
+    const firestoreError = error as FirestoreError;
+    if (firestoreError.code === 'not-found') {
+      throw new Error('Conversation not found.');
+    }
+
+    if (firestoreError.code === 'permission-denied') {
+      throw new Error('Permission denied. Unable to delete conversation.');
+    }
+
+    throw new Error('Failed to delete conversation. Please try again.');
+  }
+}
+
+/**
+ * Uploads a group photo to Firebase Storage with compression
+ *
+ * @param imageUri - Local URI of the image to upload
+ * @param groupId - The group conversation ID
+ * @returns Promise resolving to the public download URL
+ * @throws {Error} When upload fails or image processing fails
+ *
+ * @example
+ * ```typescript
+ * const photoUrl = await uploadGroupPhoto('file://image.jpg', 'group123');
+ * // Use photoUrl when creating or updating group conversation
+ * ```
+ */
+export async function uploadGroupPhoto(imageUri: string, groupId: string): Promise<string> {
+  try {
+    // Import Firebase Storage functions
+    const { getStorage, ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
+
+    // Get storage instance
+    const storage = getStorage();
+    const storageRef = ref(storage, `groups/${groupId}/photo.jpg`);
+
+    // Fetch the image as a blob
+    // Note: In React Native, fetch is global. In Node.js tests, it might need polyfill
+    // eslint-disable-next-line no-undef
+    const response = await fetch(imageUri);
+    if (!response.ok) {
+      throw new Error('Failed to fetch image from local URI');
+    }
+
+    const blob = await response.blob();
+
+    // Upload to Firebase Storage
+    const snapshot = await uploadBytes(storageRef, blob);
+
+    // Get public download URL
+    const downloadURL = await getDownloadURL(snapshot.ref);
+
+    return downloadURL;
+  } catch (error) {
+    console.error('[ConversationService] Error uploading group photo:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('storage/unauthorized')) {
+        throw new Error('Permission denied. Unable to upload group photo.');
+      }
+      if (error.message.includes('storage/quota-exceeded')) {
+        throw new Error('Storage quota exceeded. Please try again later.');
+      }
+    }
+
+    throw new Error('Failed to upload group photo. Please try again.');
+  }
+}
+
+/**
+ * Archives or unarchives multiple conversations atomically for a specific user
+ *
+ * @param conversationIds - Array of conversation IDs to archive/unarchive
+ * @param userId - User ID archiving/unarchiving the conversations
+ * @param archive - True to archive, false to unarchive
+ * @returns Promise resolving when batch update is complete
+ * @throws {Error} When batch limit exceeded or update fails
+ *
+ * @remarks
+ * - Uses Firestore writeBatch() for atomic batch operations (all-or-nothing)
+ * - Updates the archivedBy map for each conversation
+ * - Maximum 500 operations per batch (Firestore limit)
+ * - More efficient than sequential individual updates (single network round-trip)
+ * - All conversations succeed or all fail (atomic transaction)
+ * - Does not validate participant membership (relies on Firestore security rules)
+ *
+ * @example
+ * ```typescript
+ * // Archive multiple conversations
+ * await batchArchiveConversations(
+ *   ['conv1', 'conv2', 'conv3'],
+ *   'user123',
+ *   true
+ * );
+ *
+ * // Unarchive multiple conversations
+ * await batchArchiveConversations(
+ *   ['conv1', 'conv2'],
+ *   'user123',
+ *   false
+ * );
+ * ```
+ */
+export async function batchArchiveConversations(
+  conversationIds: string[],
+  userId: string,
+  archive: boolean
+): Promise<void> {
+  try {
+    // Validation
+    if (!conversationIds || conversationIds.length === 0) {
+      throw new Error('No conversations provided.');
+    }
+
+    if (conversationIds.length > 500) {
+      throw new Error('Batch operation limit exceeded. Maximum 500 conversations allowed.');
+    }
+
+    const db = getFirebaseDb();
+    const batch = writeBatch(db);
+
+    // Add each conversation update to the batch
+    conversationIds.forEach((conversationId) => {
+      const conversationRef = doc(db, 'conversations', conversationId);
+      batch.update(conversationRef, {
+        [`archivedBy.${userId}`]: archive,
+        updatedAt: serverTimestamp(),
+      });
+    });
+
+    // Commit all updates atomically
+    await batch.commit();
+  } catch (error) {
+    console.error('Error batch archiving conversations:', error);
+
+    // Re-throw custom error messages (from validation logic)
+    if (error instanceof Error && error.message.includes('No conversations provided')) {
+      throw error;
+    }
+
+    if (error instanceof Error && error.message.includes('Batch operation limit exceeded')) {
+      throw error;
+    }
+
+    const firestoreError = error as FirestoreError;
+    if (firestoreError.code === 'permission-denied') {
+      throw new Error('Permission denied. Unable to archive conversations.');
+    }
+
+    if (firestoreError.code === 'not-found') {
+      throw new Error('One or more conversations not found.');
+    }
+
+    throw new Error('Failed to archive conversations. Please try again.');
+  }
+}
+
+/**
+ * Soft-deletes multiple conversations atomically for a specific user
+ *
+ * @param conversationIds - Array of conversation IDs to delete
+ * @param userId - User ID deleting the conversations
+ * @returns Promise resolving when batch update is complete
+ * @throws {Error} When batch limit exceeded or update fails
+ *
+ * @remarks
+ * - Uses Firestore writeBatch() for atomic batch operations (all-or-nothing)
+ * - Implements SOFT DELETE via deletedBy map (preserves data for other participants)
+ * - Updates the deletedBy map for each conversation
+ * - Maximum 500 operations per batch (Firestore limit)
+ * - More efficient than sequential individual updates (single network round-trip)
+ * - All conversations succeed or all fail (atomic transaction)
+ * - Does not validate participant membership (relies on Firestore security rules)
+ * - NEVER uses hard delete (batch.delete) to preserve data for other participants
+ *
+ * @example
+ * ```typescript
+ * // Delete multiple conversations for user123
+ * await batchDeleteConversations(
+ *   ['conv1', 'conv2', 'conv3'],
+ *   'user123'
+ * );
+ * // Conversations are now hidden from user123's view but remain for other participants
+ * ```
+ */
+export async function batchDeleteConversations(
+  conversationIds: string[],
+  userId: string
+): Promise<void> {
+  try {
+    // Validation
+    if (!conversationIds || conversationIds.length === 0) {
+      throw new Error('No conversations provided.');
+    }
+
+    if (conversationIds.length > 500) {
+      throw new Error('Batch operation limit exceeded. Maximum 500 conversations allowed.');
+    }
+
+    const db = getFirebaseDb();
+    const batch = writeBatch(db);
+
+    // Add each conversation update to the batch (soft delete)
+    conversationIds.forEach((conversationId) => {
+      const conversationRef = doc(db, 'conversations', conversationId);
+      batch.update(conversationRef, {
+        [`deletedBy.${userId}`]: true,
+        updatedAt: serverTimestamp(),
+      });
+    });
+
+    // Commit all updates atomically
+    await batch.commit();
+  } catch (error) {
+    console.error('Error batch deleting conversations:', error);
+
+    // Re-throw custom error messages (from validation logic)
+    if (error instanceof Error && error.message.includes('No conversations provided')) {
+      throw error;
+    }
+
+    if (error instanceof Error && error.message.includes('Batch operation limit exceeded')) {
+      throw error;
+    }
+
+    const firestoreError = error as FirestoreError;
+    if (firestoreError.code === 'permission-denied') {
+      throw new Error('Permission denied. Unable to delete conversations.');
+    }
+
+    if (firestoreError.code === 'not-found') {
+      throw new Error('One or more conversations not found.');
+    }
+
+    throw new Error('Failed to delete conversations. Please try again.');
   }
 }

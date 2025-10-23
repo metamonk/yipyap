@@ -21,11 +21,20 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-// import * as ImagePicker from 'expo-image-picker'; // TODO: Re-enable when Firebase Storage is implemented
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/hooks/useAuth';
 import { useGroupAdmin } from '@/hooks/useGroupAdmin';
-import { getConversation, updateGroupSettings, leaveGroup } from '@/services/conversationService';
+import {
+  getConversation,
+  updateGroupSettings,
+  leaveGroup,
+  addParticipants,
+  uploadGroupPhoto,
+} from '@/services/conversationService';
+import { getUserProfile } from '@/services/userService';
+import { AddParticipantsModal } from '@/components/conversation/AddParticipantsModal';
 import type { Conversation } from '@/types/models';
+import type { User } from '@/types/user';
 
 /**
  * Group Settings screen component
@@ -47,13 +56,16 @@ export default function GroupSettingsScreen() {
   const { user } = useAuth();
 
   const [conversation, setConversation] = useState<Conversation | null>(null);
+  const [creator, setCreator] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [groupPhotoURL, setGroupPhotoURL] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
+  const [showAddParticipantsModal, setShowAddParticipantsModal] = useState(false);
 
   const isAdmin = useGroupAdmin(conversation);
+  const isCreator = user && conversation && conversation.creatorId === user.uid;
 
   /**
    * Load conversation data
@@ -78,6 +90,17 @@ export default function GroupSettingsScreen() {
       setConversation(conv);
       setGroupName(conv.groupName || '');
       setGroupPhotoURL(conv.groupPhotoURL || null);
+
+      // Load creator profile if available
+      if (conv.creatorId) {
+        try {
+          const creatorProfile = await getUserProfile(conv.creatorId);
+          setCreator(creatorProfile);
+        } catch (error) {
+          console.error('Error loading creator profile:', error);
+          // Non-critical error, continue without creator info
+        }
+      }
     } catch (error) {
       console.error('Error loading conversation:', error);
       Alert.alert('Error', 'Failed to load group settings');
@@ -107,14 +130,6 @@ export default function GroupSettingsScreen() {
       return;
     }
 
-    // Feature temporarily disabled pending Firebase Storage integration
-    // Will be implemented in future story with proper upload, progress, and error handling
-    Alert.alert(
-      'Feature Coming Soon',
-      'Group photo uploads will be available in a future update with Firebase Storage integration.'
-    );
-
-    /* Future implementation:
     try {
       // Request media library permissions
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -132,23 +147,30 @@ export default function GroupSettingsScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
-        // Upload to Firebase Storage
-        const photoURL = await uploadGroupPhotoToStorage(result.assets[0].uri);
-        setGroupPhotoURL(photoURL);
-        setHasChanges(true);
+        setSaving(true);
+        try {
+          // Upload to Firebase Storage
+          const photoURL = await uploadGroupPhoto(result.assets[0].uri, conversationId);
+          setGroupPhotoURL(photoURL);
+          setHasChanges(true);
+        } catch (uploadError) {
+          console.error('Error uploading photo:', uploadError);
+          Alert.alert(
+            'Error',
+            uploadError instanceof Error ? uploadError.message : 'Failed to upload photo'
+          );
+        } finally {
+          setSaving(false);
+        }
       }
     } catch (error) {
       console.error('Error selecting photo:', error);
       Alert.alert('Error', 'Failed to select photo');
     }
-    */
   };
 
   /**
    * Handle photo removal
-   *
-   * @remarks
-   * Photo removal temporarily disabled pending Firebase Storage integration
    */
   const handleRemovePhoto = () => {
     if (!isAdmin) {
@@ -156,32 +178,17 @@ export default function GroupSettingsScreen() {
       return;
     }
 
-    // Feature temporarily disabled pending Firebase Storage integration
-    Alert.alert(
-      'Feature Coming Soon',
-      'Group photo management will be available in a future update with Firebase Storage integration.'
-    );
-
-    /* Future implementation:
     Alert.alert('Remove Photo', 'Are you sure you want to remove the group photo?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
         style: 'destructive',
-        onPress: async () => {
-          try {
-            if (groupPhotoURL) {
-              await deleteGroupPhotoFromStorage(groupPhotoURL);
-            }
-            setGroupPhotoURL(null);
-            setHasChanges(true);
-          } catch (error) {
-            Alert.alert('Error', 'Failed to remove photo');
-          }
+        onPress: () => {
+          setGroupPhotoURL(null);
+          setHasChanges(true);
         },
       },
     ]);
-    */
   };
 
   /**
@@ -246,7 +253,10 @@ export default function GroupSettingsScreen() {
               router.replace('/(tabs)/conversations');
             } catch (error) {
               console.error('Error leaving group:', error);
-              Alert.alert('Error', error instanceof Error ? error.message : 'Failed to leave group');
+              Alert.alert(
+                'Error',
+                error instanceof Error ? error.message : 'Failed to leave group'
+              );
             }
           },
         },
@@ -262,6 +272,24 @@ export default function GroupSettingsScreen() {
       pathname: '/(tabs)/conversations/group-members',
       params: { id: conversationId },
     });
+  };
+
+  /**
+   * Handle adding participants
+   */
+  const handleAddParticipants = async (newParticipantIds: string[]) => {
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    try {
+      await addParticipants(conversationId, newParticipantIds, user.uid);
+      // Reload conversation to update participant count
+      await loadConversation();
+    } catch (error) {
+      console.error('Error adding participants:', error);
+      throw error;
+    }
   };
 
   if (loading) {
@@ -331,6 +359,33 @@ export default function GroupSettingsScreen() {
           </View>
         </View>
 
+        {/* Group Creator */}
+        {creator && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Created By</Text>
+            <View style={styles.creatorContainer}>
+              {creator.photoURL ? (
+                <Image source={{ uri: creator.photoURL }} style={styles.creatorPhoto} />
+              ) : (
+                <View style={styles.creatorPhotoPlaceholder}>
+                  <Ionicons name="person" size={24} color="#999" />
+                </View>
+              )}
+              <View style={styles.creatorInfo}>
+                <Text style={styles.creatorName}>{creator.displayName}</Text>
+                {creator.username && (
+                  <Text style={styles.creatorUsername}>@{creator.username}</Text>
+                )}
+              </View>
+              {isCreator && (
+                <View style={styles.creatorBadge}>
+                  <Text style={styles.creatorBadgeText}>You</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
         {/* Group Name */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Group Name</Text>
@@ -350,6 +405,15 @@ export default function GroupSettingsScreen() {
             <Text style={styles.sectionTitle}>Members</Text>
             <Text style={styles.memberCount}>{conversation.participantIds.length}</Text>
           </View>
+          {isCreator && (
+            <TouchableOpacity
+              onPress={() => setShowAddParticipantsModal(true)}
+              style={styles.addMembersButton}
+            >
+              <Ionicons name="person-add" size={20} color="#007AFF" />
+              <Text style={styles.addMembersButtonText}>Add Members</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity onPress={handleManageMembers} style={styles.manageButton}>
             <Text style={styles.manageButtonText}>View & Manage Members</Text>
             <Ionicons name="chevron-forward" size={20} color="#007AFF" />
@@ -364,6 +428,16 @@ export default function GroupSettingsScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Add Participants Modal */}
+      {conversation && (
+        <AddParticipantsModal
+          visible={showAddParticipantsModal}
+          onClose={() => setShowAddParticipantsModal(false)}
+          conversation={conversation}
+          onParticipantsAdded={handleAddParticipants}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -490,6 +564,22 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     marginTop: 6,
   },
+  addMembersButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+    marginBottom: 12,
+    gap: 8,
+  },
+  addMembersButtonText: {
+    fontSize: 16,
+    color: '#FFF',
+    fontWeight: '600',
+  },
   manageButton: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -519,6 +609,48 @@ const styles = StyleSheet.create({
   leaveButtonText: {
     fontSize: 16,
     color: '#FF3B30',
+    fontWeight: '600',
+  },
+  creatorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  creatorPhoto: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  creatorPhotoPlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#E5E5EA',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  creatorInfo: {
+    flex: 1,
+  },
+  creatorName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+  },
+  creatorUsername: {
+    fontSize: 14,
+    color: '#8E8E93',
+    marginTop: 2,
+  },
+  creatorBadge: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  creatorBadgeText: {
+    fontSize: 12,
+    color: '#FFF',
     fontWeight: '600',
   },
 });

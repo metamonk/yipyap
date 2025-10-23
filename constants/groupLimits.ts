@@ -9,7 +9,7 @@
  * client-side validation is consistent with server-side enforcement.
  *
  * Business Rationale:
- * - 10 member limit balances usability with technical constraints
+ * - 50 member limit balances usability with technical constraints
  * - Prevents excessive real-time listener overhead
  * - Maintains message delivery performance (<500ms P95)
  * - Simplifies group management UI/UX
@@ -24,7 +24,7 @@
  *
  * @constant
  * @type {number}
- * @default 10
+ * @default 50
  *
  * @remarks
  * This limit includes ALL participants (creator + added members).
@@ -34,14 +34,14 @@
  * - Backend validation logic
  * - Error messages and UI text
  */
-export const GROUP_SIZE_LIMIT = 10;
+export const GROUP_SIZE_LIMIT = 50;
 
 /**
  * Threshold for displaying visual warnings about approaching group size limit
  *
  * @constant
  * @type {number}
- * @default 8
+ * @default 45
  *
  * @remarks
  * When member count reaches this threshold, UI displays warning indicators:
@@ -49,7 +49,7 @@ export const GROUP_SIZE_LIMIT = 10;
  * - Warning message appears
  * - Progress indicator shows warning state
  */
-export const GROUP_SIZE_WARNING_THRESHOLD = 8;
+export const GROUP_SIZE_WARNING_THRESHOLD = 45;
 
 /**
  * Error message displayed when attempting to exceed group size limit

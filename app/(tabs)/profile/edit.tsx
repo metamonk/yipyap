@@ -28,6 +28,7 @@ import { getFirebaseAuth } from '@/services/firebase';
 import { getUserProfile, updateUserProfile } from '@/services/userService';
 import { uploadProfilePhoto } from '@/services/storageService';
 import { User, validateDisplayName } from '@/types/user';
+import { useUserStore } from '@/stores/userStore';
 
 /**
  * Profile Edit Screen Component
@@ -37,6 +38,7 @@ export default function ProfileEditScreen() {
   const router = useRouter();
   const auth = getFirebaseAuth();
   const currentUser = auth.currentUser;
+  const { updateCurrentUser } = useUserStore();
 
   // Profile state
   const [originalProfile, setOriginalProfile] = useState<User | null>(null);
@@ -65,17 +67,17 @@ export default function ProfileEditScreen() {
           setDisplayName(profile.displayName);
           setCurrentPhotoURL(profile.photoURL);
           setSendReadReceipts(profile.settings?.sendReadReceipts ?? true);
-      } else {
-        Alert.alert('Error', 'Profile not found.');
+        } else {
+          Alert.alert('Error', 'Profile not found.');
+          router.replace('/(tabs)/profile');
+        }
+      } catch (error) {
+        console.error('Error loading profile:', error);
+        Alert.alert('Error', 'Failed to load profile. Please try again.');
         router.replace('/(tabs)/profile');
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error('Error loading profile:', error);
-      Alert.alert('Error', 'Failed to load profile. Please try again.');
-      router.replace('/(tabs)/profile');
-    } finally {
-      setIsLoading(false);
-    }
     };
 
     loadProfile();
@@ -150,7 +152,11 @@ export default function ProfileEditScreen() {
       }
 
       // Update profile in Firestore
-      const updates: { displayName?: string; photoURL?: string; settings?: { sendReadReceipts: boolean } } = {};
+      const updates: {
+        displayName?: string;
+        photoURL?: string;
+        settings?: { sendReadReceipts: boolean };
+      } = {};
 
       if (optimisticDisplayName !== originalProfile.displayName) {
         updates.displayName = optimisticDisplayName;
@@ -170,14 +176,28 @@ export default function ProfileEditScreen() {
         await updateUserProfile(currentUser.uid, updates);
 
         // Update original profile to reflect saved changes
-        setOriginalProfile({
+        const updatedProfile = {
           ...originalProfile,
           ...updates,
           settings: {
             ...originalProfile.settings,
             ...updates.settings,
           },
-        });
+        };
+        setOriginalProfile(updatedProfile);
+
+        // Update the user store so other screens see the changes immediately
+        // Merge settings properly to avoid type errors
+        const storeUpdates: Partial<User> = {};
+        if (updates.displayName) storeUpdates.displayName = updates.displayName;
+        if (updates.photoURL !== undefined) storeUpdates.photoURL = updates.photoURL;
+        if (updates.settings) {
+          storeUpdates.settings = {
+            ...originalProfile.settings,
+            ...updates.settings,
+          };
+        }
+        updateCurrentUser(storeUpdates);
       }
 
       // Show success message

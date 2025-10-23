@@ -109,6 +109,22 @@ service cloud.firestore {
                request.auth.uid in request.resource.data.participantIds;
       }
 
+      // Helper function to check if user is the group creator
+      function isGroupCreator() {
+        return request.auth != null &&
+               resource.data.type == 'group' &&
+               resource.data.creatorId == request.auth.uid;
+      }
+
+      // Helper function to check if only group management fields are being updated
+      function isGroupManagementUpdate() {
+        let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
+        // These fields can only be updated by the group creator
+        let creatorOnlyFields = ['participantIds', 'groupName', 'groupPhotoURL'];
+        // Check if any creator-only fields are being modified
+        return affectedKeys.hasAny(creatorOnlyFields);
+      }
+
       // Read: Allow authenticated users to read conversations they're participants of
       // This rule works with queries that filter by participantIds array-contains
       allow read: if request.auth != null && (
@@ -120,15 +136,43 @@ service cloud.firestore {
       // This is safer than allowing all reads on non-existent docs
       allow get: if request.auth != null;
 
-      // Create: User must include themselves in participantIds and limit group size
-      // Group size limit: Maximum 10 participants per group
+      // Create: User must include themselves in participantIds and validate conversation type
+      // Group size limit: Maximum 50 participants per group
       // Client-side validation in constants/groupLimits.ts (GROUP_SIZE_LIMIT) must match this value
       // Client validation provides UX feedback, server rules provide security enforcement
-      allow create: if isParticipantInNewDoc() &&
-                       request.resource.data.participantIds.size() <= 10;
+      allow create: if isParticipantInNewDoc() && (
+        // Direct conversation validation
+        (request.resource.data.type == 'direct' &&
+         request.resource.data.participantIds.size() == 2) ||
+        // Group conversation validation
+        (request.resource.data.type == 'group' &&
+         request.resource.data.creatorId == request.auth.uid &&  // Creator must match auth
+         request.resource.data.groupName != null &&              // Group name required
+         request.resource.data.groupName.size() > 0 &&
+         request.resource.data.groupName.size() <= 50 &&         // Max 50 chars
+         request.resource.data.participantIds.size() >= 3 &&     // Min 3 participants
+         request.resource.data.participantIds.size() <= 50)      // Max 50 participants
+      );
 
-      // Update: User must be a participant
-      allow update: if isParticipant();
+      // Update: Enhanced to check creator permissions for group management fields
+      allow update: if isParticipant() && (
+        // Regular participants can update per-user fields only
+        (!isGroupManagementUpdate() &&
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['archivedBy', 'deletedBy', 'mutedBy', 'unreadCount', 'lastMessage', 'lastMessageTimestamp', 'updatedAt'])) ||
+        // Group creator can update group management fields
+        (isGroupCreator() && isGroupManagementUpdate() &&
+         // Validate participant array changes if modified
+         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['participantIds']) ||
+          (request.resource.data.participantIds.size() >= 3 &&
+           request.resource.data.participantIds.size() <= 50 &&
+           request.auth.uid in request.resource.data.participantIds)) &&  // Creator cannot remove themselves
+         // Validate group name if changed
+         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['groupName']) ||
+          (request.resource.data.groupName is string &&
+           request.resource.data.groupName.size() > 0 &&
+           request.resource.data.groupName.size() <= 50)))
+      );
 
       // Delete: Not allowed (use soft delete via deletedBy field)
       allow delete: if false;

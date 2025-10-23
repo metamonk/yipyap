@@ -13,6 +13,9 @@ import type { Message } from '@/types/models';
 jest.mock('@/components/common/Avatar', () => ({
   Avatar: () => null,
 }));
+jest.mock('@/components/PresenceIndicator', () => ({
+  PresenceIndicator: () => null,
+}));
 jest.mock('@/utils/dateHelpers', () => ({
   formatMessageTime: jest.fn(() => '10:45 AM'),
 }));
@@ -82,9 +85,7 @@ describe('MessageItem', () => {
       const styles = Array.isArray(container.props.style)
         ? container.props.style
         : [container.props.style];
-      expect(styles).toContainEqual(
-        expect.objectContaining({ justifyContent: 'flex-end' })
-      );
+      expect(styles).toContainEqual(expect.objectContaining({ justifyContent: 'flex-end' }));
     });
 
     it('does not display sender name for sent messages', () => {
@@ -189,21 +190,21 @@ describe('MessageItem', () => {
       const styles = Array.isArray(container.props.style)
         ? container.props.style
         : [container.props.style];
-      expect(styles).toContainEqual(
-        expect.objectContaining({ justifyContent: 'flex-start' })
-      );
+      expect(styles).toContainEqual(expect.objectContaining({ justifyContent: 'flex-start' }));
     });
 
-    it('displays sender name for received messages', () => {
+    it('displays sender name for received messages in 1:1 chat', () => {
       const { getByText } = render(
         <MessageItem
           message={mockMessage}
           isOwnMessage={false}
           senderDisplayName="John Doe"
           senderPhotoURL={null}
+          isGroupChat={false}
         />
       );
 
+      // Sender name is shown for received messages
       expect(getByText('John Doe')).toBeTruthy();
     });
 

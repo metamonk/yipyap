@@ -1,9 +1,10 @@
 /**
- * Chat screen for 1:1 messaging
+ * Chat screen for 1:1 and group messaging
  *
  * @remarks
  * Dynamic route screen that displays messages for a specific conversation.
- * Features real-time message updates, optimized FlatList rendering, and auto-scroll.
+ * Features real-time message updates, optimized FlatList rendering, auto-scroll,
+ * and sender attribution for group conversations.
  */
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
@@ -40,7 +41,7 @@ import {
   muteConversation,
   markConversationAsRead,
 } from '@/services/conversationService';
-import { getUserProfile } from '@/services/userService';
+import { getUserProfile, getUserProfiles } from '@/services/userService';
 import { markMessageAsRead } from '@/services/messageService';
 import { setActiveConversation } from '@/services/notificationService';
 import { groupMessagesWithSeparators } from '@/utils/messageHelpers';
@@ -48,17 +49,19 @@ import type { Conversation, ChatListItem } from '@/types/models';
 import type { User as UserProfile } from '@/types/user';
 
 /**
- * Chat screen component for real-time 1:1 messaging
+ * Chat screen component for real-time 1:1 and group messaging
  *
  * @component
  *
  * @remarks
  * - Extracts conversation ID from route params (dynamic route)
  * - Displays messages in an optimized FlatList with performance optimizations
- * - Shows sender's avatar and name for received messages
+ * - Shows sender's avatar and name for ALL messages in group chats (AC: 2, 5)
+ * - Shows sender's avatar and name for received messages in 1:1 chats
  * - Auto-scrolls to bottom when new messages arrive
  * - Displays participant info in header
  * - Handles loading states for conversation and messages
+ * - Fetches and caches participant profiles for group conversations (Task 5)
  *
  * Route: `/(tabs)/conversations/[id]` where id is the conversation ID
  */
@@ -85,6 +88,9 @@ export default function ChatScreen() {
   const { user } = useAuth();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [otherUser, setOtherUser] = useState<UserProfile | null>(null);
+  const [participantProfiles, setParticipantProfiles] = useState<Map<string, UserProfile>>(
+    new Map()
+  );
   const [conversationLoading, setConversationLoading] = useState(true);
   const [conversationError, setConversationError] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
@@ -222,7 +228,7 @@ export default function ChatScreen() {
 
           for (let i = 0; i < maxRetries; i++) {
             const delay = baseDelay * Math.pow(2, i); // Exponential backoff: 500ms, 1s, 2s
-            console.log(
+            console.warn(
               `Conversation not found, retrying in ${delay}ms (attempt ${i + 1}/${maxRetries})`
             );
 
@@ -230,7 +236,7 @@ export default function ChatScreen() {
             conv = await getConversation(conversationId);
 
             if (conv) {
-              console.log('Conversation found after retry');
+              console.warn('Conversation found after retry');
               break;
             }
           }
@@ -250,8 +256,14 @@ export default function ChatScreen() {
           setIsMuted(conv.mutedBy?.[user.uid] === true);
         }
 
-        // Get other participant's profile (for direct conversations only)
-        if (conv.type === 'direct') {
+        // Get participant profiles based on conversation type
+        if (conv.type === 'group') {
+          // For group conversations, fetch all participant profiles (AC: 2, Task 5)
+          const profiles = await getUserProfiles(conv.participantIds);
+          const profileMap = new Map(profiles.map((p) => [p.uid, p]));
+          setParticipantProfiles(profileMap);
+        } else if (conv.type === 'direct') {
+          // For direct conversations, fetch the other user's profile
           const otherUserId = conv.participantIds.find((id) => id !== user.uid);
 
           if (otherUserId) {
@@ -292,21 +304,24 @@ export default function ChatScreen() {
       const message = item.data;
       const isOwnMessage = message.senderId === user?.uid;
       const isHighlighted = message.id === highlightedMessageId;
+      const isGroupChat = conversation?.type === 'group';
 
-      // Get sender info
-      // For group chats, we'll show sender ID as a fallback until we implement participant profiles
-      // For direct chats, we use the otherUser profile
-      const senderDisplayName = isOwnMessage
-        ? user?.displayName || 'You'
-        : conversation?.type === 'direct'
-          ? otherUser?.displayName || 'Unknown'
-          : 'Group Member'; // TODO: Implement participant profile cache for group chats
+      // Get sender info based on conversation type (AC: 2, Task 5)
+      let senderDisplayName: string;
+      let senderPhotoURL: string | null;
 
-      const senderPhotoURL = isOwnMessage
-        ? user?.photoURL || null
-        : conversation?.type === 'direct'
-          ? otherUser?.photoURL || null
-          : null; // TODO: Implement participant profile cache for group chats
+      if (isGroupChat) {
+        // For group chats, get sender info from participant profiles cache
+        const senderProfile = participantProfiles.get(message.senderId);
+        senderDisplayName = senderProfile?.displayName || 'Unknown User';
+        senderPhotoURL = senderProfile?.photoURL || null;
+      } else {
+        // For direct chats, use current user or other user info
+        senderDisplayName = isOwnMessage
+          ? user?.displayName || 'You'
+          : otherUser?.displayName || 'Unknown';
+        senderPhotoURL = isOwnMessage ? user?.photoURL || null : otherUser?.photoURL || null;
+      }
 
       const messageItem = (
         <MessageItem
@@ -314,6 +329,8 @@ export default function ChatScreen() {
           isOwnMessage={isOwnMessage}
           senderDisplayName={senderDisplayName}
           senderPhotoURL={senderPhotoURL}
+          isGroupChat={isGroupChat}
+          participantIds={conversation?.participantIds || draftParticipantIds || []}
         />
       );
 
@@ -338,7 +355,16 @@ export default function ChatScreen() {
 
       return messageItem;
     },
-    [user, otherUser, highlightedMessageId, highlightOpacity]
+    [
+      user,
+      otherUser,
+      conversation?.type,
+      conversation?.participantIds,
+      participantProfiles,
+      highlightedMessageId,
+      highlightOpacity,
+      draftParticipantIds,
+    ]
   );
 
   /**
@@ -629,7 +655,12 @@ export default function ChatScreen() {
                 <View style={styles.headerNameRow}>
                   <Text style={styles.headerName}>{otherUser.displayName}</Text>
                 </View>
-                <PresenceIndicator userId={otherUser.id} size="small" showLastSeen={true} />
+                <PresenceIndicator
+                  userId={otherUser.uid}
+                  size="small"
+                  showLastSeen={true}
+                  showStatusText={true}
+                />
                 {isOffline && (
                   <Text style={styles.offlineIndicator}>
                     Offline - messages will send when connected
@@ -675,6 +706,18 @@ export default function ChatScreen() {
           onPress={() => setShowMenu(false)}
         >
           <View style={styles.menuContainer}>
+            {conversation.type === 'group' && (
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setShowMenu(false);
+                  router.push(`/(tabs)/conversations/group-settings?id=${conversationId}`);
+                }}
+              >
+                <Ionicons name="information-circle-outline" size={22} color="#007AFF" />
+                <Text style={styles.menuItemText}>Group Info</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={styles.menuItem} onPress={handleMuteToggle}>
               <Ionicons
                 name={isMuted ? 'notifications' : 'notifications-off'}

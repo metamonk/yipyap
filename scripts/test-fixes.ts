@@ -7,16 +7,17 @@
 
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { getFirestore, collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
 
 // Firebase config (same as in services/firebase.ts)
 const firebaseConfig = {
-  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "AIzaSyDe7Fl6cDNCUtSeNNwihz-W9zkfTV8pLhA",
-  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || "yipyap-19f00.firebaseapp.com",
-  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "yipyap-19f00",
-  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || "yipyap-19f00.firebasestorage.app",
-  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "501331654921",
-  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || "1:501331654921:web:f5bb8a9e5cfab479f690e7"
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || 'AIzaSyDe7Fl6cDNCUtSeNNwihz-W9zkfTV8pLhA',
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || 'yipyap-19f00.firebaseapp.com',
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || 'yipyap-19f00',
+  storageBucket:
+    process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || 'yipyap-19f00.firebasestorage.app',
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '501331654921',
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || '1:501331654921:web:f5bb8a9e5cfab479f690e7',
 };
 
 const app = initializeApp(firebaseConfig);
@@ -54,8 +55,8 @@ async function testFixes() {
     try {
       await signInWithEmailAndPassword(auth, testEmail, testPassword);
       console.log('  - Signed in successfully');
-    } catch (signInError) {
-      console.log('  - Sign in failed (expected if test account doesn\'t exist)');
+    } catch {
+      console.log("  - Sign in failed (expected if test account doesn't exist)");
     }
 
     if (auth.currentUser) {
@@ -82,8 +83,13 @@ async function testFixes() {
       await getDocs(q);
       console.log('❌ Should not allow unauthenticated reads');
       failed++;
-    } catch (error: any) {
-      if (error.code === 'permission-denied') {
+    } catch (error: unknown) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        error.code === 'permission-denied'
+      ) {
         console.log('✅ Correctly denies unauthenticated access\n');
         passed++;
       } else {
@@ -108,7 +114,15 @@ async function testFixes() {
     const { userCacheService } = await import('../services/userCacheService');
 
     // Add test data
-    const testUser = { uid: 'test123', username: 'testuser', displayName: 'Test User' } as any;
+    const testUser = {
+      uid: 'test123',
+      username: 'testuser',
+      displayName: 'Test User',
+      email: 'test@example.com',
+      photoURL: null,
+      createdAt: { toMillis: () => Date.now() },
+      updatedAt: { toMillis: () => Date.now() },
+    } as const;
     userCacheService.setUser(testUser);
 
     // Verify it's cached
@@ -135,12 +149,12 @@ async function testFixes() {
   }
 
   // Summary
-  console.log('=' .repeat(50));
+  console.log('='.repeat(50));
   console.log('Test Summary:');
   console.log(`✅ Passed: ${passed}`);
   console.log(`❌ Failed: ${failed}`);
   console.log(`ℹ️  Manual checks: 1`);
-  console.log('=' .repeat(50));
+  console.log('='.repeat(50));
 
   if (failed === 0) {
     console.log('\n🎉 All automated tests passed!');

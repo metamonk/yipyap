@@ -21,6 +21,7 @@ import {
   orderBy,
   startAfter,
   QueryDocumentSnapshot,
+  Timestamp,
 } from 'firebase/firestore';
 import { getFirebaseDb } from './firebase';
 import {
@@ -116,7 +117,10 @@ export async function createUserProfile(
 
       // Create user profile document
       // Note: Only include photoURL if it has a value (Firestore doesn't accept undefined)
-      const newUser: Omit<User, 'createdAt' | 'updatedAt'> & { photoURL?: string; displayNameLower?: string } = {
+      const newUser: Omit<User, 'createdAt' | 'updatedAt'> & {
+        photoURL?: string;
+        displayNameLower?: string;
+      } = {
         uid,
         email,
         username: normalizedUsername,
@@ -189,14 +193,12 @@ export async function createUserProfile(
  */
 export async function getUserProfile(uid: string): Promise<User | null> {
   try {
-
     const db = getFirebaseDb();
     const userDocRef = doc(db, 'users', uid);
 
     const userDoc: DocumentSnapshot = await getDoc(userDocRef);
 
     if (!userDoc.exists()) {
-
       return null;
     }
 
@@ -210,25 +212,92 @@ export async function getUserProfile(uid: string): Promise<User | null> {
 }
 
 /**
+ * Fetches multiple user profiles by their UIDs
+ * @param uids - Array of user IDs to fetch
+ * @returns Promise resolving to array of user profiles (null for non-existent users)
+ * @throws {Error} When Firestore query fails
+ * @example
+ * ```typescript
+ * const profiles = await getUserProfiles(['uid1', 'uid2', 'uid3']);
+ * ```
+ */
+export async function getUserProfiles(uids: string[]): Promise<User[]> {
+  try {
+    if (uids.length === 0) {
+      return [];
+    }
+
+    const db = getFirebaseDb();
+    const profiles: User[] = [];
+
+    // Fetch all profiles in parallel for performance
+    const promises = uids.map(async (uid) => {
+      const userDocRef = doc(db, 'users', uid);
+      const userDoc: DocumentSnapshot = await getDoc(userDocRef);
+
+      if (userDoc.exists()) {
+        return userDoc.data() as User;
+      }
+      // Return a placeholder for missing users
+      return {
+        uid: uid,
+        username: `user_${uid}`,
+        displayName: 'Unknown User',
+        email: '',
+        photoURL: undefined,
+        presence: {
+          status: 'offline' as const,
+          lastSeen: Timestamp.now(),
+        },
+        settings: {
+          sendReadReceipts: true,
+          notificationsEnabled: true,
+          notifications: {
+            enabled: true,
+            sound: true,
+            showPreview: true,
+            vibration: true,
+            directMessages: true,
+            groupMessages: true,
+            systemMessages: false,
+          },
+        },
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      } satisfies User;
+    });
+
+    const results = await Promise.all(promises);
+    profiles.push(...results);
+
+    return profiles;
+  } catch (error) {
+    console.error('[getUserProfiles] Error fetching user profiles:', error);
+    throw new Error('Failed to fetch user profiles. Please try again.');
+  }
+}
+
+/**
  * Updates user profile fields in Firestore
  * @param uid - Firebase Auth user ID
- * @param updates - Partial user data to update (displayName, photoURL)
+ * @param updates - Partial user data to update (displayName, photoURL, settings)
  * @returns Promise resolving when update is complete
  * @throws {Error} When validation fails or Firestore update fails
  * @remarks
  * Username cannot be updated after creation
- * This function only allows updating displayName and photoURL
+ * This function allows updating displayName, photoURL, and settings
  * @example
  * ```typescript
  * await updateUserProfile('uid123', {
  *   displayName: 'John Smith',
- *   photoURL: 'https://...'
+ *   photoURL: 'https://...',
+ *   settings: { sendReadReceipts: false }
  * });
  * ```
  */
 export async function updateUserProfile(
   uid: string,
-  updates: { displayName?: string; photoURL?: string }
+  updates: { displayName?: string; photoURL?: string; settings?: { sendReadReceipts: boolean } }
 ): Promise<void> {
   // Validate display name if provided
   if (updates.displayName !== undefined) {
@@ -254,6 +323,10 @@ export async function updateUserProfile(
 
     if (updates.photoURL !== undefined) {
       updateData.photoURL = updates.photoURL;
+    }
+
+    if (updates.settings !== undefined) {
+      updateData['settings.sendReadReceipts'] = updates.settings.sendReadReceipts;
     }
 
     await updateDoc(userDocRef, updateData);
@@ -352,7 +425,7 @@ export async function searchUsers(searchQuery: string): Promise<User[]> {
     // Strategy 2: Try prefix matching on username
     // This allows searching for users by typing the beginning of their username
     const endQuery = normalizedQuery + '\uf8ff'; // Unicode character after 'z'
-    
+
     const usernameQuery = query(
       usersRef,
       where('username', '>=', normalizedQuery),
@@ -374,17 +447,13 @@ export async function searchUsers(searchQuery: string): Promise<User[]> {
     // Strategy 3: If we have less than 10 results, also try email search
     // This is more targeted than fetching all users
     if (results.length < 10 && normalizedQuery.includes('@')) {
-      const emailQuery = query(
-        usersRef,
-        where('email', '==', normalizedQuery),
-        limit(1)
-      );
+      const emailQuery = query(usersRef, where('email', '==', normalizedQuery), limit(1));
 
       const emailSnapshot = await getDocs(emailQuery);
-      
+
       emailSnapshot.forEach((doc) => {
         const userData = doc.data() as User;
-        
+
         // Skip if we already have this user
         if (!seenUids.has(userData.uid)) {
           results.push(userData);

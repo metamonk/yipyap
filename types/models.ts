@@ -71,7 +71,7 @@ export interface Conversation {
   /** Per-user unread message counts */
   unreadCount: Record<string, number>;
 
-  /** Per-user archive status (true if archived by that user) */
+  /** Per-user archive status map. If userId maps to true, conversation is archived for that user. */
   archivedBy: Record<string, boolean>;
 
   /** Per-user soft deletion status (true if deleted by that user) */
@@ -88,12 +88,14 @@ export interface Conversation {
 }
 
 /**
- * Represents a chat message within a conversation
+ * Represents a chat message within a conversation (both 1:1 and group)
  *
  * @remarks
  * Messages are stored as subcollections under conversations.
  * Messages are immutable once sent and include metadata for future AI processing.
  * The metadata field is prepared for Phase 2 AI features (categorization, sentiment analysis).
+ * Message structure is identical for both direct and group conversations.
+ * In group chats, senderId is used to identify and display sender attribution.
  *
  * Firestore Collection Path: `/conversations/{conversationId}/messages/{messageId}`
  *
@@ -827,3 +829,68 @@ export type GroupCreationError =
       /** Technical error details for logging */
       details?: string;
     };
+
+/**
+ * State management for conversation selection mode
+ * @interface ConversationSelectionState
+ *
+ * @remarks
+ * Used to track selection mode state in the conversation list screen.
+ * Selection state is local to the screen (not global store) since it's transient.
+ * Uses Set<string> for O(1) add/remove/lookup operations.
+ *
+ * @example
+ * ```typescript
+ * const [selectionState, setSelectionState] = useState<ConversationSelectionState>({
+ *   isSelectionMode: false,
+ *   selectedConversationIds: new Set()
+ * });
+ * ```
+ */
+export interface ConversationSelectionState {
+  /** Whether selection mode is currently active */
+  isSelectionMode: boolean;
+
+  /** Set of conversation IDs currently selected (O(1) operations) */
+  selectedConversationIds: Set<string>;
+}
+
+/**
+ * Handler functions for managing conversation selection
+ * @type SelectionHandlers
+ *
+ * @remarks
+ * Provides type-safe callbacks for selection mode interactions.
+ * Passed as props to ConversationListItem components.
+ *
+ * @example
+ * ```typescript
+ * const handlers: SelectionHandlers = {
+ *   enterSelectionMode: (id) => {
+ *     setIsSelectionMode(true);
+ *     setSelectedConversationIds(new Set([id]));
+ *   },
+ *   exitSelectionMode: () => {
+ *     setIsSelectionMode(false);
+ *     setSelectedConversationIds(new Set());
+ *   },
+ *   toggleSelection: (id) => {
+ *     setSelectedConversationIds(prev => {
+ *       const next = new Set(prev);
+ *       next.has(id) ? next.delete(id) : next.add(id);
+ *       return next;
+ *     });
+ *   }
+ * };
+ * ```
+ */
+export type SelectionHandlers = {
+  /** Enters selection mode with the specified conversation initially selected */
+  enterSelectionMode: (conversationId: string) => void;
+
+  /** Exits selection mode and clears all selections */
+  exitSelectionMode: () => void;
+
+  /** Toggles selection state for the specified conversation */
+  toggleSelection: (conversationId: string) => void;
+};

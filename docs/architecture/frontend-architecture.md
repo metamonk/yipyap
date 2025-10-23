@@ -188,6 +188,44 @@ export default function RootLayout() {
 }
 ```
 
+### Root Layout Requirements
+
+**CRITICAL: GestureHandlerRootView Wrapper**
+
+When using any gesture-based components from `react-native-gesture-handler` (such as `Swipeable`, `PanGestureHandler`, etc.), the entire app must be wrapped in `GestureHandlerRootView` at the root layout level.
+
+```typescript
+// app/_layout.tsx
+import { Stack } from 'expo-router';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
+export default function RootLayout() {
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <Stack>
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      </Stack>
+    </GestureHandlerRootView>
+  );
+}
+```
+
+**Why this is required:**
+
+- All gesture components require `GestureHandlerRootView` as an ancestor to function
+- Without it, you'll get runtime errors: `PanGestureHandler must be used as a descendant of GestureHandlerRootView`
+- The wrapper must have `style={{ flex: 1 }}` to ensure proper layout
+
+**Components that require this:**
+
+- `Swipeable` (used in ConversationListItem for archive functionality)
+- `PanGestureHandler`, `TapGestureHandler`, etc.
+- Any custom gesture-based interactions
+
+**Reference:** https://docs.swmansion.com/react-native-gesture-handler/docs/fundamentals/installation
+
 ## Frontend Services Layer
 
 ### API Client Setup

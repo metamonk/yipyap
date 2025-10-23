@@ -134,6 +134,98 @@ describe('MessageStatus', () => {
     });
   });
 
+  describe('group chat read receipts', () => {
+    it('displays "Delivered" text for group chat delivered status', () => {
+      const { getByText, getByTestId } = render(
+        <MessageStatus status="delivered" isGroupChat={true} readByCount={0} />
+      );
+
+      const deliveredElement = getByTestId('status-delivered');
+      expect(deliveredElement).toBeTruthy();
+
+      const deliveredText = getByText('Delivered');
+      expect(deliveredText).toBeTruthy();
+    });
+
+    it('does not display "Delivered" text for 1:1 chat', () => {
+      const { queryByText, getByTestId } = render(
+        <MessageStatus status="delivered" isGroupChat={false} />
+      );
+
+      const deliveredElement = getByTestId('status-delivered');
+      expect(deliveredElement).toBeTruthy();
+
+      const deliveredText = queryByText('Delivered');
+      expect(deliveredText).toBeNull();
+    });
+
+    it('displays "Read by 1" for group chat with 1 reader', () => {
+      const { getByText } = render(
+        <MessageStatus status="read" isGroupChat={true} readByCount={1} />
+      );
+
+      const readByText = getByText('Read by 1');
+      expect(readByText).toBeTruthy();
+    });
+
+    it('displays "Read by 5" for group chat with 5 readers', () => {
+      const { getByText } = render(
+        <MessageStatus status="read" isGroupChat={true} readByCount={5} />
+      );
+
+      const readByText = getByText('Read by 5');
+      expect(readByText).toBeTruthy();
+    });
+
+    it('displays "Read by 50" for group chat with 50 readers', () => {
+      const { getByText } = render(
+        <MessageStatus status="read" isGroupChat={true} readByCount={50} />
+      );
+
+      const readByText = getByText('Read by 50');
+      expect(readByText).toBeTruthy();
+    });
+
+    it('does not display read count text for 1:1 chat', () => {
+      const { queryByText, getByTestId } = render(
+        <MessageStatus status="read" isGroupChat={false} readByCount={1} />
+      );
+
+      const readElement = getByTestId('status-read');
+      expect(readElement).toBeTruthy();
+
+      // Should not have read count text for 1:1 chats
+      const readByText = queryByText(/Read by/);
+      expect(readByText).toBeNull();
+    });
+
+    it('displays blue checkmarks with read count in group chat', () => {
+      const { getByText, UNSAFE_getAllByType } = render(
+        <MessageStatus status="read" isGroupChat={true} readByCount={3} />
+      );
+
+      // Should display read count
+      const readByText = getByText('Read by 3');
+      expect(readByText).toBeTruthy();
+
+      // Should also display blue checkmarks
+      const icons = UNSAFE_getAllByType(
+        require('@expo/vector-icons').Ionicons as React.ComponentType
+      );
+      const blueCheckmarks = icons.filter((icon) => icon.props.color === '#007AFF');
+      expect(blueCheckmarks.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('handles read count of 0', () => {
+      const { getByText } = render(
+        <MessageStatus status="read" isGroupChat={true} readByCount={0} />
+      );
+
+      const readByText = getByText('Read by 0');
+      expect(readByText).toBeTruthy();
+    });
+  });
+
   describe('edge cases', () => {
     it('handles rapid status changes without errors', () => {
       const { rerender } = render(<MessageStatus status="sending" />);

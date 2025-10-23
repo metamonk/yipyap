@@ -11,7 +11,7 @@
  * Covers AC 1, 2, 3, 4, 5 from Story 3.6
  */
 
-/* global device, element, by, waitFor, expect */
+/* global device, element, by, waitFor */
 
 describe('Notification Settings E2E', () => {
   beforeAll(async () => {
@@ -200,9 +200,7 @@ describe('Notification Settings E2E', () => {
       await expect(element(by.id('conversations-screen'))).toBeVisible();
 
       // Verify mute icon is visible on the conversation item
-      await expect(
-        element(by.id('mute-icon-conversation-0')).atIndex(0)
-      ).toBeVisible();
+      await expect(element(by.id('mute-icon-conversation-0')).atIndex(0)).toBeVisible();
     });
 
     it('should not display mute icon for unmuted conversations', async () => {
@@ -214,9 +212,7 @@ describe('Notification Settings E2E', () => {
       // Check that unmuted conversations don't show mute icon
       // (Assuming not all conversations are muted)
       try {
-        await expect(
-          element(by.id('mute-icon-conversation-1'))
-        ).not.toBeVisible();
+        await expect(element(by.id('mute-icon-conversation-1'))).not.toBeVisible();
       } catch {
         // Icon may not exist at all, which is also valid
         // This is expected behavior for unmuted conversations

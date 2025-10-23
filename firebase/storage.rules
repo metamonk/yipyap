@@ -20,6 +20,26 @@ service firebase.storage {
                                request.resource.contentType.matches('image/.*');
     }
 
+    // Group photos - only group creator can upload/update, all authenticated can read
+    match /groups/{groupId}/photo.jpg {
+      // Any authenticated user can read group photos
+      allow read: if request.auth != null;
+
+      // Only group creator can upload/update group photos
+      // Validates against creatorId field in conversation document
+      allow create, update: if request.auth != null &&
+                               // Check if user is the group creator
+                               request.auth.uid == firestore.get(/databases/(default)/documents/conversations/$(groupId)).data.creatorId &&
+                               // Validate file size (5MB max)
+                               request.resource.size < 5 * 1024 * 1024 &&
+                               // Validate content type (images only)
+                               request.resource.contentType.matches('image/.*');
+
+      // Only group creator can delete group photos
+      allow delete: if request.auth != null &&
+                      request.auth.uid == firestore.get(/databases/(default)/documents/conversations/$(groupId)).data.creatorId;
+    }
+
     // Default deny all other access
     match /{allPaths=**} {
       allow read, write: if false;

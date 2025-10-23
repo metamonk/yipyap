@@ -6,11 +6,20 @@
  * Uses Firebase Realtime Database for instant status updates (<2 seconds).
  * Displays color-coded presence dots with optional "last seen" text.
  * Includes smooth transitions and pulse animation for recent online status.
+ * Context-aware: Use without text for avatars, with text for lists/details.
  *
  * @example
  * ```tsx
+ * // Avatar context (no text)
  * <PresenceIndicator
  *   userId="user123"
+ *   size="medium"
+ * />
+ *
+ * // List/detail context (with status text)
+ * <PresenceIndicator
+ *   userId="user123"
+ *   showStatusText={true}
  *   showLastSeen={true}
  *   size="medium"
  * />
@@ -31,6 +40,9 @@ export interface PresenceIndicatorProps {
 
   /** Whether to show "last seen" text for offline users (default: false) */
   showLastSeen?: boolean;
+
+  /** Whether to show status text labels like "Away" (default: false) */
+  showStatusText?: boolean;
 
   /** Size of the presence dot (default: 'small') */
   size?: 'small' | 'medium' | 'large';
@@ -68,6 +80,7 @@ function formatLastSeen(timestamp: number): string {
 export const PresenceIndicator: React.FC<PresenceIndicatorProps> = ({
   userId,
   showLastSeen = false,
+  showStatusText = false,
   size = 'small',
   showPulse = true,
   hideWhenOffline = false,
@@ -156,7 +169,7 @@ export const PresenceIndicator: React.FC<PresenceIndicatorProps> = ({
         <Text style={styles.lastSeenText}>{formatLastSeen(lastSeen)}</Text>
       )}
 
-      {state === 'away' && <Text style={styles.awayText}>Away</Text>}
+      {showStatusText && state === 'away' && <Text style={styles.awayText}>Away</Text>}
     </View>
   );
 };
