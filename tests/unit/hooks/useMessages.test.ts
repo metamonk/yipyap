@@ -27,7 +27,7 @@ const createMockTimestamp = (millis: number): Timestamp =>
     nanoseconds: (millis % 1000) * 1000000,
     isEqual: jest.fn(),
     valueOf: jest.fn(),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
   }) as any;
 
 describe('useMessages', () => {
@@ -259,7 +259,7 @@ describe('useMessages', () => {
       const mockScrollToEnd = jest.fn();
       result.current.flatListRef.current = {
         scrollToEnd: mockScrollToEnd,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
       } as any;
 
       // Trigger callback with messages
@@ -317,7 +317,7 @@ describe('useMessages', () => {
       const mockScrollToEnd = jest.fn();
       result.current.flatListRef.current = {
         scrollToEnd: mockScrollToEnd,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
       } as any;
 
       // Clear previous calls

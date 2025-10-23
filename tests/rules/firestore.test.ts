@@ -261,7 +261,7 @@ describe('Firestore Security Rules', () => {
       const userDoc = alice.firestore().collection('users').doc('alice-uid');
 
       const invalidData = createValidUserData('alice-uid', 'alice', 'Alice');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       delete (invalidData.presence as any).lastSeen;
       await assertFails(userDoc.set(invalidData));
     });

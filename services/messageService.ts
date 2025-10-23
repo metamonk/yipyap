@@ -24,16 +24,38 @@ import {
   DocumentData,
   FirestoreError,
   Unsubscribe,
+  runTransaction,
+  updateDoc,
 } from 'firebase/firestore';
 import { getFirebaseDb } from './firebase';
 import type { Message, CreateMessageInput } from '@/types/models';
-import { updateConversationLastMessage } from './conversationService';
+import { updateConversationLastMessage, checkConversationExists, createConversationWithFirstMessage } from './conversationService';
+import { RetryQueue, RetryQueueItem } from './retryQueueService';
+
+/**
+ * Optional parameters for creating a conversation if it doesn't exist
+ *
+ * @remarks
+ * Used when sending the first message to a draft conversation.
+ * If provided, the conversation will be created atomically with the message.
+ */
+export interface DraftConversationParams {
+  /** Type of conversation to create */
+  type: 'direct' | 'group';
+
+  /** Group name (required for group conversations) */
+  groupName?: string;
+
+  /** Group photo URL (optional for group conversations) */
+  groupPhotoURL?: string;
+}
 
 /**
  * Sends a message to a conversation
  *
  * @param input - Message creation data (conversationId, senderId, text)
  * @param participantIds - Array of participant IDs in the conversation (for updating unread counts)
+ * @param draftParams - Optional parameters for creating conversation if it doesn't exist (for draft conversations)
  * @returns Promise resolving to the created message with server-assigned ID and timestamp
  * @throws {Error} When validation fails or Firestore write fails
  *
@@ -42,9 +64,12 @@ import { updateConversationLastMessage } from './conversationService';
  * - Automatically updates parent conversation's lastMessage and lastMessageTimestamp
  * - Initializes message with 'sending' status and AI metadata (aiProcessed: false)
  * - Text must be between 1-1000 characters
+ * - If conversation doesn't exist and draftParams provided, creates conversation atomically with first message
+ * - Preserves existing retry queue integration for failed operations
  *
  * @example
  * ```typescript
+ * // Send message to existing conversation
  * const message = await sendMessage(
  *   {
  *     conversationId: 'user123_user456',
@@ -53,11 +78,23 @@ import { updateConversationLastMessage } from './conversationService';
  *   },
  *   ['user123', 'user456']
  * );
+ *
+ * // Send first message to draft conversation
+ * const firstMessage = await sendMessage(
+ *   {
+ *     conversationId: 'user123_user456',
+ *     senderId: 'user123',
+ *     text: 'Hello!'
+ *   },
+ *   ['user123', 'user456'],
+ *   { type: 'direct' }
+ * );
  * ```
  */
 export async function sendMessage(
   input: CreateMessageInput,
-  participantIds: string[]
+  participantIds: string[],
+  draftParams?: DraftConversationParams
 ): Promise<Message> {
   const { conversationId, senderId, text } = input;
 
@@ -73,6 +110,82 @@ export async function sendMessage(
   const db = getFirebaseDb();
 
   try {
+    // Check if conversation exists
+    const conversationExists = await checkConversationExists(conversationId);
+
+    // If conversation doesn't exist, create it atomically with the first message
+    if (!conversationExists) {
+      if (!draftParams) {
+        throw new Error('Conversation does not exist. Cannot send message to non-existent conversation.');
+      }
+
+      // Create conversation with first message atomically
+      try {
+        const result = await createConversationWithFirstMessage({
+          type: draftParams.type,
+          participantIds,
+          messageText: text,
+          senderId,
+          groupName: draftParams.groupName,
+          groupPhotoURL: draftParams.groupPhotoURL,
+        });
+
+        // Return the created message
+        // Note: The message was created in the transaction, we need to fetch it or construct it
+        const now = Timestamp.now();
+        return {
+          id: result.messageId,
+          conversationId: result.conversationId,
+          senderId,
+          text: text.trim(),
+          status: 'delivered',
+          readBy: [senderId],
+          timestamp: now,
+          metadata: {
+            aiProcessed: false,
+          },
+        };
+      } catch (createError) {
+        // Categorize the error
+        const errorType = categorizeError(createError);
+
+        // For network errors, queue for retry
+        if (errorType === 'network') {
+          const retryQueue = RetryQueue.getInstance();
+          await retryQueue.enqueue({
+            operationType: 'CONVERSATION_CREATE',
+            data: {
+              type: draftParams.type,
+              participantIds,
+              messageText: text,
+              senderId,
+              groupName: draftParams.groupName,
+              groupPhotoURL: draftParams.groupPhotoURL,
+            },
+          });
+
+          // Return optimistic message
+          const now = Timestamp.now();
+          return {
+            id: `temp_${Date.now()}`, // Temporary ID
+            conversationId,
+            senderId,
+            text: text.trim(),
+            status: 'sending',
+            readBy: [senderId],
+            timestamp: now,
+            metadata: {
+              aiProcessed: false,
+            },
+          };
+        }
+
+        // Re-throw non-network errors
+        throw createError;
+      }
+    }
+
+    // Conversation exists - proceed with normal message sending
     const messagesRef = collection(db, 'conversations', conversationId, 'messages');
 
     // Create message document
@@ -97,7 +210,6 @@ export async function sendMessage(
     });
 
     // Update message status to 'delivered' after successful creation
-    const { updateDoc } = await import('firebase/firestore');
     await updateDoc(messageRef, {
       status: 'delivered',
     });
@@ -386,16 +498,257 @@ export async function markMessageAsRead(
 }
 
 /**
- * Marks multiple messages as read in batch
+ * Performance metrics for batch update operations
+ */
+interface BatchUpdateMetrics {
+  startTime: number;
+  endTime?: number;
+  success: boolean;
+  retryCount: number;
+  errorType?: string;
+}
+
+// Track metrics for monitoring
+const batchUpdateMetrics: BatchUpdateMetrics[] = [];
+
+/**
+ * Initializes the retry queue for message service operations
+ */
+function initializeRetryQueue(): void {
+  const retryQueue = RetryQueue.getInstance();
+
+  // Register processor for conversation creation with first message
+  retryQueue.registerProcessor('CONVERSATION_CREATE', async (item: RetryQueueItem) => {
+    const data = item.data as {
+      type: 'direct' | 'group';
+      participantIds: string[];
+      messageText: string;
+      senderId: string;
+      groupName?: string;
+      groupPhotoURL?: string;
+    };
+
+    try {
+      await createConversationWithFirstMessage({
+        type: data.type,
+        participantIds: data.participantIds,
+        messageText: data.messageText,
+        senderId: data.senderId,
+        groupName: data.groupName,
+        groupPhotoURL: data.groupPhotoURL,
+      });
+      return true; // Success
+    } catch (error) {
+      console.error('Conversation creation failed:', error);
+
+      // Categorize error
+      const errorType = categorizeError(error);
+
+      // Don't retry permission errors
+      if (errorType === 'permission') {
+        console.error('Permission denied, not retrying:', error);
+        return true; // Mark as "success" to remove from queue
+      }
+
+      // Continue retrying for network errors
+      return false;
+    }
+  });
+
+  // Register processor for read receipt batch updates
+  retryQueue.registerProcessor('READ_RECEIPT_BATCH', async (item: RetryQueueItem) => {
+    const data = item.data as {
+      conversationId: string;
+      messageIds: string[];
+      userId: string;
+    };
+
+    try {
+      // Try atomic transaction first
+      await batchUpdateReadReceiptsWithTransaction(data.conversationId, data.messageIds, data.userId);
+      return true; // Success
+    } catch (error) {
+      console.error('Batch update failed, attempting fallback:', error);
+
+      // Categorize error
+      const errorType = categorizeError(error);
+
+      // Don't retry permission errors
+      if (errorType === 'permission') {
+        console.error('Permission denied, not retrying:', error);
+        return true; // Mark as "success" to remove from queue
+      }
+
+      // For persistent failures after 3 retries, try individual updates
+      if (item.retryCount >= 3) {
+        try {
+          await fallbackToIndividualUpdates(data.conversationId, data.messageIds, data.userId);
+          return true; // Success with fallback
+        } catch (fallbackError) {
+          console.error('Fallback to individual updates also failed:', fallbackError);
+          return false; // Will retry
+        }
+      }
+
+      return false; // Retry
+    }
+  });
+}
+
+// Initialize retry queue when module loads
+initializeRetryQueue();
+
+/**
+ * Categorizes errors for proper handling
+ * @param error - The error to categorize
+ * @returns Error category string
+ */
+function categorizeError(error: unknown): string {
+  if (error instanceof FirestoreError) {
+    switch (error.code) {
+      case 'permission-denied':
+      case 'unauthenticated':
+        return 'permission';
+      case 'unavailable':
+      case 'cancelled':
+      case 'deadline-exceeded':
+        return 'network';
+      case 'resource-exhausted':
+        return 'quota';
+      default:
+        return 'unknown';
+    }
+  }
+
+  if (error instanceof Error) {
+    if (error.message.includes('network') || error.message.includes('offline')) {
+      return 'network';
+    }
+  }
+
+  return 'unknown';
+}
+
+/**
+ * Updates read receipts using atomic transaction for consistency
+ * @param conversationId - The conversation ID
+ * @param messageIds - Array of message IDs to mark as read
+ * @param userId - The user marking messages as read
+ * @returns Promise that resolves when transaction completes
+ */
+async function batchUpdateReadReceiptsWithTransaction(
+  conversationId: string,
+  messageIds: string[],
+  userId: string
+): Promise<void> {
+  const db = getFirebaseDb();
+  const { doc, arrayUnion } = await import('firebase/firestore');
+
+  await runTransaction(db, async (transaction) => {
+    // Read all documents first (required for transactions)
+    const messageRefs = messageIds.map(id =>
+      doc(db, 'conversations', conversationId, 'messages', id)
+    );
+
+    const messageDocs = await Promise.all(
+      messageRefs.map(ref => transaction.get(ref))
+    );
+
+    // Check if all documents exist
+    const missingDocs = messageDocs.filter(doc => !doc.exists());
+    if (missingDocs.length > 0) {
+      console.warn(`${missingDocs.length} messages not found, skipping update`);
+    }
+
+    // Update all existing documents in transaction
+    messageDocs.forEach((doc, index) => {
+      if (doc.exists()) {
+        transaction.update(messageRefs[index], {
+          readBy: arrayUnion(userId),
+          status: 'read',
+        });
+      }
+    });
+
+    // Also update conversation unread count
+    const conversationRef = doc(db, 'conversations', conversationId);
+    transaction.update(conversationRef, {
+      [`unreadCount.${userId}`]: 0,
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
+/**
+ * Fallback to individual updates if batch fails persistently
+ * @param conversationId - The conversation ID
+ * @param messageIds - Array of message IDs to mark as read
+ * @param userId - The user marking messages as read
+ * @returns Promise that resolves when all individual updates complete
+ */
+async function fallbackToIndividualUpdates(
+  conversationId: string,
+  messageIds: string[],
+  userId: string
+): Promise<void> {
+  const db = getFirebaseDb();
+  const { doc, updateDoc, arrayUnion } = await import('firebase/firestore');
+
+  console.warn(`Falling back to individual updates for ${messageIds.length} messages`);
+
+  const updatePromises = messageIds.map(async (messageId) => {
+    try {
+      const messageRef = doc(db, 'conversations', conversationId, 'messages', messageId);
+      await updateDoc(messageRef, {
+        readBy: arrayUnion(userId),
+        status: 'read',
+      });
+    } catch (error) {
+      console.error(`Failed to update message ${messageId}:`, error);
+      // Continue with other messages even if one fails
+    }
+  });
+
+  // Update conversation unread count separately
+  const conversationUpdatePromise = (async () => {
+    try {
+      const conversationRef = doc(db, 'conversations', conversationId);
+      await updateDoc(conversationRef, {
+        [`unreadCount.${userId}`]: 0,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error('Failed to update conversation unread count:', error);
+    }
+  })();
+
+  await Promise.all([...updatePromises, conversationUpdatePromise]);
+}
+
+/**
+ * Marks multiple messages as read in batch with retry logic
  * @param conversationId - The conversation ID
  * @param messageIds - Array of message IDs to mark as read
  * @param userId - The user marking messages as read
  * @returns Promise that resolves when all messages are marked
- * @throws {Error} When batch update fails
+ * @throws {Error} When batch update fails and cannot be queued
  * @example
  * ```typescript
  * await markMessagesAsReadBatch('conv123', ['msg1', 'msg2', 'msg3'], 'user123');
  * ```
+ *
+ * @remarks
+ * Implements sequencing to prevent race conditions:
+ * 1. PREREQUISITE CHECK: Verify messages exist before attempting update
+ * 2. TRANSACTION: Update only existing messages atomically
+ * 3. RETRY: Only for network failures, not race conditions or permission errors
+ *
+ * - Filters out non-existent messages to prevent race conditions
+ * - Uses atomic transactions for consistency
+ * - Queues failed updates for retry when network is restored
+ * - Permission errors are NOT retried (real security issues)
+ *
+ * See: docs/architecture/real-time-data-patterns.md
  */
 export async function markMessagesAsReadBatch(
   conversationId: string,
@@ -404,30 +757,103 @@ export async function markMessagesAsReadBatch(
 ): Promise<void> {
   if (messageIds.length === 0) return;
 
+  // Track performance metrics
+  const metric: BatchUpdateMetrics = {
+    startTime: Date.now(),
+    success: false,
+    retryCount: 0,
+  };
+
   try {
+    // PREVENTIVE: Filter out messages that don't exist yet (prevent race condition)
+    // This sequencing prevents errors when messages haven't propagated yet
+    // See: docs/architecture/real-time-data-patterns.md
     const db = getFirebaseDb();
-    const { writeBatch, doc, arrayUnion } = await import('firebase/firestore');
-    const batch = writeBatch(db);
+    const { doc, getDoc } = await import('firebase/firestore');
 
-    messageIds.forEach((messageId) => {
-      const messageRef = doc(db, 'conversations', conversationId, 'messages', messageId);
-      batch.update(messageRef, {
-        readBy: arrayUnion(userId),
-        // Only update status to 'read' - the hook already filters to only messages from others
-        status: 'read',
-      });
-    });
+    const existingMessages = await Promise.all(
+      messageIds.map(async (id) => {
+        const msgRef = doc(db, 'conversations', conversationId, 'messages', id);
+        const msgDoc = await getDoc(msgRef);
+        return msgDoc.exists() ? id : null;
+      })
+    );
 
-    // Also update conversation unread count
-    const conversationRef = doc(db, 'conversations', conversationId);
-    batch.update(conversationRef, {
-      [`unreadCount.${userId}`]: 0,
-      updatedAt: serverTimestamp(),
-    });
+    const validMessageIds = existingMessages.filter((id): id is string => id !== null);
 
-    await batch.commit();
+    if (validMessageIds.length === 0) {
+      console.warn('No messages found, skipping batch read receipt update');
+      return;
+    }
+
+    if (validMessageIds.length < messageIds.length) {
+      console.warn(
+        `${messageIds.length - validMessageIds.length} messages not found yet, updating only existing messages`
+      );
+    }
+
+    // NOW retry is appropriate for network failures only
+    await batchUpdateReadReceiptsWithTransaction(conversationId, validMessageIds, userId);
+
+    // Success - record metrics
+    metric.success = true;
+    metric.endTime = Date.now();
+    batchUpdateMetrics.push(metric);
+
   } catch (error) {
     console.error('Error marking messages as read in batch:', error);
-    throw new Error('Failed to mark messages as read. Please try again.');
+
+    // Record failed metric
+    metric.success = false;
+    metric.endTime = Date.now();
+    metric.errorType = categorizeError(error);
+    batchUpdateMetrics.push(metric);
+
+    // Don't queue permission errors - these are real security issues
+    if (metric.errorType === 'permission') {
+      throw new Error('Permission denied. You must be a participant in this conversation.');
+    }
+
+    // Queue for retry only on network errors
+    const retryQueue = RetryQueue.getInstance();
+    try {
+      await retryQueue.enqueue({
+        operationType: 'READ_RECEIPT_BATCH',
+        data: {
+          conversationId,
+          messageIds,
+          userId,
+          timestamp: Timestamp.now(),
+        },
+      });
+
+      // Don't throw error - operation is queued for retry
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('Batch update queued for retry');
+      }
+    } catch (queueError) {
+      console.error('Failed to queue batch update for retry:', queueError);
+      throw new Error('Failed to mark messages as read. Please try again.');
+    }
   }
+}
+
+/**
+ * Gets performance metrics for batch updates
+ * @returns Array of batch update metrics
+ * @remarks Used for monitoring and debugging batch update performance
+ */
+export function getBatchUpdateMetrics(): BatchUpdateMetrics[] {
+  return [...batchUpdateMetrics];
+}
+
+/**
+ * Calculates batch update success rate
+ * @returns Success rate as percentage (0-100)
+ */
+export function getBatchUpdateSuccessRate(): number {
+  if (batchUpdateMetrics.length === 0) return 100;
+
+  const successful = batchUpdateMetrics.filter(m => m.success).length;
+  return Math.round((successful / batchUpdateMetrics.length) * 100);
 }

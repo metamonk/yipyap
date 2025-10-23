@@ -26,7 +26,7 @@ jest.mock('firebase/firestore', () => ({
 }));
 
 describe('userService', () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const mockDb = {} as any;
   const mockUid = 'test-uid-123';
   const mockEmail = 'test@example.com';

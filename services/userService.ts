@@ -17,6 +17,9 @@ import {
   query,
   getDocs,
   limit,
+  orderBy,
+  startAfter,
+  QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { getFirebaseDb } from './firebase';
 import {
@@ -25,6 +28,7 @@ import {
   UsernameDocument,
   validateUsername,
   validateDisplayName,
+  NotificationPreferences,
 } from '@/types/user';
 
 /**
@@ -398,5 +402,263 @@ export async function getAllUsers(): Promise<User[]> {
   } catch (error) {
     console.error('Error fetching all users:', error);
     throw new Error('Failed to fetch users. Please try again.');
+  }
+}
+
+/**
+ * Updates notification preferences for a user
+ * @param uid - Firebase Auth user ID
+ * @param preferences - Notification preferences to update
+ * @returns Promise resolving when update is complete
+ * @throws {Error} When Firestore update fails
+ * @remarks
+ * This function updates the nested settings.notifications field
+ * @example
+ * ```typescript
+ * await updateNotificationPreferences('uid123', {
+ *   enabled: true,
+ *   showPreview: false,
+ *   sound: true,
+ *   vibration: true,
+ *   directMessages: true,
+ *   groupMessages: true,
+ *   systemMessages: false,
+ * });
+ * ```
+ */
+export async function updateNotificationPreferences(
+  uid: string,
+  preferences: NotificationPreferences
+): Promise<void> {
+  const db = getFirebaseDb();
+  const userDocRef = doc(db, 'users', uid);
+
+  try {
+    await updateDoc(userDocRef, {
+      'settings.notifications': preferences,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('Error updating notification preferences:', error);
+
+    const firestoreError = error as FirestoreError;
+    if (firestoreError.code === 'not-found') {
+      throw new Error('User profile not found.');
+    }
+
+    if (firestoreError.code === 'permission-denied') {
+      throw new Error('Permission denied. You can only update your own preferences.');
+    }
+
+    throw new Error('Failed to update notification preferences. Please try again.');
+  }
+}
+
+/**
+ * Gets notification preferences for a user
+ * @param uid - Firebase Auth user ID
+ * @returns Promise resolving to notification preferences or null if not found
+ * @throws {Error} When Firestore operation fails
+ * @example
+ * ```typescript
+ * const preferences = await getNotificationPreferences('uid123');
+ * if (preferences) {
+ *   console.log('Notifications enabled:', preferences.enabled);
+ * }
+ * ```
+ */
+export async function getNotificationPreferences(
+  uid: string
+): Promise<NotificationPreferences | null> {
+  try {
+    const db = getFirebaseDb();
+    const userDocRef = doc(db, 'users', uid);
+    const userDoc = await getDoc(userDocRef);
+
+    if (!userDoc.exists()) {
+      return null;
+    }
+
+    const userData = userDoc.data() as User;
+    return (userData.settings?.notifications as NotificationPreferences) || null;
+  } catch (error) {
+    console.error('Error fetching notification preferences:', error);
+    throw new Error('Failed to fetch notification preferences. Please try again.');
+  }
+}
+
+/**
+ * Result of paginated user query
+ * @interface PaginatedUsersResult
+ *
+ * @remarks
+ * Contains users for current page and cursor for fetching next page.
+ * lastDoc is used with startAfter() for cursor-based pagination.
+ */
+export interface PaginatedUsersResult {
+  /** Array of users for the current page */
+  users: User[];
+
+  /** Last document snapshot for pagination cursor (null if no more pages) */
+  lastDoc: QueryDocumentSnapshot | null;
+
+  /** Whether there are more users to fetch */
+  hasMore: boolean;
+}
+
+/**
+ * Fetches users with cursor-based pagination
+ *
+ * @param pageSize - Number of users to fetch per page (default: 20)
+ * @param lastDoc - Last document from previous page (for pagination)
+ * @returns Promise resolving to paginated users result
+ * @throws {Error} When Firestore operation fails
+ *
+ * @remarks
+ * Uses cursor-based pagination with orderBy displayName for consistent results.
+ * Pass the lastDoc from previous result to fetch the next page.
+ * Performance remains constant regardless of total user count.
+ *
+ * @example
+ * ```typescript
+ * // Fetch first page
+ * const page1 = await getPaginatedUsers(20);
+ * setUsers(page1.users);
+ *
+ * // Fetch next page
+ * if (page1.hasMore) {
+ *   const page2 = await getPaginatedUsers(20, page1.lastDoc);
+ *   setUsers([...users, ...page2.users]);
+ * }
+ * ```
+ */
+export async function getPaginatedUsers(
+  pageSize: number = 20,
+  lastDoc: QueryDocumentSnapshot | null = null
+): Promise<PaginatedUsersResult> {
+  try {
+    const db = getFirebaseDb();
+    const usersRef = collection(db, 'users');
+
+    // Build query with pagination
+    let q;
+    if (lastDoc) {
+      q = query(usersRef, orderBy('displayName'), startAfter(lastDoc), limit(pageSize + 1));
+    } else {
+      q = query(usersRef, orderBy('displayName'), limit(pageSize + 1));
+    }
+
+    const snapshot = await getDocs(q);
+    const users: User[] = [];
+    const docs: QueryDocumentSnapshot[] = [];
+
+    snapshot.forEach((doc) => {
+      users.push(doc.data() as User);
+      docs.push(doc as QueryDocumentSnapshot);
+    });
+
+    // Check if there are more pages
+    const hasMore = users.length > pageSize;
+    if (hasMore) {
+      // Remove the extra user we fetched to check for more pages
+      users.pop();
+      docs.pop();
+    }
+
+    return {
+      users,
+      lastDoc: docs.length > 0 ? docs[docs.length - 1] : null,
+      hasMore,
+    };
+  } catch (error) {
+    console.error('Error fetching paginated users:', error);
+    throw new Error('Failed to fetch users. Please try again.');
+  }
+}
+
+/**
+ * Searches users with pagination support
+ *
+ * @param searchQuery - Search query string (searches username and displayName)
+ * @param pageSize - Number of results per page (default: 20)
+ * @param lastDoc - Last document from previous page (for pagination)
+ * @returns Promise resolving to paginated search results
+ * @throws {Error} When Firestore operation fails
+ *
+ * @remarks
+ * Due to Firestore limitations, this performs client-side filtering on a larger set.
+ * For production-scale search, consider integrating Algolia or Elasticsearch.
+ * Searches are case-insensitive and match partial strings.
+ *
+ * @example
+ * ```typescript
+ * // Search first page
+ * const results = await searchUsersPaginated('john', 20);
+ * setUsers(results.users);
+ *
+ * // Load more results
+ * if (results.hasMore) {
+ *   const more = await searchUsersPaginated('john', 20, results.lastDoc);
+ *   setUsers([...users, ...more.users]);
+ * }
+ * ```
+ */
+export async function searchUsersPaginated(
+  searchQuery: string,
+  pageSize: number = 20,
+  lastDoc: QueryDocumentSnapshot | null = null
+): Promise<PaginatedUsersResult> {
+  try {
+    if (!searchQuery || searchQuery.trim().length === 0) {
+      return { users: [], lastDoc: null, hasMore: false };
+    }
+
+    const db = getFirebaseDb();
+    const usersRef = collection(db, 'users');
+    const normalizedQuery = searchQuery.toLowerCase().trim();
+
+    // Strategy: Fetch users and filter client-side
+    // This is a limitation of Firestore - production should use Algolia/Elasticsearch
+    let q;
+    if (lastDoc) {
+      q = query(usersRef, orderBy('displayName'), startAfter(lastDoc), limit(100));
+    } else {
+      q = query(usersRef, orderBy('displayName'), limit(100));
+    }
+
+    const snapshot = await getDocs(q);
+    const matchedUsers: User[] = [];
+    const allDocs: QueryDocumentSnapshot[] = [];
+
+    snapshot.forEach((doc) => {
+      const userData = doc.data() as User;
+
+      // Filter by display name or username (case-insensitive partial match)
+      if (
+        userData.displayName.toLowerCase().includes(normalizedQuery) ||
+        userData.username.toLowerCase().includes(normalizedQuery)
+      ) {
+        matchedUsers.push(userData);
+      }
+      allDocs.push(doc as QueryDocumentSnapshot);
+    });
+
+    // Apply pagination to matched results
+    const hasMore = matchedUsers.length > pageSize;
+    const paginatedUsers = matchedUsers.slice(0, pageSize);
+
+    // Find the lastDoc corresponding to the last user in paginatedUsers
+    const lastUser = paginatedUsers[paginatedUsers.length - 1];
+    const lastDocIndex = allDocs.findIndex((d) => (d.data() as User).uid === lastUser?.uid);
+    const newLastDoc = lastDocIndex >= 0 ? allDocs[lastDocIndex] : null;
+
+    return {
+      users: paginatedUsers,
+      lastDoc: newLastDoc,
+      hasMore,
+    };
+  } catch (error) {
+    console.error('Error searching users with pagination:', error);
+    throw new Error('Failed to search users. Please try again.');
   }
 }

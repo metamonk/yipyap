@@ -21,14 +21,22 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 }));
 
 // Mock Expo vector icons
-jest.mock('@expo/vector-icons', () => ({
-  Ionicons: {
-    font: { Ionicons: 'mock-ionicons-font' },
-  },
-  MaterialIcons: {
-    font: { 'Material Icons': 'mock-material-icons-font' },
-  },
-}));
+ 
+jest.mock('@expo/vector-icons', () => {
+  const React = require('react');
+  const { Text } = require('react-native');
+
+  // Mock icon component for testing
+  // eslint-disable-next-line react/display-name
+  const MockIcon = React.forwardRef((props: any, ref: any) =>
+    React.createElement(Text, { ...props, ref }, props.name || '')
+  );
+
+  return {
+    Ionicons: MockIcon,
+    MaterialIcons: MockIcon,
+  };
+});
 
 // Mock Firebase Timestamp
 const mockTimestamp = () => ({
@@ -59,7 +67,7 @@ jest.mock('react-native-reanimated', () => {
   return {
     default: {
       View,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       createAnimatedComponent: (component: any) => component,
     },
     SlideInUp: {
@@ -103,7 +111,7 @@ jest.mock('expo-router', () => ({
   })),
   useSegments: jest.fn(() => []),
   Stack: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     Screen: ({ children }: any) => children,
   },
 }));
@@ -121,7 +129,8 @@ jest.mock('@/hooks/useNotifications', () => ({
 }));
 
 // Suppress console warnings in tests
-global.console = {
+ 
+(globalThis as any).console = {
   ...console,
   warn: jest.fn(),
   error: jest.fn(),

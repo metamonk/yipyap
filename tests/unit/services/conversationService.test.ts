@@ -12,6 +12,7 @@ import {
   getUserConversations,
   updateConversationLastMessage,
   markConversationAsRead,
+  createConversationWithFirstMessage,
 } from '@/services/conversationService';
 import {
   collection,
@@ -25,11 +26,21 @@ import {
   updateDoc,
   serverTimestamp,
   Timestamp,
+  runTransaction,
 } from 'firebase/firestore';
 import { getFirebaseDb } from '@/services/firebase';
 
 // Mock Firebase
 jest.mock('@/services/firebase');
+// Mock PerformanceMonitor
+jest.mock('@/utils/performanceMonitor', () => ({
+  PerformanceMonitor: {
+    getInstance: jest.fn(() => ({
+      startOperation: jest.fn(() => 'metric-id-123'),
+      endOperation: jest.fn(),
+    })),
+  },
+}));
 jest.mock('firebase/firestore', () => ({
   collection: jest.fn(),
   doc: jest.fn(),
@@ -42,13 +53,14 @@ jest.mock('firebase/firestore', () => ({
   updateDoc: jest.fn(),
   serverTimestamp: jest.fn(),
   increment: jest.fn((value) => ({ _methodName: 'increment', _operand: value })),
+  runTransaction: jest.fn(),
   Timestamp: {
     now: jest.fn(() => ({ seconds: Date.now() / 1000, nanoseconds: 0 })),
   },
 }));
 
 describe('conversationService', () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const mockDb = {} as any;
   const mockUser1 = 'user123';
   const mockUser2 = 'user456';
@@ -276,7 +288,7 @@ describe('conversationService', () => {
       ];
 
       const mockSnapshot = {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         forEach: (callback: any) => {
           mockConversations.forEach((conv) => {
             callback({
@@ -316,7 +328,7 @@ describe('conversationService', () => {
       ];
 
       const mockSnapshot = {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         forEach: (callback: any) => {
           mockConversations.forEach((conv) => {
             callback({
@@ -424,6 +436,193 @@ describe('conversationService', () => {
       await expect(markConversationAsRead('user123_user456', mockUser1)).rejects.toThrow(
         'Failed to mark conversation as read'
       );
+    });
+  });
+
+  describe('createConversationWithFirstMessage', () => {
+    it('should create conversation and message atomically for direct message', async () => {
+      // Mock transaction callback
+      (runTransaction as jest.Mock).mockImplementation(async (db, callback) => {
+        const mockTransaction = {
+          get: jest.fn().mockResolvedValue({ exists: () => false }),
+          set: jest.fn(),
+          update: jest.fn(),
+        };
+        return await callback(mockTransaction);
+      });
+
+      (doc as jest.Mock).mockReturnValue({ id: 'mock-doc-id' });
+      (collection as jest.Mock).mockReturnValue('mock-collection');
+
+      const result = await createConversationWithFirstMessage({
+        type: 'direct',
+        participantIds: [mockUser1, mockUser2],
+        messageText: 'Hello!',
+        senderId: mockUser1,
+      });
+
+      expect(runTransaction).toHaveBeenCalled();
+      expect(result).toHaveProperty('conversationId');
+      expect(result).toHaveProperty('messageId');
+    });
+
+    it('should create group conversation with first message', async () => {
+      (runTransaction as jest.Mock).mockImplementation(async (db, callback) => {
+        const mockTransaction = {
+          get: jest.fn().mockResolvedValue({ exists: () => false }),
+          set: jest.fn(),
+          update: jest.fn(),
+        };
+        return await callback(mockTransaction);
+      });
+
+      (doc as jest.Mock).mockReturnValue({ id: 'group-123' });
+      (collection as jest.Mock).mockReturnValue('mock-collection');
+
+      const result = await createConversationWithFirstMessage({
+        type: 'group',
+        participantIds: [mockUser1, mockUser2, mockUser3],
+        messageText: 'Welcome!',
+        senderId: mockUser1,
+        groupName: 'Test Group',
+      });
+
+      expect(runTransaction).toHaveBeenCalled();
+      expect(result).toHaveProperty('conversationId');
+      expect(result).toHaveProperty('messageId');
+    });
+
+    it('should handle race condition when conversation already exists', async () => {
+      (runTransaction as jest.Mock).mockImplementation(async (db, callback) => {
+        const mockTransaction = {
+          get: jest.fn().mockResolvedValue({ exists: () => true }), // Conversation exists
+          set: jest.fn(),
+          update: jest.fn(),
+        };
+        return await callback(mockTransaction);
+      });
+
+      (doc as jest.Mock).mockReturnValue({ id: 'user123_user456' });
+      (collection as jest.Mock).mockReturnValue('mock-collection');
+
+      const result = await createConversationWithFirstMessage({
+        type: 'direct',
+        participantIds: [mockUser1, mockUser2],
+        messageText: 'Hello!',
+        senderId: mockUser1,
+      });
+
+      expect(runTransaction).toHaveBeenCalled();
+      expect(result).toHaveProperty('conversationId');
+      expect(result).toHaveProperty('messageId');
+    });
+
+    it('should reject if less than 2 participants', async () => {
+      await expect(
+        createConversationWithFirstMessage({
+          type: 'direct',
+          participantIds: [mockUser1],
+          messageText: 'Hello!',
+          senderId: mockUser1,
+        })
+      ).rejects.toThrow('Conversation requires at least 2 participants');
+    });
+
+    it('should reject direct conversation with more than 2 participants', async () => {
+      await expect(
+        createConversationWithFirstMessage({
+          type: 'direct',
+          participantIds: [mockUser1, mockUser2, mockUser3],
+          messageText: 'Hello!',
+          senderId: mockUser1,
+        })
+      ).rejects.toThrow('Direct conversation requires exactly 2 participants');
+    });
+
+    it('should reject group conversation without group name', async () => {
+      await expect(
+        createConversationWithFirstMessage({
+          type: 'group',
+          participantIds: [mockUser1, mockUser2, mockUser3],
+          messageText: 'Hello!',
+          senderId: mockUser1,
+        })
+      ).rejects.toThrow('Group conversation requires a group name');
+    });
+
+    it('should reject empty message text', async () => {
+      await expect(
+        createConversationWithFirstMessage({
+          type: 'direct',
+          participantIds: [mockUser1, mockUser2],
+          messageText: '',
+          senderId: mockUser1,
+        })
+      ).rejects.toThrow('First message text is required');
+    });
+
+    it('should reject message text exceeding 1000 characters', async () => {
+      const longText = 'a'.repeat(1001);
+
+      await expect(
+        createConversationWithFirstMessage({
+          type: 'direct',
+          participantIds: [mockUser1, mockUser2],
+          messageText: longText,
+          senderId: mockUser1,
+        })
+      ).rejects.toThrow('Message text must be 1000 characters or less');
+    });
+
+    it('should reject if sender is not a participant', async () => {
+      await expect(
+        createConversationWithFirstMessage({
+          type: 'direct',
+          participantIds: [mockUser1, mockUser2],
+          messageText: 'Hello!',
+          senderId: mockUser3, // Not in participants
+        })
+      ).rejects.toThrow('Sender must be one of the conversation participants');
+    });
+
+    it('should handle transaction errors gracefully', async () => {
+      (runTransaction as jest.Mock).mockRejectedValue({
+        code: 'unavailable',
+        message: 'Network error',
+      });
+
+      await expect(
+        createConversationWithFirstMessage({
+          type: 'direct',
+          participantIds: [mockUser1, mockUser2],
+          messageText: 'Hello!',
+          senderId: mockUser1,
+        })
+      ).rejects.toThrow('Failed to create conversation');
+    });
+
+    it('should use deterministic ID for direct messages', async () => {
+      (runTransaction as jest.Mock).mockImplementation(async (db, callback) => {
+        const mockTransaction = {
+          get: jest.fn().mockResolvedValue({ exists: () => false }),
+          set: jest.fn(),
+          update: jest.fn(),
+        };
+        return await callback(mockTransaction);
+      });
+
+      (doc as jest.Mock).mockReturnValue({ id: 'mock-doc-id' });
+      (collection as jest.Mock).mockReturnValue('mock-collection');
+
+      const result = await createConversationWithFirstMessage({
+        type: 'direct',
+        participantIds: [mockUser1, mockUser2],
+        messageText: 'Hello!',
+        senderId: mockUser1,
+      });
+
+      // Should generate deterministic ID for direct messages
+      expect(result.conversationId).toBeDefined();
     });
   });
 });

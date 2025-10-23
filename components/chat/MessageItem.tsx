@@ -7,8 +7,8 @@
  * appear left-aligned with gray background and include sender info.
  */
 
-import React, { FC, memo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { FC, memo, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 import { Avatar } from '@/components/common/Avatar';
 import { MessageStatus } from '@/components/chat/MessageStatus';
 import { formatMessageTime } from '@/utils/dateHelpers';
@@ -32,6 +32,9 @@ export interface MessageItemProps {
 
   /** Callback when retry button is tapped (for failed messages) */
   onRetry?: () => void;
+
+  /** Whether this message's read receipt is being retried */
+  isRetrying?: boolean;
 }
 
 /**
@@ -56,11 +59,50 @@ export interface MessageItemProps {
  * ```
  */
 export const MessageItem: FC<MessageItemProps> = memo(
-  ({ message, isOwnMessage, senderDisplayName, senderPhotoURL, onRetry }) => {
+  ({ message, isOwnMessage, senderDisplayName, senderPhotoURL, onRetry, isRetrying = false }) => {
+    // Animation for retry indication
+    const opacityAnim = useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+      if (isRetrying) {
+        // Start pulsing animation when retrying
+        const animation = Animated.loop(
+          Animated.sequence([
+            Animated.timing(opacityAnim, {
+              toValue: 0.7,
+              duration: 800,
+              useNativeDriver: true,
+            }),
+            Animated.timing(opacityAnim, {
+              toValue: 1,
+              duration: 800,
+              useNativeDriver: true,
+            }),
+          ])
+        );
+        animation.start();
+
+        // Cleanup animation when component unmounts or retry stops
+        return () => {
+          animation.stop();
+          opacityAnim.setValue(1);
+        };
+      } else {
+        // Reset opacity when not retrying
+        opacityAnim.setValue(1);
+      }
+    }, [isRetrying, opacityAnim]);
+
     return (
-      <View
-        style={[styles.container, isOwnMessage ? styles.sentMessage : styles.receivedMessage]}
+      <Animated.View
+        style={[
+          styles.container,
+          isOwnMessage ? styles.sentMessage : styles.receivedMessage,
+          { opacity: opacityAnim }
+        ]}
         testID="message-container"
+        accessibilityLabel={isRetrying ? 'Message syncing' : undefined}
+        accessibilityHint={isRetrying ? 'This message is being synchronized' : undefined}
       >
         {/* Avatar for received messages */}
         {!isOwnMessage && (
@@ -83,9 +125,18 @@ export const MessageItem: FC<MessageItemProps> = memo(
             </Text>
           </View>
 
-          {/* Timestamp and status (for sent messages only) */}
+          {/* Timestamp, status, and sync indicator */}
           <View style={styles.metadataContainer}>
-            <Text style={styles.timestamp}>{formatMessageTime(message.timestamp)}</Text>
+            <View style={styles.timestampRow}>
+              <Text style={styles.timestamp}>{formatMessageTime(message.timestamp)}</Text>
+
+              {/* Syncing indicator */}
+              {isRetrying && (
+                <Text style={styles.syncingText} accessibilityRole="status">
+                  {' • syncing'}
+                </Text>
+              )}
+            </View>
 
             {/* Message status indicator (only for sent messages) */}
             {isOwnMessage && <MessageStatus status={message.status} onRetry={onRetry} />}
@@ -94,7 +145,7 @@ export const MessageItem: FC<MessageItemProps> = memo(
 
         {/* Spacer for sent messages to push content right */}
         {isOwnMessage && <View style={styles.spacer} />}
-      </View>
+      </Animated.View>
     );
   }
 );
@@ -158,9 +209,18 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginLeft: 12,
   },
+  timestampRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   timestamp: {
     fontSize: 11,
     color: '#8E8E93',
+  },
+  syncingText: {
+    fontSize: 11,
+    color: '#8E8E93',
+    fontStyle: 'italic',
   },
   spacer: {
     width: 40, // Space for avatar on the other side (for alignment)

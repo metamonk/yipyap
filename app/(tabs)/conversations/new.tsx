@@ -22,7 +22,6 @@ import { searchUsers } from '@/services/userService';
 import {
   generateConversationId,
   checkConversationExists,
-  createConversation,
 } from '@/services/conversationService';
 import { Avatar } from '@/components/common/Avatar';
 import { useAuth } from '@/hooks/useAuth';
@@ -82,7 +81,7 @@ export default function NewConversationScreen() {
   };
 
   /**
-   * Handle user selection - create or open conversation
+   * Handle user selection - navigate to chat (draft mode if new, existing if already created)
    */
   const handleUserSelect = async (selectedUser: User) => {
     if (!currentUserId) {
@@ -101,17 +100,21 @@ export default function NewConversationScreen() {
       const exists = await checkConversationExists(conversationId);
 
       if (!exists) {
-        // Create new conversation
-        await createConversation({
-          type: 'direct',
-          participantIds: [currentUserId, selectedUser.uid],
-        });
+        // Navigate to chat screen in draft mode (conversation created on first message send)
+        router.push({
+          pathname: `/(tabs)/conversations/${conversationId}`,
+          params: {
+            isDraft: 'true',
+            recipientId: selectedUser.uid,
+            type: 'direct',
+          },
+        } as never);
+      } else {
+        // Navigate to existing conversation
+        router.push(`/(tabs)/conversations/${conversationId}`);
       }
-
-      // Navigate to chat screen
-      router.push(`/(tabs)/conversations/${conversationId}`);
     } catch (err) {
-      console.error('Error creating conversation:', err);
+      console.error('Error checking conversation:', err);
       setError(err instanceof Error ? err.message : 'Failed to start conversation');
     } finally {
       setCreatingConversation(false);

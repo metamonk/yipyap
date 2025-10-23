@@ -49,7 +49,7 @@ describe('useMessages - Pagination', () => {
 
     mockGetMessages.mockResolvedValueOnce({
       messages: mockMessages,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       lastDoc: { id: 'cursor1' } as any,
       hasMore: true,
     });
@@ -87,13 +87,13 @@ describe('useMessages - Pagination', () => {
     mockGetMessages
       .mockResolvedValueOnce({
         messages: firstPageMessages,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         lastDoc: { id: 'cursor1' } as any,
         hasMore: true,
       })
       .mockResolvedValue({
         messages: secondPageMessages,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         lastDoc: { id: 'cursor2' } as any,
         hasMore: true,
       });
@@ -160,7 +160,7 @@ describe('useMessages - Pagination', () => {
     // Initial load
     mockGetMessages.mockResolvedValue({
       messages: mockMessages,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       lastDoc: { id: 'cursor1' } as any,
       hasMore: true,
     });
@@ -239,13 +239,13 @@ describe('useMessages - Pagination', () => {
     mockGetMessages
       .mockResolvedValueOnce({
         messages: firstPageMessages,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         lastDoc: { id: 'cursor1' } as any,
         hasMore: true,
       })
       .mockResolvedValue({
         messages: secondPageMessages,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         lastDoc: { id: 'cursor2' } as any,
         hasMore: false,
       });
@@ -282,7 +282,7 @@ describe('useMessages - Pagination', () => {
     // Initial load (newer messages)
     mockGetMessages.mockResolvedValueOnce({
       messages: firstPageMessages,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       lastDoc: { id: 'cursor1' } as any,
       hasMore: true,
     });
@@ -296,7 +296,7 @@ describe('useMessages - Pagination', () => {
     // Load more (older messages)
     mockGetMessages.mockResolvedValueOnce({
       messages: secondPageMessages,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       lastDoc: { id: 'cursor2' } as any,
       hasMore: false,
     });
@@ -319,7 +319,7 @@ describe('useMessages - Pagination', () => {
     // Initial load succeeds
     mockGetMessages.mockResolvedValueOnce({
       messages: mockMessages,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       lastDoc: { id: 'cursor1' } as any,
       hasMore: true,
     });

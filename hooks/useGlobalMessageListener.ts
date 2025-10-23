@@ -87,6 +87,14 @@ export function useGlobalMessageListener() {
         snapshot.docs.forEach((doc) => {
           const conversation = { id: doc.id, ...doc.data() } as Conversation;
 
+          // Skip newly created conversations without any messages yet
+          // This prevents race conditions where the conversation document exists locally
+          // but hasn't propagated to the server, causing permission errors when
+          // trying to set up message listeners that require reading the parent document
+          if (!conversation.lastMessageTimestamp) {
+            return; // No messages yet, nothing to listen to
+          }
+
           // Listen to recent messages in this conversation
           const messagesQuery = query(
             collection(db, 'conversations', conversation.id, 'messages'),

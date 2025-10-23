@@ -34,6 +34,10 @@ yarn-error.*
 .env
 .env*.local
 
+# Firebase config files
+google-services.json
+GoogleService-Info.plist
+
 # typescript
 *.tsbuildinfo
 
@@ -50,3 +54,15 @@ yarn-error.*
 
 # additional info
 .ignore/
+
+# debug
+firestore-debug.log
+*-debug.log
+
+# temp
+*.new
+*.tmp
+
+# service account
+serviceAccountKey.json
+key-info.md

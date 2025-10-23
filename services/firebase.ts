@@ -18,6 +18,7 @@ import {
   disableNetwork,
 } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
+import { getDatabase, Database } from 'firebase/database';
 import NetInfo from '@react-native-community/netinfo';
 import { Config } from '@/constants/Config';
 
@@ -40,6 +41,11 @@ let db: Firestore;
  * Firebase Storage instance
  */
 let storage: FirebaseStorage;
+
+/**
+ * Firebase Realtime Database instance
+ */
+let realtimeDb: Database;
 
 /**
  * Initializes Firebase services with configuration from environment variables
@@ -93,6 +99,11 @@ export function initializeFirebase(): void {
     });
 
     storage = getStorage(app);
+
+    // Initialize Realtime Database for presence system
+    // RTDB provides instant status updates via onDisconnect handlers
+    // Used for presence and typing indicators (not for primary data storage)
+    realtimeDb = getDatabase(app);
 
     // Set up network state listener to manage Firestore connection
     // This enables automatic sync when network is restored and prevents
@@ -152,4 +163,19 @@ export function getFirebaseStorage(): FirebaseStorage {
     throw new Error('Firebase not initialized. Call initializeFirebase() first.');
   }
   return storage;
+}
+
+/**
+ * Returns the Firebase Realtime Database instance
+ * @returns Firebase Realtime Database instance for presence and typing indicators
+ * @throws {Error} When Firebase has not been initialized
+ * @remarks
+ * RTDB is used exclusively for real-time features (presence, typing indicators).
+ * For all other data, use getFirebaseDb() to access Firestore.
+ */
+export function getFirebaseRealtimeDb(): Database {
+  if (!realtimeDb) {
+    throw new Error('Firebase not initialized. Call initializeFirebase() first.');
+  }
+  return realtimeDb;
 }

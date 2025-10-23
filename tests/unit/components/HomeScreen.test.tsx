@@ -19,7 +19,7 @@ describe('HomeScreen', () => {
     mockUseAuth.mockReturnValue({
       isAuthenticated: true,
       isLoading: false,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       user: { uid: 'test-user-id', email: 'test@example.com' } as any,
       userProfile: null,
       hasProfile: false,
@@ -58,7 +58,7 @@ describe('HomeScreen', () => {
     mockUseAuth.mockReturnValue({
       isAuthenticated: true,
       isLoading: true,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       user: { uid: 'test-user-id', email: 'test@example.com' } as any,
       userProfile: null,
       hasProfile: false,

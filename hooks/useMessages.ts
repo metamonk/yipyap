@@ -10,7 +10,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { FlatList, Alert } from 'react-native';
 import { Timestamp, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
-import { subscribeToMessages, sendMessage, getMessages } from '@/services/messageService';
+import { subscribeToMessages, sendMessage, getMessages, DraftConversationParams } from '@/services/messageService';
 import { useNetworkStatus } from './useNetworkStatus';
 import type { Message } from '@/types/models';
 
@@ -70,6 +70,7 @@ function generateTempId(): string {
  * @param conversationId - The conversation ID to subscribe to
  * @param currentUserId - The current user's ID
  * @param participantIds - Array of participant IDs in the conversation
+ * @param draftParams - Optional draft conversation params for creating conversation on first message
  * @returns Object containing messages, loading state, sendMessage/retryMessage functions, and scroll controls
  *
  * @remarks
@@ -82,6 +83,7 @@ function generateTempId(): string {
  * - Deduplicates messages to prevent showing the same message twice
  * - Supports offline messaging: Messages sent while offline are queued automatically
  *   by Firestore and will sync when connection is restored
+ * - Supports draft conversations: If draftParams provided, conversation is created on first message send
  *
  * @example
  * ```tsx
@@ -114,7 +116,8 @@ function generateTempId(): string {
 export function useMessages(
   conversationId: string,
   currentUserId: string,
-  participantIds: string[]
+  participantIds: string[],
+  draftParams?: DraftConversationParams
 ): UseMessagesResult {
   const [confirmedMessages, setConfirmedMessages] = useState<Message[]>([]);
   const [optimisticMessages, setOptimisticMessages] = useState<MessageWithFailedStatus[]>([]);
@@ -163,7 +166,14 @@ export function useMessages(
    * Load initial messages with pagination support
    */
   useEffect(() => {
-    if (!conversationId) {
+    // Skip loading messages for draft conversations that don't exist yet
+    if (!conversationId || draftParams) {
+      // For draft conversations, just set loading to false and return empty state
+      if (draftParams) {
+        setLoading(false);
+        setConfirmedMessages([]);
+        setHasMore(false);
+      }
       return;
     }
 
@@ -200,14 +210,18 @@ export function useMessages(
     return () => {
       isMounted = false;
     };
-  }, [conversationId, scrollToBottom]);
+    // scrollToBottom is intentionally omitted from deps to prevent infinite loops
+    // It's only called inside the async function and doesn't need to trigger re-runs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId, draftParams]);
 
   /**
    * Subscribe to real-time message updates for new messages
    * This supplements the initial paginated load with real-time updates
    */
   useEffect(() => {
-    if (!conversationId || loading) {
+    // Skip subscription for draft conversations or while loading
+    if (!conversationId || loading || draftParams) {
       return;
     }
 
@@ -308,7 +322,10 @@ export function useMessages(
     return () => {
       unsubscribe();
     };
-  }, [conversationId, loading, optimisticMessages, scrollToBottom]);
+    // scrollToBottom is intentionally omitted from deps to prevent infinite loops
+    // It's only called in the callback and doesn't need to trigger re-subscription
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId, loading, optimisticMessages, draftParams]);
 
   /**
    * Scroll to bottom after initial load
@@ -371,7 +388,8 @@ export function useMessages(
             senderId: currentUserId,
             text: text.trim(),
           },
-          participantIds
+          participantIds,
+          draftParams // Pass draft params for conversation creation if needed
         );
 
         // Remove from optimistic state on success
@@ -395,7 +413,7 @@ export function useMessages(
         // User can retry using the retry button
       }
     },
-    [conversationId, currentUserId, participantIds, scrollToBottom, connectionStatus]
+    [conversationId, currentUserId, participantIds, scrollToBottom, connectionStatus, draftParams]
   );
 
   /**
@@ -431,7 +449,8 @@ export function useMessages(
             senderId: currentUserId,
             text: failedMessage.text,
           },
-          participantIds
+          participantIds,
+          draftParams // Pass draft params for conversation creation if needed
         );
 
         // Remove from optimistic state on success
@@ -455,7 +474,7 @@ export function useMessages(
         Alert.alert('Failed to send message', 'Please check your connection and try again.');
       }
     },
-    [conversationId, currentUserId, participantIds, optimisticMessages, scrollToBottom]
+    [conversationId, currentUserId, participantIds, optimisticMessages, scrollToBottom, draftParams]
   );
 
   /**
@@ -468,8 +487,8 @@ export function useMessages(
    * - Updates pagination state for next page
    */
   const loadMoreMessages = useCallback(async () => {
-    // Early return if no more messages or already loading
-    if (!hasMore || isLoadingMore) {
+    // Early return if no more messages, already loading, or draft conversation
+    if (!hasMore || isLoadingMore || draftParams) {
       return;
     }
 
@@ -502,7 +521,7 @@ export function useMessages(
     } finally {
       setIsLoadingMore(false);
     }
-  }, [conversationId, hasMore, isLoadingMore, lastVisible]);
+  }, [conversationId, hasMore, isLoadingMore, lastVisible, draftParams]);
 
   return {
     messages,

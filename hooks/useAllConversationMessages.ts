@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
-import { db } from '@/services/firebase';
+import { getFirebaseDb } from '@/services/firebase';
 import type { Message } from '@/types/models';
 
 /**
@@ -81,7 +81,7 @@ export function useAllConversationMessages(
       // Load messages from each conversation
       const messagePromises = conversationIds.map(async (conversationId) => {
         try {
-          const messagesRef = collection(db, 'conversations', conversationId, 'messages');
+          const messagesRef = collection(getFirebaseDb(), 'conversations', conversationId, 'messages');
           const q = query(
             messagesRef,
             orderBy('timestamp', 'desc'),

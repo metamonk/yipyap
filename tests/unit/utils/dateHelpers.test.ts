@@ -172,12 +172,12 @@ describe('dateHelpers', () => {
     });
 
     it('handles null timestamp gracefully', () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       expect(formatDateSeparator(null as any)).toBe('Today');
     });
 
     it('handles invalid timestamp gracefully', () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const invalidTimestamp = { invalid: true } as any;
       expect(formatDateSeparator(invalidTimestamp)).toBe('Today');
     });
@@ -230,12 +230,12 @@ describe('dateHelpers', () => {
     });
 
     it('handles null timestamp gracefully', () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       expect(formatMessageTimestamp(null as any)).toBe('Now');
     });
 
     it('handles invalid timestamp gracefully', () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const invalidTimestamp = { invalid: true } as any;
       expect(formatMessageTimestamp(invalidTimestamp)).toBe('Now');
     });

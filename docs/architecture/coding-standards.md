@@ -10,6 +10,7 @@
 - **Optimistic Updates:** All user actions must show immediate UI feedback before server confirmation
 - **Offline Handling:** All features must gracefully handle offline state with queuing
 - **Security Rules:** Never bypass Firestore Security Rules - all data access must be validated
+- **Race Condition Prevention:** Fix race conditions through sequencing, not error suppression. Check prerequisites before setting up real-time listeners. See: [architecture/real-time-data-patterns.md](./real-time-data-patterns.md)
 
 ## TypeScript Documentation Standards
 

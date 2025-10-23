@@ -2,7 +2,7 @@
  * Tests for root layout with protected route pattern
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 
 import React from 'react';
 import { render, waitFor } from '@testing-library/react-native';

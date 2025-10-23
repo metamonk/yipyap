@@ -131,6 +131,9 @@ service cloud.firestore {
       );
 
       // Create: User must include themselves in participantIds and limit group size
+      // Group size limit: Maximum 10 participants per group
+      // Client-side validation in constants/groupLimits.ts (GROUP_SIZE_LIMIT) must match this value
+      // Client validation provides UX feedback, server rules provide security enforcement
       allow create: if isParticipantInNewDoc() &&
                        request.resource.data.participantIds.size() <= 10;
 
@@ -142,22 +145,47 @@ service cloud.firestore {
 
       // Messages within conversations
       match /messages/{messageId} {
-        // Helper function to get parent conversation
+        // Helper function to get parent conversation (returns null if doesn't exist)
         function getConversation() {
-          return get(/databases/$(database)/documents/conversations/$(conversationId)).data;
+          return get(/databases/$(database)/documents/conversations/$(conversationId));
+        }
+
+        // Helper function to check if user ID is in the deterministic conversation ID
+        // For direct conversations, ID format is "userId1_userId2" (sorted alphabetically)
+        function isInConversationId() {
+          return request.auth != null && (
+            // ID starts with user's ID followed by underscore
+            conversationId.matches('^' + request.auth.uid + '_.*') ||
+            // ID ends with underscore followed by user's ID
+            conversationId.matches('.*_' + request.auth.uid + '$')
+          );
         }
 
         function isConversationParticipant() {
+          let conversation = getConversation();
           return request.auth != null &&
-                 request.auth.uid in getConversation().participantIds;
+                 conversation.exists &&
+                 request.auth.uid in conversation.data.participantIds;
+        }
+
+        // Helper function to check if conversation is being created atomically
+        // (conversation doesn't exist yet but message references valid conversation ID)
+        function isAtomicCreation() {
+          return request.auth != null &&
+                 !getConversation().exists &&
+                 request.resource.data.conversationId == conversationId &&
+                 isInConversationId();
         }
 
         // Read: User must be participant in parent conversation
         allow read: if isConversationParticipant();
 
         // Create: User must be participant AND senderId must match auth.uid
-        allow create: if isConversationParticipant() &&
-                         request.auth.uid == request.resource.data.senderId;
+        // OR conversation is being created atomically in same transaction
+        allow create: if request.auth.uid == request.resource.data.senderId && (
+          isConversationParticipant() ||
+          isAtomicCreation()
+        );
 
         // Update: User must be participant (for read receipts, status updates)
         allow update: if isConversationParticipant();

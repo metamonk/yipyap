@@ -17,8 +17,13 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationHeader } from '@/app/_components/NavigationHeader';
 import { UserSelectList } from '@/components/conversation/UserSelectList';
-import { createConversation } from '@/services/conversationService';
+import { GroupMemberCounter } from '@/components/groups/GroupMemberCounter';
+import { GroupSizeError } from '@/components/groups/GroupSizeError';
+import { getFirebaseDb } from '@/services/firebase';
+import { collection, doc } from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuth';
+import { useGroupValidation } from '@/hooks/useGroupValidation';
+import { MAX_SELECTABLE_MEMBERS } from '@/constants/groupLimits';
 import type { User } from '@/types/models';
 
 /**
@@ -28,6 +33,8 @@ import type { User } from '@/types/models';
  * - Enter a group name
  * - Select multiple participants (up to 10 total including creator)
  * - Create the group conversation
+ * - View real-time validation feedback for group size limits
+ * - Receive warnings when approaching the 10-member limit
  */
 export default function NewGroupScreen() {
   const router = useRouter();
@@ -35,14 +42,22 @@ export default function NewGroupScreen() {
   const [groupName, setGroupName] = useState('');
   const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
   const [creating, setCreating] = useState(false);
+  const [showError, setShowError] = useState(false);
+
+  // Calculate total member count (selected users + current user)
+  const memberCount = selectedUsers.length + 1;
+
+  // Validate group size in real-time
+  const { validationState } = useGroupValidation(memberCount);
 
   const handleCreateGroup = async () => {
-    // Validation
+    // Validation: Group name
     if (!groupName.trim()) {
       Alert.alert('Group Name Required', 'Please enter a name for the group.');
       return;
     }
 
+    // Validation: Minimum members (at least 2 other users + current user = 3 total)
     if (selectedUsers.length < 2) {
       Alert.alert(
         'More Participants Required',
@@ -51,6 +66,14 @@ export default function NewGroupScreen() {
       return;
     }
 
+    // Validation: Group size limit
+    if (!validationState.isValid) {
+      setShowError(true);
+      Alert.alert('Group Size Limit Exceeded', validationState.errorMessage || '');
+      return;
+    }
+
+    // Validation: Authentication
     if (!currentUser) {
       Alert.alert('Error', 'You must be logged in to create a group.');
       return;
@@ -62,18 +85,22 @@ export default function NewGroupScreen() {
       // Create participant IDs array (including current user)
       const participantIds = [currentUser.uid, ...selectedUsers.map((u) => u.uid)];
 
-      // Create the group conversation
-      const conversation = await createConversation({
-        type: 'group',
-        participantIds,
-        groupName: groupName.trim(),
-        creatorId: currentUser.uid,
-      });
+      // Generate a conversation ID for navigation (group will be created on first message send)
+      const db = getFirebaseDb();
+      const conversationId = doc(collection(db, 'conversations')).id;
 
-      // Navigate to the new group chat
-      router.push(`/(tabs)/conversations/${conversation.id}`);
+      // Navigate to chat screen in draft mode (conversation created on first message send)
+      router.push({
+        pathname: `/(tabs)/conversations/${conversationId}`,
+        params: {
+          isDraft: 'true',
+          type: 'group',
+          groupName: groupName.trim(),
+          participantIds: participantIds.join(','), // Pass as comma-separated string
+        },
+      } as never);
     } catch (error) {
-      console.error('Failed to create group:', error);
+      console.error('Failed to navigate to group chat:', error);
       Alert.alert('Error', 'Failed to create group. Please try again.');
     } finally {
       setCreating(false);
@@ -102,7 +129,11 @@ export default function NewGroupScreen() {
         rightAction={{
           label: creating ? 'Creating...' : 'Create',
           onPress: handleCreateGroup,
-          disabled: creating || selectedUsers.length < 2 || !groupName.trim(),
+          disabled:
+            creating ||
+            selectedUsers.length < 2 ||
+            !groupName.trim() ||
+            !validationState.canSubmit,
         }}
       />
 
@@ -123,17 +154,43 @@ export default function NewGroupScreen() {
           </View>
         </View>
 
-        {/* Participants Section */}
+        {/* Participants Section with Counter */}
         <View style={styles.participantsSection}>
-          <Text style={styles.sectionTitle}>Add Participants ({selectedUsers.length}/9)</Text>
+          <Text style={styles.sectionTitle}>Add Participants</Text>
+          <GroupMemberCounter
+            count={memberCount}
+            severity={validationState.severity}
+            showProgressBar={true}
+            testID="new-group-member-counter"
+          />
           <Text style={styles.sectionSubtitle}>Select at least 2 people to create a group</Text>
         </View>
+
+        {/* Error/Warning Messages */}
+        {showError && validationState.errorMessage && (
+          <GroupSizeError
+            message={validationState.errorMessage}
+            severity="error"
+            suggestion="Remove some members to continue"
+            dismissible={true}
+            onDismiss={() => setShowError(false)}
+            testID="new-group-error"
+          />
+        )}
+        {validationState.warningMessage && (
+          <GroupSizeError
+            message={validationState.warningMessage}
+            severity="warning"
+            dismissible={false}
+            testID="new-group-warning"
+          />
+        )}
 
         {/* User Selection List */}
         <View style={styles.userListContainer}>
           <UserSelectList
             onSelectionChange={setSelectedUsers}
-            maxSelection={9}
+            maxSelection={MAX_SELECTABLE_MEMBERS}
             showOnlineStatus={true}
           />
         </View>

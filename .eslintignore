@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+lib/
+*.js.map
+
+# Functions build output
+functions/lib/
+functions/node_modules/
+functions/jest.config.js
+functions/tests/
+
+# Generated files
+.expo/
+.expo-shared/
+expo-env.d.ts
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+
+# Test coverage
+coverage/
+
+# Misc
+.DS_Store
+*.log

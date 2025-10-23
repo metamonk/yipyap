@@ -1,0 +1,49 @@
+{
+  "rules": {
+    "presence": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "$uid === auth.uid",
+        ".validate": "newData.hasChildren(['state', 'lastSeen'])",
+        "state": {
+          ".validate": "newData.isString() && (newData.val() === 'online' || newData.val() === 'offline' || newData.val() === 'away')"
+        },
+        "lastSeen": {
+          ".validate": "newData.isNumber()"
+        },
+        "devices": {
+          "$deviceId": {
+            ".validate": "newData.hasChildren(['state', 'platform', 'lastActivity'])",
+            "state": {
+              ".validate": "newData.isString() && (newData.val() === 'online' || newData.val() === 'offline')"
+            },
+            "platform": {
+              ".validate": "newData.isString() && (newData.val() === 'ios' || newData.val() === 'android' || newData.val() === 'web')"
+            },
+            "lastActivity": {
+              ".validate": "newData.isNumber()"
+            },
+            "appVersion": {
+              ".validate": "!newData.exists() || newData.isString()"
+            }
+          }
+        }
+      }
+    },
+    "typing": {
+      "$conversationId": {
+        ".read": "auth != null",
+        "$uid": {
+          ".write": "$uid === auth.uid",
+          ".validate": "newData.hasChildren(['isTyping', 'timestamp'])",
+          "isTyping": {
+            ".validate": "newData.isBoolean()"
+          },
+          "timestamp": {
+            ".validate": "newData.isNumber()"
+          }
+        }
+      }
+    }
+  }
+}

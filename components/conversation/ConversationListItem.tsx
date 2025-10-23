@@ -10,7 +10,7 @@ import React, { FC, memo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Avatar } from '@/components/common/Avatar';
 import { Badge } from '@/components/common/Badge';
-import { OnlineIndicator } from '@/components/common/OnlineIndicator';
+import { PresenceIndicator } from '@/components/PresenceIndicator';
 import { formatRelativeTime } from '@/utils/dateHelpers';
 import type { Conversation } from '@/types/models';
 
@@ -30,8 +30,8 @@ export interface ConversationListItemProps {
   /** Profile photo URL of the other participant (null if no photo) */
   otherParticipantPhoto: string | null;
 
-  /** Whether the other participant is online */
-  otherParticipantOnline?: boolean;
+  /** User ID of the other participant (for direct conversations, used for presence) */
+  otherParticipantId?: string;
 
   /** Callback fired when the conversation item is pressed */
   onPress: (conversationId: string) => void;
@@ -68,10 +68,10 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
     currentUserId,
     otherParticipantName,
     otherParticipantPhoto,
-    otherParticipantOnline = false,
+    otherParticipantId,
     onPress,
   }) => {
-    const { id, lastMessage, lastMessageTimestamp, unreadCount } = conversation;
+    const { id, type, lastMessage, lastMessageTimestamp, unreadCount } = conversation;
 
     // Get unread count for current user
     const userUnreadCount = unreadCount[currentUserId] || 0;
@@ -97,14 +97,14 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
         testID="conversation-item"
         activeOpacity={0.7}
       >
-        {/* Avatar with online indicator */}
+        {/* Avatar with presence indicator */}
         <View style={styles.avatarContainer}>
           <Avatar photoURL={otherParticipantPhoto} displayName={otherParticipantName} size={48} />
-          <OnlineIndicator
-            isOnline={otherParticipantOnline}
-            size={12}
-            style={styles.onlineIndicator}
-          />
+          {type === 'direct' && otherParticipantId && (
+            <View style={styles.presenceIndicator}>
+              <PresenceIndicator userId={otherParticipantId} size="small" hideWhenOffline={false} />
+            </View>
+          )}
         </View>
 
         {/* Content */}
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
   avatarContainer: {
     position: 'relative',
   },
-  onlineIndicator: {
+  presenceIndicator: {
     position: 'absolute',
     bottom: 0,
     right: 0,

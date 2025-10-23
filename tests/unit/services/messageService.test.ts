@@ -17,32 +17,74 @@ import {
   onSnapshot,
   serverTimestamp,
   Timestamp,
+  updateDoc,
+  FirestoreError,
 } from 'firebase/firestore';
 import { getFirebaseDb } from '@/services/firebase';
-import { updateConversationLastMessage } from '@/services/conversationService';
+import { updateConversationLastMessage, checkConversationExists } from '@/services/conversationService';
+// Import the mock helper to access mock enqueue function
+const retryQueueMock = require('@/services/retryQueueService');
+mockEnqueue = retryQueueMock.__getMockEnqueue();
 
 // Mock Firebase
 jest.mock('@/services/firebase');
 jest.mock('@/services/conversationService');
-jest.mock('firebase/firestore', () => ({
-  collection: jest.fn(),
-  addDoc: jest.fn(),
-  query: jest.fn(),
-  orderBy: jest.fn(),
-  limit: jest.fn(),
-  startAfter: jest.fn(),
-  getDocs: jest.fn(),
-  onSnapshot: jest.fn(),
-  updateDoc: jest.fn(),
-  serverTimestamp: jest.fn(),
-  Timestamp: {
-    now: jest.fn(() => ({ seconds: Date.now() / 1000, nanoseconds: 0 })),
-  },
-  arrayUnion: jest.fn((value) => ({ _methodName: 'arrayUnion', _elements: [value] })),
-}));
+
+// Mock RetryQueue at module level - create functions that will be accessible from tests
+let mockEnqueue: jest.Mock;
+
+jest.mock('@/services/retryQueueService', () => {
+  // Create the mock functions inside the factory
+  const enqueueMock = jest.fn();
+  const registerProcessorMock = jest.fn();
+  const mockRetryQueue = {
+    enqueue: enqueueMock,
+    registerProcessor: registerProcessorMock,
+    processQueue: jest.fn(),
+    loadQueue: jest.fn(),
+  };
+
+  return {
+    RetryQueue: {
+      getInstance: jest.fn(() => mockRetryQueue),
+    },
+    // Export the mock enqueue so we can access it in tests
+    __getMockEnqueue: () => enqueueMock,
+  };
+})
+
+jest.mock('firebase/firestore', () => {
+  // Define MockFirestoreError inside the factory to ensure it's available
+  class MockFirestoreErrorClass extends Error {
+    code: string;
+    constructor(code: string, message: string) {
+      super(message);
+      this.code = code;
+      this.name = 'FirebaseError';
+    }
+  }
+
+  return {
+    collection: jest.fn(),
+    addDoc: jest.fn(),
+    query: jest.fn(),
+    orderBy: jest.fn(),
+    limit: jest.fn(),
+    startAfter: jest.fn(),
+    getDocs: jest.fn(),
+    onSnapshot: jest.fn(),
+    updateDoc: jest.fn(),
+    serverTimestamp: jest.fn(),
+    Timestamp: {
+      now: jest.fn(() => ({ seconds: Date.now() / 1000, nanoseconds: 0 })),
+    },
+    arrayUnion: jest.fn((value) => ({ _methodName: 'arrayUnion', _elements: [value] })),
+    FirestoreError: MockFirestoreErrorClass,
+  };
+});
 
 describe('messageService', () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const mockDb = {} as any;
   const mockConversationId = 'user123_user456';
   const mockSenderId = 'user123';
@@ -50,8 +92,14 @@ describe('messageService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockEnqueue.mockClear();
+    mockEnqueue.mockResolvedValue(undefined);
     (getFirebaseDb as jest.Mock).mockReturnValue(mockDb);
     (serverTimestamp as jest.Mock).mockReturnValue({ _seconds: Date.now() / 1000 });
+    // Mock checkConversationExists to return true by default (conversation exists)
+    (checkConversationExists as jest.Mock).mockResolvedValue(true);
+    // Mock updateDoc to resolve successfully
+    (updateDoc as jest.Mock).mockResolvedValue(undefined);
   });
 
   describe('sendMessage', () => {
@@ -73,7 +121,7 @@ describe('messageService', () => {
       expect(result.id).toBe('msg123');
       expect(result.text).toBe('Hello, world!');
       expect(result.senderId).toBe(mockSenderId);
-      expect(result.status).toBe('sending');
+      expect(result.status).toBe('delivered'); // Status is updated to 'delivered' after creation
       expect(result.readBy).toEqual([mockSenderId]);
       expect(result.metadata.aiProcessed).toBe(false);
       expect(addDoc).toHaveBeenCalled();
@@ -214,6 +262,137 @@ describe('messageService', () => {
         )
       ).rejects.toThrow('Failed to send message');
     });
+
+    it('should create conversation atomically when draft mode and conversation does not exist', async () => {
+      // Mock checkConversationExists to return false (conversation doesn't exist)
+      (checkConversationExists as jest.Mock).mockResolvedValue(false);
+
+      // Import and mock createConversationWithFirstMessage
+      const { createConversationWithFirstMessage } = require('@/services/conversationService');
+      const mockCreateConversation = createConversationWithFirstMessage as jest.Mock;
+      mockCreateConversation.mockResolvedValue({
+        conversationId: mockConversationId,
+        messageId: 'msg123',
+      });
+
+      const draftParams = {
+        type: 'direct' as const,
+        groupName: undefined,
+        groupPhotoURL: undefined,
+      };
+
+      const result = await sendMessage(
+        {
+          conversationId: mockConversationId,
+          senderId: mockSenderId,
+          text: 'Hello!',
+        },
+        mockParticipantIds,
+        draftParams
+      );
+
+      // Verify createConversationWithFirstMessage was called
+      expect(mockCreateConversation).toHaveBeenCalledWith({
+        type: 'direct',
+        participantIds: mockParticipantIds,
+        messageText: 'Hello!',
+        senderId: mockSenderId,
+        groupName: undefined,
+        groupPhotoURL: undefined,
+      });
+
+      // Verify the returned message
+      expect(result.id).toBe('msg123');
+      expect(result.conversationId).toBe(mockConversationId);
+      expect(result.text).toBe('Hello!');
+      expect(result.status).toBe('delivered');
+      expect(result.senderId).toBe(mockSenderId);
+    });
+
+    it('should use existing conversation when draft mode but conversation already exists', async () => {
+      // Mock checkConversationExists to return true (conversation exists)
+      (checkConversationExists as jest.Mock).mockResolvedValue(true);
+
+      // Mock normal message creation flow
+      const mockMessageRef = { id: 'msg456' };
+      (collection as jest.Mock).mockReturnValue('mock-collection');
+      (addDoc as jest.Mock).mockResolvedValue(mockMessageRef);
+      (updateConversationLastMessage as jest.Mock).mockResolvedValue(undefined);
+
+      const draftParams = {
+        type: 'direct' as const,
+        groupName: undefined,
+        groupPhotoURL: undefined,
+      };
+
+      const result = await sendMessage(
+        {
+          conversationId: mockConversationId,
+          senderId: mockSenderId,
+          text: 'Hello to existing conversation!',
+        },
+        mockParticipantIds,
+        draftParams
+      );
+
+      // Verify normal message flow was used (not atomic creation)
+      expect(addDoc).toHaveBeenCalled();
+      expect(updateConversationLastMessage).toHaveBeenCalled();
+
+      // Verify the returned message
+      expect(result.id).toBe('msg456');
+      expect(result.text).toBe('Hello to existing conversation!');
+      expect(result.status).toBe('delivered');
+    });
+
+    it('should queue conversation creation for retry when network error occurs', async () => {
+      // Mock checkConversationExists to return false (conversation doesn't exist)
+      (checkConversationExists as jest.Mock).mockResolvedValue(false);
+
+      // Mock createConversationWithFirstMessage to throw network error
+      const { createConversationWithFirstMessage } = require('@/services/conversationService');
+      const mockCreateConversation = createConversationWithFirstMessage as jest.Mock;
+
+      // Create a FirestoreError with 'unavailable' code (network error)
+      // The categorizeError function will recognize this as 'network'
+      const networkError = new FirestoreError('unavailable', 'Network unavailable');
+      mockCreateConversation.mockRejectedValue(networkError);
+
+      const draftParams = {
+        type: 'direct' as const,
+        groupName: undefined,
+        groupPhotoURL: undefined,
+      };
+
+      const result = await sendMessage(
+        {
+          conversationId: mockConversationId,
+          senderId: mockSenderId,
+          text: 'Hello!',
+        },
+        mockParticipantIds,
+        draftParams
+      );
+
+      // Verify enqueue was called with correct parameters
+      expect(mockEnqueue).toHaveBeenCalledWith({
+        operationType: 'CONVERSATION_CREATE',
+        data: {
+          type: 'direct',
+          participantIds: mockParticipantIds,
+          messageText: 'Hello!',
+          senderId: mockSenderId,
+          groupName: undefined,
+          groupPhotoURL: undefined,
+        },
+      });
+
+      // Verify optimistic message was returned with 'sending' status
+      expect(result.status).toBe('sending');
+      expect(result.id).toMatch(/^temp_/); // Temporary ID
+      expect(result.text).toBe('Hello!');
+      expect(result.senderId).toBe(mockSenderId);
+    });
   });
 
   describe('getMessages', () => {
@@ -230,7 +409,7 @@ describe('messageService', () => {
 
       const mockSnapshot = {
         docs: mockDocs,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         forEach: (callback: any) => {
           mockDocs.forEach(callback);
         },
@@ -242,7 +421,8 @@ describe('messageService', () => {
       const result = await getMessages(mockConversationId);
 
       expect(result.messages).toHaveLength(2);
-      expect(result.messages[0].id).toBe('msg1');
+      // Messages are reversed, so msg2 comes first (oldest-to-newest order)
+      expect(result.messages[0].id).toBe('msg2');
       expect(result.hasMore).toBe(false);
       expect(orderBy).toHaveBeenCalledWith('timestamp', 'desc');
       expect(limit).toHaveBeenCalledWith(50);
@@ -270,7 +450,7 @@ describe('messageService', () => {
 
       (getDocs as jest.Mock).mockResolvedValue(mockSnapshot);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       await getMessages(mockConversationId, 50, mockLastDoc as any);
 
       expect(startAfter).toHaveBeenCalledWith(mockLastDoc);
@@ -289,7 +469,7 @@ describe('messageService', () => {
 
       const mockSnapshot = {
         docs: mockDocs,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         forEach: (callback: any) => {
           mockDocs.forEach(callback);
         },
@@ -316,7 +496,7 @@ describe('messageService', () => {
 
       const mockSnapshot = {
         docs: mockDocs,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         forEach: (callback: any) => {
           mockDocs.forEach(callback);
         },
@@ -338,7 +518,7 @@ describe('messageService', () => {
 
       const mockSnapshot = {
         docs: mockDocs,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         forEach: (callback: any) => {
           mockDocs.forEach(callback);
         },
@@ -380,7 +560,7 @@ describe('messageService', () => {
       ];
 
       const mockSnapshot = {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         forEach: (callback: any) => {
           mockMessages.forEach((msg) => {
             callback({ id: msg.id, data: () => msg });

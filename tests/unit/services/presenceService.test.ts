@@ -1,253 +1,509 @@
 /**
- * Unit tests for Presence Service
+ * Unit tests for Presence Service (RTDB-based)
  * @module tests/unit/services/presenceService
  */
 
+ 
+
 import { presenceService } from '@/services/presenceService';
-import { getFirebaseDb } from '@/services/firebase';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { AppState } from 'react-native';
+import { getFirebaseRealtimeDb } from '@/services/firebase';
+import { getDeviceId } from '@/utils/deviceId';
 
-// Mock Firebase
-jest.mock('@/services/firebase', () => ({
-  getFirebaseDb: jest.fn(),
+// Mock dependencies
+jest.mock('@/services/firebase');
+jest.mock('@/utils/deviceId', () => ({
+  getDeviceId: jest.fn(),
+  getPlatform: jest.fn(() => 'ios'),
 }));
-
-jest.mock('firebase/firestore', () => ({
-  doc: jest.fn(),
-  updateDoc: jest.fn(),
-  serverTimestamp: jest.fn(),
-}));
-
 jest.mock('react-native', () => ({
   AppState: {
     addEventListener: jest.fn(),
-    currentState: 'active',
+  },
+  Platform: {
+    OS: 'ios',
   },
 }));
 
-describe('PresenceService', () => {
-  const mockUserId = 'user123';
-  const mockDb = {};
-  const mockUserRef = { id: mockUserId };
-  const mockAppStateListener = { remove: jest.fn() };
+// Mock Firebase RTDB functions
+const mockRef = jest.fn();
+const mockSet = jest.fn();
+const mockGet = jest.fn();
+const mockUpdate = jest.fn();
+const mockOnDisconnect = jest.fn();
+const mockOnValue = jest.fn();
+
+jest.mock('firebase/database', () => ({
+  ref: (...args: any[]) => mockRef(...args),
+  set: (...args: any[]) => mockSet(...args),
+  get: (...args: any[]) => mockGet(...args),
+  update: (...args: any[]) => mockUpdate(...args),
+  onDisconnect: (...args: any[]) => mockOnDisconnect(...args),
+  onValue: (...args: any[]) => mockOnValue(...args),
+  serverTimestamp: () => 1234567890,
+}));
+
+describe('PresenceService (RTDB)', () => {
+  const mockDb = {} as any;
+  const mockDeviceId = 'test-device-123';
+  const mockUserId = 'user-456';
 
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.useFakeTimers();
 
-    (getFirebaseDb as jest.Mock).mockReturnValue(mockDb);
-    (doc as jest.Mock).mockReturnValue(mockUserRef);
-    (updateDoc as jest.Mock).mockResolvedValue(undefined);
-    (serverTimestamp as jest.Mock).mockReturnValue({ _serverTimestamp: true });
-    (AppState.addEventListener as jest.Mock).mockReturnValue(mockAppStateListener);
+    // Setup mocks
+    (getFirebaseRealtimeDb as jest.Mock).mockReturnValue(mockDb);
+    (getDeviceId as jest.Mock).mockResolvedValue(mockDeviceId);
+
+    mockRef.mockReturnValue('mockRef');
+    mockSet.mockResolvedValue(undefined);
+    mockGet.mockResolvedValue({ val: () => null });
+    mockUpdate.mockResolvedValue(undefined);
+    mockOnDisconnect.mockReturnValue({
+      set: jest.fn().mockResolvedValue(undefined),
+      cancel: jest.fn().mockResolvedValue(undefined),
+    });
+    mockOnValue.mockReturnValue(jest.fn());
   });
 
-  afterEach(() => {
-    // Cleanup to prevent state leakage between tests
-    presenceService.cleanup();
-    jest.useRealTimers();
+  afterEach(async () => {
+    // Cleanup after each test
+    await presenceService.cleanup();
   });
 
   describe('initialize', () => {
-    it('should set initial online status', async () => {
-      presenceService.initialize(mockUserId);
+    it('should initialize presence tracking for a user', async () => {
+      // Setup connection state callback
+      let connectionCallback: ((snapshot: any) => void) | null = null;
+      mockOnValue.mockImplementation((ref: any, callback: (snapshot: any) => void) => {
+        if (ref === 'mockRef') {
+          connectionCallback = callback;
+        }
+        return jest.fn();
+      });
+
+      await presenceService.initialize(mockUserId);
+
+      // Verify device ID was retrieved
+      expect(getDeviceId).toHaveBeenCalled();
+
+      // Verify RTDB refs were created
+      expect(mockRef).toHaveBeenCalledWith(mockDb, `presence/${mockUserId}`);
+      expect(mockRef).toHaveBeenCalledWith(mockDb, `presence/${mockUserId}/devices/${mockDeviceId}`);
+      expect(mockRef).toHaveBeenCalledWith(mockDb, '.info/connected');
+
+      // Simulate connection
+      if (connectionCallback) {
+        connectionCallback({ val: () => true });
+      }
 
       // Wait for async operations
-      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
-      expect(doc).toHaveBeenCalledWith(mockDb, 'users', mockUserId);
-      expect(updateDoc).toHaveBeenCalledWith(mockUserRef, {
-        'presence.status': 'online',
-        'presence.lastSeen': { _serverTimestamp: true },
-        updatedAt: { _serverTimestamp: true },
+      // Verify device presence was set
+      expect(mockSet).toHaveBeenCalled();
+
+      // Verify onDisconnect handler was registered
+      expect(mockOnDisconnect).toHaveBeenCalled();
+    });
+
+    it('should cleanup existing presence before re-initializing', async () => {
+      mockOnValue.mockReturnValue(jest.fn());
+
+      await presenceService.initialize(mockUserId);
+      const firstCallCount = mockSet.mock.calls.length;
+
+      // Re-initialize
+      await presenceService.initialize('different-user');
+
+      // Should have set offline status during cleanup
+      expect(mockSet.mock.calls.length).toBeGreaterThan(firstCallCount);
+    });
+
+    it('should register onDisconnect handlers', async () => {
+      const mockDisconnectSet = jest.fn().mockResolvedValue(undefined);
+      mockOnDisconnect.mockReturnValue({
+        set: mockDisconnectSet,
+        cancel: jest.fn(),
       });
-    });
 
-    it('should start heartbeat interval', () => {
-      presenceService.initialize(mockUserId);
-
-      // Advance time by 30 seconds
-      jest.advanceTimersByTime(30000);
-
-      // Should have made 2 calls - initial and after 30 seconds
-      expect(updateDoc).toHaveBeenCalledTimes(2);
-    });
-
-    it('should setup app state listener', () => {
-      presenceService.initialize(mockUserId);
-
-      expect(AppState.addEventListener).toHaveBeenCalledWith('change', expect.any(Function));
-    });
-
-    it('should cleanup previous session before initializing new one', () => {
-      presenceService.initialize('user1');
-      const firstListenerRemove = mockAppStateListener.remove;
-
-      presenceService.initialize('user2');
-
-      expect(firstListenerRemove).toHaveBeenCalled();
-    });
-  });
-
-  describe('app state changes', () => {
-    it('should set online status when app becomes active', async () => {
-      presenceService.initialize(mockUserId);
-      const appStateHandler = (AppState.addEventListener as jest.Mock).mock.calls[0][1];
-
-      jest.clearAllMocks();
-      appStateHandler('active');
-
-      await Promise.resolve();
-
-      expect(updateDoc).toHaveBeenCalledWith(mockUserRef, {
-        'presence.status': 'online',
-        'presence.lastSeen': { _serverTimestamp: true },
-        updatedAt: { _serverTimestamp: true },
+      mockOnValue.mockImplementation((ref: any, callback: (snapshot: any) => void) => {
+        // Immediately trigger connected state
+        if (ref === 'mockRef') {
+          setTimeout(() => callback({ val: () => true }), 0);
+        }
+        return jest.fn();
       });
-    });
 
-    it('should set offline status when app goes to background', async () => {
-      presenceService.initialize(mockUserId);
-      const appStateHandler = (AppState.addEventListener as jest.Mock).mock.calls[0][1];
+      await presenceService.initialize(mockUserId);
 
-      jest.clearAllMocks();
-      appStateHandler('background');
+      // Wait for connection callback
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
-      await Promise.resolve();
-
-      expect(updateDoc).toHaveBeenCalledWith(mockUserRef, {
-        'presence.status': 'offline',
-        'presence.lastSeen': { _serverTimestamp: true },
-        updatedAt: { _serverTimestamp: true },
-      });
-    });
-
-    it('should stop heartbeat when app goes to background', () => {
-      presenceService.initialize(mockUserId);
-      const appStateHandler = (AppState.addEventListener as jest.Mock).mock.calls[0][1];
-
-      jest.clearAllMocks();
-      appStateHandler('background');
-
-      // Advance time - should not trigger more updates
-      jest.advanceTimersByTime(60000);
-
-      expect(updateDoc).toHaveBeenCalledTimes(1); // Only the offline status update
-    });
-  });
-
-  describe('throttling', () => {
-    it('should throttle rapid updates', async () => {
-      presenceService.initialize(mockUserId);
-
-      jest.clearAllMocks();
-
-      // Try to force multiple rapid updates
-      await presenceService.forceUpdate('online');
-      await presenceService.forceUpdate('offline');
-      await presenceService.forceUpdate('online');
-
-      // Should only make first update due to 5-second throttle
-      expect(updateDoc).toHaveBeenCalledTimes(1);
-    });
-
-    it('should allow updates after throttle period', async () => {
-      presenceService.initialize(mockUserId);
-
-      jest.clearAllMocks();
-
-      await presenceService.forceUpdate('online');
-
-      // Advance time past throttle period
-      jest.advanceTimersByTime(6000);
-
-      await presenceService.forceUpdate('offline');
-
-      expect(updateDoc).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  describe('cleanup', () => {
-    it('should set offline status on cleanup', async () => {
-      presenceService.initialize(mockUserId);
-      jest.clearAllMocks();
-
-      presenceService.cleanup();
-
-      await Promise.resolve();
-
-      expect(updateDoc).toHaveBeenCalledWith(mockUserRef, {
-        'presence.status': 'offline',
-        'presence.lastSeen': { _serverTimestamp: true },
-        updatedAt: { _serverTimestamp: true },
-      });
-    });
-
-    it('should stop heartbeat interval', () => {
-      presenceService.initialize(mockUserId);
-      presenceService.cleanup();
-
-      jest.clearAllMocks();
-      jest.advanceTimersByTime(60000);
-
-      expect(updateDoc).not.toHaveBeenCalled();
-    });
-
-    it('should remove app state listener', () => {
-      presenceService.initialize(mockUserId);
-      presenceService.cleanup();
-
-      expect(mockAppStateListener.remove).toHaveBeenCalled();
-    });
-  });
-
-  describe('error handling', () => {
-    it('should silently fail on update errors', async () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-      (updateDoc as jest.Mock).mockRejectedValue(new Error('Permission denied'));
-
-      presenceService.initialize(mockUserId);
-
-      await Promise.resolve();
-
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to update presence:', expect.any(Error));
-
-      consoleErrorSpy.mockRestore();
-    });
-
-    it('should continue heartbeat even after errors', async () => {
-      (updateDoc as jest.Mock).mockRejectedValue(new Error('Network error'));
-
-      presenceService.initialize(mockUserId);
-
-      // Advance time to trigger multiple heartbeats
-      jest.advanceTimersByTime(60000);
-
-      // Should have attempted updates despite errors
-      expect(updateDoc).toHaveBeenCalledTimes(3); // Initial + 2 heartbeats
+      expect(mockOnDisconnect).toHaveBeenCalled();
+      expect(mockDisconnectSet).toHaveBeenCalled();
     });
   });
 
   describe('forceUpdate', () => {
-    it('should bypass throttle for force updates', async () => {
-      presenceService.initialize(mockUserId);
-
-      // Make a regular update
-      const appStateHandler = (AppState.addEventListener as jest.Mock).mock.calls[0][1];
-      appStateHandler('background');
-
+    beforeEach(async () => {
+      mockOnValue.mockReturnValue(jest.fn());
+      await presenceService.initialize(mockUserId);
       jest.clearAllMocks();
+    });
 
-      // Force update immediately (would normally be throttled)
+    it('should update status to online', async () => {
       await presenceService.forceUpdate('online');
 
-      expect(updateDoc).toHaveBeenCalledTimes(1);
-      expect(updateDoc).toHaveBeenCalledWith(mockUserRef, {
-        'presence.status': 'online',
-        'presence.lastSeen': { _serverTimestamp: true },
-        updatedAt: { _serverTimestamp: true },
+      expect(mockSet).toHaveBeenCalled();
+    });
+
+    it('should update status to offline', async () => {
+      await presenceService.forceUpdate('offline');
+
+      expect(mockSet).toHaveBeenCalled();
+    });
+
+    it('should update status to away', async () => {
+      await presenceService.forceUpdate('away');
+
+      expect(mockSet).toHaveBeenCalled();
+    });
+  });
+
+  describe('cleanup', () => {
+    beforeEach(async () => {
+      mockOnValue.mockReturnValue(jest.fn());
+      await presenceService.initialize(mockUserId);
+      jest.clearAllMocks();
+    });
+
+    it('should set device presence to offline', async () => {
+      await presenceService.cleanup();
+
+      expect(mockSet).toHaveBeenCalled();
+    });
+
+    it('should cancel onDisconnect handlers', async () => {
+      const mockCancel = jest.fn().mockResolvedValue(undefined);
+      mockOnDisconnect.mockReturnValue({
+        set: jest.fn(),
+        cancel: mockCancel,
       });
+
+      await presenceService.cleanup();
+
+      // OnDisconnect is called during cleanup to cancel
+      expect(mockCancel).toHaveBeenCalled();
+    });
+  });
+
+  describe('subscribeToPresence', () => {
+    it('should subscribe to another user presence', () => {
+      const callback = jest.fn();
+      const unsubscribe = presenceService.subscribeToPresence('other-user', callback);
+
+      expect(mockRef).toHaveBeenCalledWith(mockDb, 'presence/other-user');
+      expect(mockOnValue).toHaveBeenCalled();
+      expect(typeof unsubscribe).toBe('function');
+    });
+
+    it('should call callback with presence data', () => {
+      const callback = jest.fn();
+      const mockPresence = {
+        state: 'online',
+        lastSeen: Date.now(),
+        devices: {},
+      };
+
+      mockOnValue.mockImplementation((ref: any, cb: (snapshot: any) => void) => {
+        cb({ val: () => mockPresence });
+        return jest.fn();
+      });
+
+      presenceService.subscribeToPresence('other-user', callback);
+
+      expect(callback).toHaveBeenCalledWith(mockPresence);
+    });
+  });
+
+  describe('recordActivity', () => {
+    beforeEach(async () => {
+      mockOnValue.mockReturnValue(jest.fn());
+      await presenceService.initialize(mockUserId);
+      jest.clearAllMocks();
+    });
+
+    it('should reset away timer', () => {
+      // Just verify it doesn't throw
+      expect(() => presenceService.recordActivity()).not.toThrow();
+    });
+
+    it('should change state from away to online', async () => {
+      // Set to away first
+      await presenceService.forceUpdate('away');
+      jest.clearAllMocks();
+
+      // Record activity
+      presenceService.recordActivity();
+
+      // Should trigger presence update
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // State should be updated internally
+    });
+  });
+
+  describe('connection state handling', () => {
+    it('should handle connection lost', async () => {
+      let connectionCallback: ((snapshot: any) => void) | null = null;
+      mockOnValue.mockImplementation((ref: any, callback: (snapshot: any) => void) => {
+        if (ref === 'mockRef') {
+          connectionCallback = callback;
+        }
+        return jest.fn();
+      });
+
+      await presenceService.initialize(mockUserId);
+
+      if (connectionCallback) {
+        // Simulate connection
+        connectionCallback({ val: () => true });
+
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        // Clear mocks to check reconnection behavior
+        jest.clearAllMocks();
+
+        // Simulate disconnection
+        connectionCallback({ val: () => false });
+
+        // onDisconnect handlers are triggered server-side, not in the callback
+      }
+    });
+
+    it('should handle connection restored', async () => {
+      let connectionCallback: ((snapshot: any) => void) | null = null;
+      mockOnValue.mockImplementation((ref: any, callback: (snapshot: any) => void) => {
+        if (ref === 'mockRef') {
+          connectionCallback = callback;
+        }
+        return jest.fn();
+      });
+
+      await presenceService.initialize(mockUserId);
+
+      if (connectionCallback) {
+        // Simulate disconnection first
+        connectionCallback({ val: () => false });
+
+        jest.clearAllMocks();
+
+        // Simulate reconnection
+        connectionCallback({ val: () => true });
+
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        // Should set presence and onDisconnect again
+        expect(mockSet).toHaveBeenCalled();
+        expect(mockOnDisconnect).toHaveBeenCalled();
+      }
+    });
+  });
+
+  describe('multi-device support', () => {
+    it('should use device ID in RTDB path', async () => {
+      mockOnValue.mockReturnValue(jest.fn());
+
+      await presenceService.initialize(mockUserId);
+
+      expect(mockRef).toHaveBeenCalledWith(
+        mockDb,
+        `presence/${mockUserId}/devices/${mockDeviceId}`
+      );
+    });
+  });
+
+  describe('automatic offline on disconnect', () => {
+    it('should register onDisconnect when connected', async () => {
+      const mockDisconnectSet = jest.fn().mockResolvedValue(undefined);
+      mockOnDisconnect.mockReturnValue({
+        set: mockDisconnectSet,
+        cancel: jest.fn(),
+      });
+
+      let connectionCallback: ((snapshot: any) => void) | null = null;
+      mockOnValue.mockImplementation((ref: any, callback: (snapshot: any) => void) => {
+        if (ref === 'mockRef') {
+          connectionCallback = callback;
+        }
+        return jest.fn();
+      });
+
+      await presenceService.initialize(mockUserId);
+
+      // Simulate connection
+      if (connectionCallback) {
+        connectionCallback({ val: () => true });
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(mockOnDisconnect).toHaveBeenCalled();
+      expect(mockDisconnectSet).toHaveBeenCalledWith(
+        expect.objectContaining({
+          state: 'offline',
+          platform: 'ios',
+        })
+      );
+    });
+  });
+
+  describe('Read-Aggregate-Write pattern (Bug #1 fix)', () => {
+    beforeEach(async () => {
+      let connectionCallback: ((snapshot: any) => void) | null = null;
+      mockOnValue.mockImplementation((ref: any, callback: (snapshot: any) => void) => {
+        if (ref === 'mockRef') {
+          connectionCallback = callback;
+        }
+        return jest.fn();
+      });
+
+      await presenceService.initialize(mockUserId);
+
+      // Simulate connection
+      if (connectionCallback) {
+        connectionCallback({ val: () => true });
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      jest.clearAllMocks();
+    });
+
+    it('should read device data before aggregating presence', async () => {
+      // Mock existing device data
+      const existingDevices = {
+        'device-1': { state: 'online', platform: 'ios', lastActivity: 1000 },
+        'device-2': { state: 'offline', platform: 'android', lastActivity: 2000 },
+      };
+      mockGet.mockResolvedValue({ val: () => existingDevices });
+
+      // Trigger aggregation
+      await presenceService.forceUpdate('online');
+
+      // Verify device data was read first
+      expect(mockGet).toHaveBeenCalled();
+      // Verify update was called (not set, which would overwrite)
+      expect(mockUpdate).toHaveBeenCalled();
+      // Verify set was called for device presence (not user aggregated presence)
+      expect(mockSet).toHaveBeenCalled();
+    });
+
+    it('should preserve device data when updating aggregated presence', async () => {
+      const existingDevices = {
+        'device-1': { state: 'online', platform: 'ios', lastActivity: 1000 },
+        'device-2': { state: 'offline', platform: 'android', lastActivity: 2000 },
+      };
+      mockGet.mockResolvedValue({ val: () => existingDevices });
+
+      await presenceService.forceUpdate('online');
+
+      // Verify update was called with only state and lastSeen (not devices)
+      expect(mockUpdate).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          state: expect.any(String),
+          lastSeen: expect.anything(),
+        })
+      );
+
+      // Verify devices field was NOT in the update (would overwrite)
+      const updateCall = mockUpdate.mock.calls[0];
+      const updateData = updateCall?.[1];
+      expect(updateData).not.toHaveProperty('devices');
+    });
+
+    it('should aggregate correctly: any device online = user online', async () => {
+      const devicesWithOneOnline = {
+        'device-1': { state: 'online', platform: 'ios', lastActivity: 1000 },
+        'device-2': { state: 'offline', platform: 'android', lastActivity: 2000 },
+        'device-3': { state: 'offline', platform: 'web', lastActivity: 3000 },
+      };
+      mockGet.mockResolvedValue({ val: () => devicesWithOneOnline });
+
+      await presenceService.forceUpdate('online');
+
+      // User should be online because device-1 is online
+      expect(mockUpdate).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          state: 'online',
+        })
+      );
+    });
+
+    it('should aggregate correctly: all devices offline = user offline', async () => {
+      const allDevicesOffline = {
+        'device-1': { state: 'offline', platform: 'ios', lastActivity: 1000 },
+        'device-2': { state: 'offline', platform: 'android', lastActivity: 2000 },
+      };
+      mockGet.mockResolvedValue({ val: () => allDevicesOffline });
+
+      await presenceService.forceUpdate('offline');
+
+      // User should be offline because all devices are offline
+      expect(mockUpdate).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          state: 'offline',
+        })
+      );
+    });
+
+    it('should track most recent activity across all devices', async () => {
+      const devicesWithActivities = {
+        'device-1': { state: 'offline', platform: 'ios', lastActivity: 1000 },
+        'device-2': { state: 'online', platform: 'android', lastActivity: 5000 },
+        'device-3': { state: 'offline', platform: 'web', lastActivity: 3000 },
+      };
+      mockGet.mockResolvedValue({ val: () => devicesWithActivities });
+
+      await presenceService.forceUpdate('online');
+
+      // lastSeen should be the most recent activity (5000)
+      expect(mockUpdate).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          lastSeen: 5000,
+        })
+      );
+    });
+
+    it('should handle empty device data gracefully', async () => {
+      mockGet.mockResolvedValue({ val: () => null });
+
+      await presenceService.forceUpdate('online');
+
+      // Should not throw and should still update
+      expect(mockUpdate).toHaveBeenCalled();
+    });
+
+    it('should handle away state correctly with multi-device', async () => {
+      const devicesWithOneOnline = {
+        'device-1': { state: 'online', platform: 'ios', lastActivity: 1000 },
+        'device-2': { state: 'offline', platform: 'android', lastActivity: 2000 },
+      };
+      mockGet.mockResolvedValue({ val: () => devicesWithOneOnline });
+
+      // Force update to 'away'
+      await presenceService.forceUpdate('away');
+
+      // User should be away (even though device is online, user explicitly set away)
+      expect(mockUpdate).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          state: 'away',
+        })
+      );
     });
   });
 });

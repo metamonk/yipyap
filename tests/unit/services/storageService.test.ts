@@ -15,7 +15,7 @@ import { getFirebaseStorage } from '@/services/firebase';
 // Type declarations for global objects
 declare global {
   var fetch: jest.Mock;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   var Blob: any;
 }
 
@@ -38,12 +38,12 @@ if (typeof Blob === 'undefined') {
       public parts: Array<unknown>,
       public options?: { type?: string }
     ) {}
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
   } as any;
 }
 
 describe('storageService', () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const mockStorage = {} as any;
   const mockUserId = 'test-uid-123';
   const mockImageUri = 'file:///path/to/image.jpg';

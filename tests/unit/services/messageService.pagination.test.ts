@@ -44,16 +44,16 @@ const mockCollection = collection as jest.MockedFunction<typeof collection>;
 /**
  * Helper to create mock Firestore document
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 function createMockDoc(id: string, data: any): QueryDocumentSnapshot<DocumentData> {
   return {
     id,
     data: () => data,
     exists: () => true,
     get: (field: string) => data[field],
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     ref: {} as any,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     metadata: {} as any,
   } as QueryDocumentSnapshot<DocumentData>;
 }
@@ -68,9 +68,9 @@ describe.skip('messageService.getMessages (requires Firebase emulator)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // Setup default mocks that chain properly
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const mockQueryObj = { type: 'query' } as any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     mockCollection.mockReturnValue({ type: 'collection' } as any);
     mockOrderBy.mockReturnValue(mockQueryObj);
     mockLimit.mockReturnValue(mockQueryObj);
@@ -81,7 +81,7 @@ describe.skip('messageService.getMessages (requires Firebase emulator)', () => {
       docs: [],
       size: 0,
       empty: true,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
     } as any);
   });
 
@@ -102,7 +102,7 @@ describe.skip('messageService.getMessages (requires Firebase emulator)', () => {
       docs: mockDocs,
       size: mockDocs.length,
       empty: false,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
     } as any);
 
     const result = await getMessages('conv1', 50);
@@ -133,7 +133,7 @@ describe.skip('messageService.getMessages (requires Firebase emulator)', () => {
       docs: mockDocs,
       size: mockDocs.length,
       empty: false,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
     } as any);
 
     await getMessages('conv1', 50, lastVisible);
@@ -158,7 +158,7 @@ describe.skip('messageService.getMessages (requires Firebase emulator)', () => {
       docs: mockDocs,
       size: mockDocs.length,
       empty: false,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
     } as any);
 
     const result = await getMessages('conv1', 50);
@@ -172,7 +172,7 @@ describe.skip('messageService.getMessages (requires Firebase emulator)', () => {
       docs: [],
       size: 0,
       empty: true,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
     } as any);
 
     const result = await getMessages('conv1', 50);
@@ -199,7 +199,7 @@ describe.skip('messageService.getMessages (requires Firebase emulator)', () => {
       docs: mockDocs,
       size: mockDocs.length,
       empty: false,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
     } as any);
 
     const result = await getMessages('conv1', 50);
@@ -220,7 +220,7 @@ describe.skip('messageService.getMessages (requires Firebase emulator)', () => {
       docs: mockDocs,
       size: mockDocs.length,
       empty: false,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
     } as any);
 
     await getMessages('conv1', 10);
@@ -247,7 +247,7 @@ describe.skip('messageService.getMessages (requires Firebase emulator)', () => {
       docs: mockDocs,
       size: mockDocs.length,
       empty: false,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
     } as any);
 
     const result = await getMessages('conv1', pageSize);
@@ -282,7 +282,7 @@ describe.skip('messageService.getMessages (requires Firebase emulator)', () => {
       docs: mockDocs,
       size: mockDocs.length,
       empty: false,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
     } as any);
 
     const result = await getMessages('conv1', 50);

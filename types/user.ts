@@ -41,6 +41,102 @@ export interface UserPresence {
 }
 
 /**
+ * Push token types supported
+ */
+export type PushTokenType = 'expo' | 'fcm' | 'apns';
+
+/**
+ * Push notification token information for a specific device
+ * @remarks
+ * Supports multiple devices per user for push notifications.
+ * Handles both Expo tokens (for Expo Go) and native FCM/APNs tokens (for production builds).
+ */
+export interface PushToken {
+  /** Push notification token for this device */
+  token: string;
+
+  /** Token type: expo (Expo Go), fcm (Android native), or apns (iOS native) */
+  type: PushTokenType;
+
+  /** Platform type (iOS or Android) */
+  platform: 'ios' | 'android';
+
+  /** Unique device identifier */
+  deviceId: string;
+
+  /** App version at time of token generation */
+  appVersion: string;
+
+  /** Timestamp when token was created */
+  createdAt: Timestamp;
+
+  /** Timestamp when token was last used/verified */
+  lastUsed: Timestamp;
+}
+
+/**
+ * @deprecated Use PushToken instead
+ * Legacy type for backward compatibility
+ */
+export type FCMToken = PushToken;
+
+/**
+ * Notification preference categories
+ * @remarks
+ * Allows granular control over notification types
+ */
+export interface NotificationPreferences {
+  /** Master toggle for all notifications */
+  enabled: boolean;
+
+  /** Show message preview in notification */
+  showPreview: boolean;
+
+  /** Enable notification sounds */
+  sound: boolean;
+
+  /** Enable notification vibration */
+  vibration: boolean;
+
+  /** Enable notifications for direct messages */
+  directMessages: boolean;
+
+  /** Enable notifications for group messages */
+  groupMessages: boolean;
+
+  /** Enable notifications for system messages */
+  systemMessages: boolean;
+
+  /** Quiet hours start time (24-hour format, e.g., "22:00") */
+  quietHoursStart?: string;
+
+  /** Quiet hours end time (24-hour format, e.g., "08:00") */
+  quietHoursEnd?: string;
+}
+
+/**
+ * Presence privacy and behavior preferences
+ * @remarks
+ * Controls how user's online/offline status is displayed to others
+ */
+export interface PresencePreferences {
+  /** Whether to show online/offline status to others */
+  showOnlineStatus: boolean;
+
+  /** Whether to show "last seen" timestamp when offline */
+  showLastSeen: boolean;
+
+  /** Idle timeout in minutes before marked as "away" (default: 5) */
+  awayTimeoutMinutes: number;
+
+  /** Whether away detection is enabled */
+  awayDetectionEnabled: boolean;
+
+  /** Invisible mode - appear offline while still receiving updates */
+  invisibleMode: boolean;
+}
+
+/**
  * User settings and preferences
  * @remarks
  * Additional settings will be added in future epics
@@ -51,6 +147,12 @@ export interface UserSettings {
 
   /** Whether push notifications are enabled */
   notificationsEnabled: boolean;
+
+  /** Detailed notification preferences */
+  notifications?: NotificationPreferences;
+
+  /** Presence and online status preferences */
+  presence?: PresencePreferences;
 }
 
 /**
@@ -77,6 +179,12 @@ export interface User {
 
   /** Firebase Cloud Messaging token for push notifications (optional, Epic 3) */
   fcmToken?: string;
+
+  /** Array of push tokens for multiple devices (supports Expo and native tokens) */
+  fcmTokens?: PushToken[];
+
+  /** @deprecated Legacy field - use fcmTokens instead */
+  pushTokens?: PushToken[];
 
   /** User's current presence information */
   presence: UserPresence;

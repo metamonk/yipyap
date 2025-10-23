@@ -6,7 +6,7 @@
  * Features real-time updates, pull-to-refresh, and empty state.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   FlatList,
@@ -85,7 +85,11 @@ export default function ConversationListScreen() {
   const [searchEnabled, setSearchEnabled] = useState(false);
 
   // Get conversation IDs for loading messages
-  const conversationIds = conversations.map((conv) => conv.id);
+  // Memoize to prevent infinite re-renders in useAllConversationMessages
+  const conversationIds = React.useMemo(
+    () => conversations.map((conv) => conv.id),
+    [conversations]
+  );
 
   // Load messages from all conversations for search
   const { messages: allMessages, loading: messagesLoading } = useAllConversationMessages(
@@ -200,16 +204,19 @@ export default function ConversationListScreen() {
   /**
    * Handle search query change
    */
-  const handleSearch = (query: string) => {
-    searchMessages(query);
-  };
+  const handleSearch = useCallback(
+    (query: string) => {
+      searchMessages(query);
+    },
+    [searchMessages]
+  );
 
   /**
    * Handle clear search
    */
-  const handleClearSearch = () => {
+  const handleClearSearch = useCallback(() => {
     clearSearch();
-  };
+  }, [clearSearch]);
 
   /**
    * Navigate to specific message in conversation
@@ -276,17 +283,13 @@ export default function ConversationListScreen() {
     const photoURL =
       item.type === 'group' ? item.groupPhotoURL || null : otherParticipant?.photoURL || null;
 
-    // Get online status for direct chats
-    const isOnline =
-      item.type === 'direct' ? otherParticipant?.presence?.status === 'online' : false;
-
     return (
       <ConversationListItem
         conversation={item}
         currentUserId={currentUserId}
         otherParticipantName={displayName}
         otherParticipantPhoto={photoURL}
-        otherParticipantOnline={isOnline}
+        otherParticipantId={item.type === 'direct' ? otherParticipantId : undefined}
         onPress={handleConversationPress}
       />
     );

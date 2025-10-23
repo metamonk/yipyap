@@ -6,7 +6,7 @@
  * Features real-time message updates, optimized FlatList rendering, and auto-scroll.
  */
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   FlatList,
@@ -20,12 +20,14 @@ import {
   Animated,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
+import { Timestamp } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { MessageItem } from '@/components/chat/MessageItem';
 import { MessageInput } from '@/components/chat/MessageInput';
 import { DateSeparator } from '@/components/chat/DateSeparator';
 import { SearchBar } from '@/components/chat/SearchBar';
 import { Avatar } from '@/components/common/Avatar';
+import { PresenceIndicator } from '@/components/PresenceIndicator';
 import { useMessages } from '@/hooks/useMessages';
 import { useAuth } from '@/hooks/useAuth';
 import { useMessageSearch } from '@/hooks/useMessageSearch';
@@ -52,9 +54,21 @@ import type { User as UserProfile } from '@/types/user';
  * Route: `/(tabs)/conversations/[id]` where id is the conversation ID
  */
 export default function ChatScreen() {
-  const params = useLocalSearchParams<{ id: string; messageId?: string }>();
+  const params = useLocalSearchParams<{
+    id: string;
+    messageId?: string;
+    isDraft?: string;
+    recipientId?: string;
+    type?: string;
+    groupName?: string;
+    participantIds?: string;
+  }>();
   const conversationId = params.id;
   const targetMessageId = params.messageId;
+  const isDraft = params.isDraft === 'true';
+  const draftType = params.type as 'direct' | 'group' | undefined;
+  const draftGroupName = params.groupName;
+  const draftParticipantIds = params.participantIds?.split(',') || [];
 
   const { user } = useAuth();
   const [conversation, setConversation] = useState<Conversation | null>(null);
@@ -63,6 +77,19 @@ export default function ChatScreen() {
   const [showSearch, setShowSearch] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const highlightOpacity = useRef(new Animated.Value(0)).current;
+
+  // Prepare draft params for useMessages if in draft mode
+  // Memoize to prevent recreating object on every render (would cause unnecessary effect runs)
+  const draftParams = useMemo(
+    () =>
+      isDraft && draftType
+        ? {
+            type: draftType,
+            groupName: draftGroupName,
+          }
+        : undefined,
+    [isDraft, draftType, draftGroupName]
+  );
 
   const {
     messages,
@@ -73,7 +100,7 @@ export default function ChatScreen() {
     isLoadingMore,
     loadMoreMessages,
     isOffline,
-  } = useMessages(conversationId || '', user?.uid || '', conversation?.participantIds || []);
+  } = useMessages(conversationId || '', user?.uid || '', conversation?.participantIds || [], draftParams);
 
   // Search functionality
   const { searchResults, isSearching, searchMessages, clearSearch } = useMessageSearch(messages);
@@ -91,11 +118,54 @@ export default function ChatScreen() {
 
     const loadConversationData = async () => {
       try {
-        // Fetch conversation
+        // Handle draft mode - create mock conversation without Firestore fetch
+        if (isDraft && draftType) {
+          const participantIds =
+            draftType === 'direct'
+              ? [user.uid, params.recipientId!]
+              : draftParticipantIds.length > 0
+              ? draftParticipantIds
+              : [user.uid];
+
+          // Create a mock conversation object for draft mode
+          const now = Timestamp.now();
+          const draftConversation: Conversation = {
+            id: conversationId,
+            type: draftType,
+            participantIds,
+            ...(draftGroupName && { groupName: draftGroupName }),
+            lastMessage: {
+              text: '',
+              senderId: user.uid,
+              timestamp: now,
+            },
+            lastMessageTimestamp: now,
+            unreadCount: {},
+            archivedBy: {},
+            deletedBy: {},
+            mutedBy: {},
+            createdAt: now,
+            updatedAt: now,
+          };
+
+          setConversation(draftConversation);
+
+          // For direct messages, load the other user's profile
+          if (draftType === 'direct' && params.recipientId) {
+            const userProfile = await getUserProfile(params.recipientId);
+            setOtherUser(userProfile);
+          }
+
+          setConversationLoading(false);
+          return;
+        }
+
+        // Normal mode - fetch conversation from Firestore
         const conv = await getConversation(conversationId);
 
         if (!conv) {
           console.error('Conversation not found');
+          setConversationLoading(false);
           return;
         }
 
@@ -117,7 +187,7 @@ export default function ChatScreen() {
     };
 
     loadConversationData();
-  }, [conversationId, user?.uid]);
+  }, [conversationId, user?.uid, isDraft, draftType, draftGroupName, params.recipientId]);
 
   /**
    * Renders a single message or separator item
@@ -300,7 +370,12 @@ export default function ChatScreen() {
               size={36}
             />
             <View style={styles.headerTextContainer}>
-              <Text style={styles.headerName}>{otherUser.displayName}</Text>
+              <View style={styles.headerNameRow}>
+                <Text style={styles.headerName}>{otherUser.displayName}</Text>
+              </View>
+              {conversation.type === 'direct' && (
+                <PresenceIndicator userId={otherUser.id} size="small" showLastSeen={true} />
+              )}
               {isOffline && (
                 <Text style={styles.offlineIndicator}>
                   Offline - messages will send when connected
@@ -440,6 +515,10 @@ const styles = StyleSheet.create({
   headerTextContainer: {
     marginLeft: 12,
     flex: 1,
+  },
+  headerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   headerName: {
     fontSize: 18,
