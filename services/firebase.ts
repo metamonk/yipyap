@@ -84,17 +84,16 @@ export function initializeFirebase(): void {
       auth = getAuth(app);
     }
 
-    // Initialize Firestore with memory cache for React Native
-    // Note: React Native doesn't support IndexedDB, so we use memory cache
-    // This still provides caching during app session but not between app restarts
+    // Initialize Firestore with offline persistence enabled
+    // This caches data locally for faster access and offline support
     // Offline behavior:
-    // - All reads cached in memory during session
+    // - All reads cached locally
     // - All writes queued locally when offline
     // - Queued writes automatically sent when connection restored
     // - Real-time listeners (onSnapshot) automatically reconnect
-    // - Cache cleared on app restart (no persistence between sessions)
+    // - Cached data available instantly on app restart
     db = initializeFirestore(app, {
-      localCache: memoryLocalCache(),
+      localCache: persistentLocalCache(),
     });
 
     storage = getStorage(app);

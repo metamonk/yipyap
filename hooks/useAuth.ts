@@ -95,16 +95,13 @@ export function useAuth(): UseAuthReturn {
       auth = getFirebaseAuth();
     } catch (authError) {
       console.error('Failed to get Firebase Auth:', authError);
-      // Use async wrapper to avoid setState in effect warning
-      const setAuthError = async () => {
-        setError({
-          code: 'auth/initialization-error',
-          message: authError instanceof Error ? authError.message : 'Failed to initialize authentication',
-          userMessage: 'Authentication service is not available. Please restart the app.',
-        });
-        setIsLoading(false);
-      };
-      setAuthError();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      setError({
+        code: 'auth/initialization-error',
+        message: authError instanceof Error ? authError.message : 'Failed to initialize authentication',
+        userMessage: 'Authentication service is not available. Please restart the app.',
+      });
+      setIsLoading(false);
       return;
     }
 
@@ -133,16 +130,13 @@ export function useAuth(): UseAuthReturn {
       },
       (authError) => {
         console.error('Auth state change error:', authError);
-        // Use async wrapper to avoid setState in effect warning
-        const setAuthStateError = async () => {
-          setError({
-            code: 'auth/state-change-error',
-            message: authError.message,
-            userMessage: 'Authentication state error. Please try again.',
-          });
-          setIsLoading(false);
-        };
-        setAuthStateError();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        setError({
+          code: 'auth/state-change-error',
+          message: authError.message,
+          userMessage: 'Authentication state error. Please try again.',
+        });
+        setIsLoading(false);
       }
     );
 
