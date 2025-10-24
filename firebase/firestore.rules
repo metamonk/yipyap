@@ -466,13 +466,23 @@ service cloud.firestore {
                             request.auth.uid == userId;
     }
 
+    // AI Cache - users can read and write their own AI operation cache
+    match /users/{userId}/ai_cache/{cacheKey} {
+      // Read and Write: Users can access their own AI cache
+      // Used for caching AI operation results to reduce costs and improve latency
+      allow read, write: if request.auth != null &&
+                            request.auth.uid == userId;
+    }
+
     // AI Rate Limits - users can read and write their own rate limit data
     match /rate_limits/{limitId} {
       // Read and Write: Users can access rate limits for their own operations
-      // limitId format: userId_operation_YYYY-MM-DD
-      // Extract userId from the limitId to verify ownership
+      // limitId formats:
+      //   Hourly: userId_operation_YYYY-MM-DD-HH (e.g., userId_voice_matching_2025-10-24-17)
+      //   Daily:  userId_operation_YYYY-MM-DD     (e.g., userId_voice_matching_2025-10-24)
+      // Extract userId from the limitId by splitting on underscore and verify ownership
       allow read, write: if request.auth != null &&
-                            limitId.matches('^' + request.auth.uid + '_.*');
+                            limitId.split('_')[0] == request.auth.uid;
     }
 
     // Default deny all other access

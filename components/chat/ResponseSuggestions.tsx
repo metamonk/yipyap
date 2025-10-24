@@ -20,7 +20,7 @@
  * ```
  */
 
-import React, { FC, useState, useEffect } from 'react';
+import React, { FC, useState, useEffect, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -28,30 +28,14 @@ import {
   ActivityIndicator,
   Text,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
-import {
-  GestureHandlerRootView,
-  PanGestureHandler,
-  PanGestureHandlerGestureEvent,
-} from 'react-native-gesture-handler';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  runOnJS,
-} from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { ResponseCard } from './ResponseCard';
-import {
-  voiceMatchingService,
-  VoiceMatchingErrorType,
-  ResponseSuggestion,
-} from '@/services/voiceMatchingService';
+import { voiceMatchingService, VoiceMatchingErrorType } from '@/services/voiceMatchingService';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 40;
-const SWIPE_THRESHOLD = 100; // Pixels required to trigger accept/reject
 
 /**
  * Props for the ResponseSuggestions component
@@ -115,16 +99,9 @@ export const ResponseSuggestions: FC<ResponseSuggestionsProps> = ({
   const opacity = useSharedValue(1);
 
   /**
-   * Loads response suggestions from voice matching service
-   */
-  useEffect(() => {
-    loadSuggestions();
-  }, [conversationId, incomingMessageId]);
-
-  /**
    * Fetches suggestions using voice matching service
    */
-  const loadSuggestions = async () => {
+  const loadSuggestions = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -138,14 +115,16 @@ export const ResponseSuggestions: FC<ResponseSuggestionsProps> = ({
       // Extract text from ResponseSuggestion objects
       const suggestionTexts = result.suggestions?.map((s) => s.text) || [];
       setSuggestions(suggestionTexts);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to load suggestions:', err);
 
       // Handle specific error types
       const errorType = err.type as VoiceMatchingErrorType;
       switch (errorType) {
         case VoiceMatchingErrorType.PROFILE_NOT_FOUND:
-          setError('Voice profile not trained. Train your profile in settings to use this feature.');
+          setError(
+            'Voice profile not trained. Train your profile in settings to use this feature.'
+          );
           break;
         case VoiceMatchingErrorType.INSUFFICIENT_DATA:
           setError('Not enough messages to generate suggestions. Keep chatting!');
@@ -162,44 +141,48 @@ export const ResponseSuggestions: FC<ResponseSuggestionsProps> = ({
     } finally {
       setLoading(false);
     }
+  }, [conversationId, incomingMessageId, suggestionCount]);
+
+  /**
+   * Loads response suggestions from voice matching service
+   */
+  useEffect(() => {
+    loadSuggestions();
+  }, [loadSuggestions]);
+
+  /**
+   * Handles accept button press
+   */
+  const handleAcceptPress = () => {
+    console.warn('[ResponseSuggestions] Accept button pressed');
+    const currentSuggestion = suggestions[currentIndex];
+
+    // Animate out
+    translateX.value = withSpring(CARD_WIDTH, { damping: 15 });
+    opacity.value = withSpring(0);
+
+    handleAccept(currentSuggestion);
   };
 
   /**
-   * Handles swipe gesture for accept/reject actions
+   * Handles reject button press
    */
-  const gestureHandler = {
-    onStart: (_: any, ctx: any) => {
-      ctx.startX = translateX.value;
-    },
-    onActive: (event: any, ctx: any) => {
-      translateX.value = ctx.startX + event.translationX;
-    },
-    onEnd: (event: any) => {
-      const currentSuggestion = suggestions[currentIndex];
+  const handleRejectPress = () => {
+    console.warn('[ResponseSuggestions] Reject button pressed');
+    const currentSuggestion = suggestions[currentIndex];
 
-      if (event.translationX > SWIPE_THRESHOLD) {
-        // Swipe right: Accept
-        translateX.value = withSpring(CARD_WIDTH, { damping: 15 });
-        opacity.value = withSpring(0);
+    // Animate out
+    translateX.value = withSpring(-CARD_WIDTH, { damping: 15 });
+    opacity.value = withSpring(0);
 
-        runOnJS(handleAccept)(currentSuggestion);
-      } else if (event.translationX < -SWIPE_THRESHOLD) {
-        // Swipe left: Reject
-        translateX.value = withSpring(-CARD_WIDTH, { damping: 15 });
-        opacity.value = withSpring(0);
-
-        runOnJS(handleReject)(currentSuggestion);
-      } else {
-        // Return to center
-        translateX.value = withSpring(0);
-      }
-    },
+    handleReject(currentSuggestion);
   };
 
   /**
    * Handles suggestion acceptance
    */
   const handleAccept = (suggestion: string) => {
+    console.warn('[ResponseSuggestions] Accepting suggestion:', suggestion);
     onAccept(suggestion);
 
     // Move to next suggestion after animation
@@ -212,6 +195,7 @@ export const ResponseSuggestions: FC<ResponseSuggestionsProps> = ({
    * Handles suggestion rejection
    */
   const handleReject = (suggestion: string) => {
+    console.warn('[ResponseSuggestions] Rejecting suggestion:', suggestion);
     onReject(suggestion);
 
     // Move to next suggestion after animation
@@ -231,8 +215,13 @@ export const ResponseSuggestions: FC<ResponseSuggestionsProps> = ({
    * Moves to the next suggestion in the carousel
    */
   const moveToNext = () => {
+    console.warn(
+      `[ResponseSuggestions] Moving to next suggestion. Current: ${currentIndex}, Total: ${suggestions.length}`
+    );
+
     if (currentIndex >= suggestions.length - 1) {
       // All suggestions processed
+      console.warn('[ResponseSuggestions] All suggestions processed, calling onComplete');
       onComplete?.();
       return;
     }
@@ -293,29 +282,38 @@ export const ResponseSuggestions: FC<ResponseSuggestionsProps> = ({
 
   // Render current suggestion card
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <PanGestureHandler onGestureEvent={gestureHandler}>
-        <Animated.View style={[styles.cardContainer, animatedStyle]}>
-          <ResponseCard
-            text={suggestions[currentIndex]}
-            index={currentIndex}
-            total={suggestions.length}
-            onEdit={() => handleEdit(suggestions[currentIndex])}
-            showHints={true}
-          />
-        </Animated.View>
-      </PanGestureHandler>
+    <View style={styles.container}>
+      <Animated.View style={[styles.cardContainer, animatedStyle]}>
+        <ResponseCard
+          text={suggestions[currentIndex]}
+          index={currentIndex}
+          total={suggestions.length}
+          onEdit={() => handleEdit(suggestions[currentIndex])}
+          showHints={false}
+        />
 
-      {/* Swipe direction indicators */}
-      <View style={styles.indicators}>
-        <View style={styles.indicatorLeft}>
-          <Ionicons name="close-circle" size={20} color="#FF3B30" />
+        {/* Action buttons */}
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.rejectButton]}
+            onPress={handleRejectPress}
+            testID="reject-button"
+          >
+            <Ionicons name="close-circle" size={24} color="#FFFFFF" />
+            <Text style={styles.buttonText}>Reject</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionButton, styles.acceptButton]}
+            onPress={handleAcceptPress}
+            testID="accept-button"
+          >
+            <Ionicons name="checkmark-circle" size={24} color="#FFFFFF" />
+            <Text style={styles.buttonText}>Accept</Text>
+          </TouchableOpacity>
         </View>
-        <View style={styles.indicatorRight}>
-          <Ionicons name="checkmark-circle" size={20} color="#34C759" />
-        </View>
-      </View>
-    </GestureHandlerRootView>
+      </Animated.View>
+    </View>
   );
 };
 
@@ -386,5 +384,32 @@ const styles = StyleSheet.create({
   },
   indicatorRight: {
     opacity: 0.3,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 12,
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  rejectButton: {
+    backgroundColor: '#FF3B30',
+  },
+  acceptButton: {
+    backgroundColor: '#34C759',
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

@@ -22,7 +22,7 @@ import {
   Modal,
   Alert,
 } from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Timestamp } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { MessageItem } from '@/components/chat/MessageItem';
@@ -155,16 +155,18 @@ export default function ChatScreen() {
   }, [conversationId]);
 
   /**
-   * Reset unread count when conversation is opened
+   * Reset unread count when conversation gains focus
+   * Ensures badge clears even when messages arrive while user is viewing the conversation
    */
-  useEffect(() => {
-    if (!conversationId || !user?.uid || isDraft) return;
+  useFocusEffect(
+    useCallback(() => {
+      if (!conversationId || !user?.uid || isDraft) return;
 
-    // Reset unread count for current user
-    markConversationAsRead(conversationId, user.uid).catch((error) => {
-      console.error('[ChatScreen] Failed to reset unread count:', error);
-    });
-  }, [conversationId, user?.uid, isDraft]);
+      markConversationAsRead(conversationId, user.uid).catch((error) => {
+        console.error('[ChatScreen] Failed to reset unread count:', error);
+      });
+    }, [conversationId, user?.uid, isDraft])
+  );
 
   /**
    * Load conversation data and other participant's info

@@ -136,14 +136,16 @@ export function useConnectionState() {
 
   useEffect(() => {
     try {
-      const db = getFirebaseRealtimeDb();
-      const connectedRef = ref(db, '.info/connected');
+      // Monitor Firebase RTDB connection
+      const rtdb = getFirebaseRealtimeDb();
+      const connectedRef = ref(rtdb, '.info/connected');
 
       unsubscribeRef.current = onValue(connectedRef, async (snapshot) => {
         const isConnected = snapshot.val() === true;
 
         if (isConnected) {
           // Connection restored
+          console.warn('[ConnectionState] ✅ Firebase RTDB connected');
           reconnectAttemptsRef.current = 0;
 
           setConnectionState({
@@ -153,9 +155,15 @@ export function useConnectionState() {
           });
 
           // Process queued operations
+          if (queueRef.current.length > 0) {
+            console.warn(
+              `[ConnectionState] Processing ${queueRef.current.length} queued operations`
+            );
+          }
           await processQueue();
         } else {
           // Connection lost
+          console.warn('[ConnectionState] ⚠️ Firebase RTDB disconnected');
           setConnectionState((prev) => ({
             ...prev,
             connected: false,
@@ -166,8 +174,13 @@ export function useConnectionState() {
           handleReconnect();
         }
       });
+
+      // Note: Firestore handles its own connection management and auto-reconnects
+      // when the app returns to foreground. Active snapshot listeners will
+      // automatically resume when the connection is restored.
+      console.warn('[ConnectionState] Firestore auto-reconnect enabled via active listeners');
     } catch (error) {
-      console.error('Failed to setup connection monitoring:', error);
+      console.error('[ConnectionState] Failed to setup connection monitoring:', error);
     }
 
     // Cleanup

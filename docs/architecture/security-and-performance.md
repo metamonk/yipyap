@@ -19,6 +19,14 @@
   - Immutable username claims (prevent username hijacking)
   - Email field validation
   - Presence and settings structure validation
+  - **User-scoped subcollections:** Users can only read/write their own subcollections (ai_cache, ai_performance_metrics, rate_limits, etc.)
+
+- **AI Service Authentication Guards:**
+  - All AI services implement authentication guards for cross-user operations
+  - Pattern: Check `currentUser.uid === targetUserId` before Firestore writes
+  - Prevents permission errors when operations cross user boundaries
+  - Enables graceful degradation when auth contexts don't match
+  - Services using guards: aiPerformanceService, aiRateLimitService, aiCacheService, aiAvailabilityService
 
 - **Multi-Device Security:**
   - Individual push tokens per device tracked with metadata

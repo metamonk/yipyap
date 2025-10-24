@@ -10,8 +10,9 @@
  * - Protects (tabs) routes from unauthorized access
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import { AppState, AppStateStatus } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initializeFirebase } from '@/services/firebase';
 import { useAuth } from '@/hooks/useAuth';
@@ -21,7 +22,9 @@ import { useNotificationPermissions } from '@/hooks/useNotificationPermissions';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { usePresence } from '@/hooks/usePresence';
 import { OfflineBanner } from '@/components/common/OfflineBanner';
+import { SyncBanner } from '@/components/common/SyncBanner';
 import { NotificationBanner } from '@/components/common/NotificationBanner';
+import { refreshConversations } from '@/services/conversationService';
 
 // Initialize Firebase before React renders
 // This is safe because initializeFirebase checks if it's already initialized
@@ -38,13 +41,14 @@ initializeFirebase();
  * - Prevents infinite loops by only navigating when necessary
  */
 export default function RootLayout() {
-  const { isAuthenticated, hasProfile, isLoading } = useAuth();
+  const { isAuthenticated, hasProfile, isLoading, user } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   const { connected } = useConnectionState();
   const { lastNotification, clearLastNotification } = useNotifications();
+  const { isSyncing } = useOfflineSync();
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   useNotificationPermissions();
-  useOfflineSync();
   usePresence();
 
   /**
@@ -80,9 +84,44 @@ export default function RootLayout() {
     }
   }, [isAuthenticated, hasProfile, isLoading, segments, router]);
 
+  /**
+   * Explicit foreground sync for instant message recovery
+   * @remarks
+   * When app returns to foreground, manually trigger conversation refresh
+   * to fetch any missed messages. This ensures instant sync rather than
+   * waiting for Firebase's automatic reconnection.
+   */
+  useEffect(() => {
+    const subscription = AppState.addEventListener(
+      'change',
+      async (nextAppState: AppStateStatus) => {
+        const wasInBackground =
+          appStateRef.current === 'background' || appStateRef.current === 'inactive';
+        const isNowActive = nextAppState === 'active';
+
+        if (wasInBackground && isNowActive && user?.uid) {
+          console.warn('[RootLayout] App foregrounded - triggering conversation sync');
+          try {
+            await refreshConversations(user.uid);
+            console.warn('[RootLayout] Conversation sync completed');
+          } catch (error) {
+            console.error('[RootLayout] Failed to sync conversations on foreground:', error);
+          }
+        }
+
+        appStateRef.current = nextAppState;
+      }
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, [user?.uid]);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <OfflineBanner isOffline={!connected} />
+      <SyncBanner isSyncing={isSyncing} />
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />

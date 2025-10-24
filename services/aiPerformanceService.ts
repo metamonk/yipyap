@@ -8,7 +8,17 @@
  * user-facing performance.
  */
 
-import { getFirestore, collection, addDoc, query, where, orderBy, getDocs, Timestamp } from 'firebase/firestore';
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  query,
+  where,
+  orderBy,
+  getDocs,
+  Timestamp,
+} from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { getFirebaseApp } from './firebase';
 import type { AIPerformanceMetrics, OperationPerformance } from '../types/ai';
 import { trackModelUsage } from './aiCostMonitoringService';
@@ -49,7 +59,7 @@ const getDb = () => {
  */
 export function trackOperationStart(
   operationId: string,
-  operation: AIPerformanceMetrics['operation']
+  _operation: AIPerformanceMetrics['operation']
 ): string {
   try {
     operationStartTimes.set(operationId, Date.now());
@@ -114,6 +124,16 @@ export async function trackOperationEnd(
   }
 ): Promise<void> {
   try {
+    // Get current authenticated user
+    const auth = getAuth(getFirebaseApp());
+    const currentUser = auth.currentUser;
+
+    // Only track metrics if authenticated user matches the userId
+    // This prevents permission errors when sender != recipient
+    if (!currentUser || currentUser.uid !== metrics.userId) {
+      return;
+    }
+
     // Calculate latency
     const startTime = operationStartTimes.get(operationId);
     const latency = startTime ? Date.now() - startTime : 0;
@@ -125,7 +145,7 @@ export async function trackOperationEnd(
     const metricsCollection = collection(db, `users/${metrics.userId}/ai_performance_metrics`);
 
     // Build performance metric object, excluding undefined values (Firestore doesn't accept undefined)
-    const performanceMetric: any = {
+    const performanceMetric: Record<string, unknown> = {
       userId: metrics.userId,
       operation: metrics.operation,
       latency,

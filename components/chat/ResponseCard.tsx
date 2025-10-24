@@ -136,7 +136,6 @@ const styles = StyleSheet.create({
     color: '#1C1C1E',
     lineHeight: 22,
     marginBottom: 16,
-    flex: 1,
   },
   footer: {
     flexDirection: 'row',

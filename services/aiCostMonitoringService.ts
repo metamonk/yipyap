@@ -8,7 +8,16 @@
  * Aggregates costs by daily and monthly periods.
  */
 
-import { getFirestore, doc, getDoc, setDoc, updateDoc, Timestamp, increment } from 'firebase/firestore';
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  Timestamp,
+  increment,
+} from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { getFirebaseApp } from './firebase';
 import type { CostMetrics } from '../types/ai';
 
@@ -82,8 +91,8 @@ export function calculateOperationCost(
   const pricing = OPENAI_PRICING[baseModel] || OPENAI_PRICING['gpt-4o-mini'];
 
   // Calculate cost per token in cents
-  const inputCostCents = (promptTokens * pricing.input) / 1_000_000 * 100;
-  const outputCostCents = (completionTokens * pricing.output) / 1_000_000 * 100;
+  const inputCostCents = ((promptTokens * pricing.input) / 1_000_000) * 100;
+  const outputCostCents = ((completionTokens * pricing.output) / 1_000_000) * 100;
 
   // Round to 2 decimal places (fractional cents)
   return Math.round((inputCostCents + outputCostCents) * 100) / 100;
@@ -126,15 +135,25 @@ export async function trackModelUsage(
   period: 'daily' | 'monthly'
 ): Promise<void> {
   try {
+    // Authentication guard - only track if authenticated user matches target
+    const auth = getAuth(getFirebaseApp());
+    const currentUser = auth.currentUser;
+
+    if (!currentUser || currentUser.uid !== userId) {
+      // Graceful degradation - silently skip cost tracking
+      return;
+    }
+
     const db = getDb();
     const cost = calculateOperationCost(modelUsed, promptTokens, completionTokens);
     const totalTokens = promptTokens + completionTokens;
 
     // Generate period-based document ID
     const now = new Date();
-    const periodId = period === 'daily'
-      ? `daily-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-      : `monthly-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const periodId =
+      period === 'daily'
+        ? `daily-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+        : `monthly-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
     const costMetricsRef = doc(db, `users/${userId}/ai_cost_metrics`, periodId);
 
@@ -177,13 +196,15 @@ export async function trackModelUsage(
       }
     } else {
       // Create new document
-      const periodStart = period === 'daily'
-        ? new Date(now.getFullYear(), now.getMonth(), now.getDate())
-        : new Date(now.getFullYear(), now.getMonth(), 1);
+      const periodStart =
+        period === 'daily'
+          ? new Date(now.getFullYear(), now.getMonth(), now.getDate())
+          : new Date(now.getFullYear(), now.getMonth(), 1);
 
-      const periodEnd = period === 'daily'
-        ? new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
-        : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      const periodEnd =
+        period === 'daily'
+          ? new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
+          : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
       const newCostMetrics: Omit<CostMetrics, 'userId'> & { userId: string } = {
         userId,
@@ -302,7 +323,7 @@ export async function getDailyCosts(userId: string, days: number = 30): Promise<
     // Fetch costs for each of the last N days
     for (let i = days - 1; i >= 0; i--) {
       // Create a new date by calculating milliseconds offset
-      const targetDate = new Date(now.getTime() - (i * 24 * 60 * 60 * 1000));
+      const targetDate = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
       const year = targetDate.getFullYear();
       const month = targetDate.getMonth() + 1;
       const day = targetDate.getDate();
@@ -363,7 +384,7 @@ export async function getMonthlyCost(
     const db = getDb();
     const now = new Date();
     const targetYear = year || now.getFullYear();
-    const targetMonth = month || (now.getMonth() + 1);
+    const targetMonth = month || now.getMonth() + 1;
 
     const periodId = `monthly-${targetYear}-${String(targetMonth).padStart(2, '0')}`;
 

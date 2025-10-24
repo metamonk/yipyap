@@ -15,7 +15,15 @@
 
 import { getFunctions, httpsCallable, HttpsCallableResult } from 'firebase/functions';
 import { getFirebaseAuth, getFirebaseDb } from './firebase';
-import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc, increment } from 'firebase/firestore';
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+  doc,
+  getDoc,
+  updateDoc,
+  increment,
+} from 'firebase/firestore';
 import { trackOperationStart, trackOperationEnd } from './aiPerformanceService';
 import { checkUserBudgetStatus } from './aiAvailabilityService';
 import { checkRateLimit, incrementOperationCount } from './aiRateLimitService';
@@ -247,11 +255,12 @@ export class VoiceMatchingService {
       >(functions, 'generateResponseSuggestions');
 
       // Call Cloud Function
-      const result: HttpsCallableResult<ResponseSuggestionsResult> = await generateResponseSuggestions({
-        conversationId,
-        incomingMessageId,
-        suggestionCount: validCount,
-      });
+      const result: HttpsCallableResult<ResponseSuggestionsResult> =
+        await generateResponseSuggestions({
+          conversationId,
+          incomingMessageId,
+          suggestionCount: validCount,
+        });
 
       // Track successful operation
       if (userId) {
@@ -276,18 +285,19 @@ export class VoiceMatchingService {
       }
 
       return result.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Track failed operation
+      const err = error as { code?: string; message?: string };
       if (userId) {
         let errorType: 'network' | 'timeout' | 'rate_limit' | 'model_error' | 'unknown' = 'unknown';
 
-        if (error.code === 'unauthenticated') {
+        if (err.code === 'unauthenticated') {
           errorType = 'network';
-        } else if (error.code === 'deadline-exceeded' || error.message?.includes('timeout')) {
+        } else if (err.code === 'deadline-exceeded' || err.message?.includes('timeout')) {
           errorType = 'timeout';
-        } else if (error.code === 'unavailable') {
+        } else if (err.code === 'unavailable') {
           errorType = 'network';
-        } else if (error.code === 'failed-precondition') {
+        } else if (err.code === 'failed-precondition') {
           errorType = 'model_error';
         }
 
@@ -318,7 +328,10 @@ export class VoiceMatchingService {
         );
       }
 
-      if (error.code === 'failed-precondition' || error.message?.includes('Voice profile not found')) {
+      if (
+        error.code === 'failed-precondition' ||
+        error.message?.includes('Voice profile not found')
+      ) {
         throw new VoiceMatchingError(
           VoiceMatchingErrorType.PROFILE_NOT_FOUND,
           'Voice profile not found. Please train your voice profile first.',
@@ -378,10 +391,7 @@ export class VoiceMatchingService {
     try {
       // Validate inputs
       if (!userId) {
-        throw new VoiceMatchingError(
-          VoiceMatchingErrorType.UNKNOWN,
-          'User ID is required'
-        );
+        throw new VoiceMatchingError(VoiceMatchingErrorType.UNKNOWN, 'User ID is required');
       }
 
       // Get Cloud Functions instance
@@ -398,9 +408,10 @@ export class VoiceMatchingService {
       });
 
       return result.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as { code?: string; message?: string };
       // Handle Firebase Functions errors
-      if (error.code === 'unauthenticated') {
+      if (err.code === 'unauthenticated') {
         throw new VoiceMatchingError(
           VoiceMatchingErrorType.UNAUTHENTICATED,
           'Please sign in to train your voice profile',
@@ -408,7 +419,7 @@ export class VoiceMatchingService {
         );
       }
 
-      if (error.code === 'permission-denied') {
+      if (err.code === 'permission-denied') {
         throw new VoiceMatchingError(
           VoiceMatchingErrorType.UNAUTHENTICATED,
           'You can only train your own voice profile',
@@ -416,15 +427,15 @@ export class VoiceMatchingService {
         );
       }
 
-      if (error.code === 'failed-precondition' || error.message?.includes('Insufficient')) {
+      if (err.code === 'failed-precondition' || err.message?.includes('Insufficient')) {
         throw new VoiceMatchingError(
           VoiceMatchingErrorType.INSUFFICIENT_DATA,
-          error.message || 'Not enough messages for training. Keep chatting!',
+          err.message || 'Not enough messages for training. Keep chatting!',
           error
         );
       }
 
-      if (error.code === 'unavailable') {
+      if (err.code === 'unavailable') {
         throw new VoiceMatchingError(
           VoiceMatchingErrorType.SERVICE_UNAVAILABLE,
           'Voice training service is temporarily unavailable. Please try again later.',
@@ -435,7 +446,7 @@ export class VoiceMatchingService {
       // Default error
       throw new VoiceMatchingError(
         VoiceMatchingErrorType.UNKNOWN,
-        error.message || 'Failed to train voice profile',
+        err.message || 'Failed to train voice profile',
         error
       );
     }
@@ -482,17 +493,26 @@ export class VoiceMatchingService {
 
       const db = getFirebaseDb();
 
+      // Build feedback data object, only including defined optional fields
+      const feedbackData: Record<string, unknown> = {
+        originalSuggestion: feedback.suggestion,
+        action: feedback.action,
+        rating: feedback.rating || 0,
+      };
+
+      // Only include optional fields if they're defined (Firestore doesn't support undefined)
+      if (feedback.userEdit !== undefined) {
+        feedbackData.userEdit = feedback.userEdit;
+      }
+      if (feedback.comments !== undefined) {
+        feedbackData.comments = feedback.comments;
+      }
+
       // Store feedback in ai_training_data collection
       await addDoc(collection(db, 'ai_training_data'), {
         userId: user.uid,
         type: 'response_feedback',
-        feedback: {
-          originalSuggestion: feedback.suggestion,
-          action: feedback.action,
-          userEdit: feedback.userEdit,
-          rating: feedback.rating || 0,
-          comments: feedback.comments,
-        },
+        feedback: feedbackData,
         modelVersion: 'gpt-4-turbo-preview',
         processed: false,
         createdAt: serverTimestamp(),
@@ -503,7 +523,7 @@ export class VoiceMatchingService {
       const profileSnapshot = await getDoc(profileRef);
 
       if (profileSnapshot.exists()) {
-        const updateData: any = {
+        const updateData: Record<string, unknown> = {
           updatedAt: serverTimestamp(),
         };
 
@@ -532,21 +552,22 @@ export class VoiceMatchingService {
           };
 
           // Calculate total number of rated suggestions
-          const totalRated = (currentMetrics.acceptedSuggestions || 0) +
-                            (currentMetrics.editedSuggestions || 0);
+          const totalRated =
+            (currentMetrics.acceptedSuggestions || 0) + (currentMetrics.editedSuggestions || 0);
 
           // Calculate new average (weighted average)
           const currentAvg = currentMetrics.averageSatisfactionRating || 0;
-          const newAvg = totalRated === 0
-            ? feedback.rating
-            : ((currentAvg * totalRated) + feedback.rating) / (totalRated + 1);
+          const newAvg =
+            totalRated === 0
+              ? feedback.rating
+              : (currentAvg * totalRated + feedback.rating) / (totalRated + 1);
 
           updateData['metrics.averageSatisfactionRating'] = newAvg;
         }
 
         await updateDoc(profileRef, updateData);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Re-throw VoiceMatchingError instances
       if (error instanceof VoiceMatchingError) {
         throw error;

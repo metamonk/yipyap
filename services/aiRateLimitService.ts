@@ -12,7 +12,19 @@
  * Uses Firestore for distributed rate limiting across devices/sessions.
  */
 
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, Timestamp, collection, query, where, getDocs } from 'firebase/firestore';
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  deleteDoc,
+  Timestamp,
+  collection,
+  query,
+  where,
+  getDocs,
+} from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { getFirebaseApp } from './firebase';
 import * as Notifications from 'expo-notifications';
 
@@ -192,11 +204,15 @@ async function incrementWindowCount(docId: string, expiresAt: Date): Promise<num
       // Increment existing document
       const currentCount = docSnap.data().count || 0;
       newCount = currentCount + 1;
-      await setDoc(docRef, {
-        count: newCount,
-        expiresAt: Timestamp.fromDate(expiresAt),
-        updatedAt: Timestamp.now(),
-      }, { merge: true });
+      await setDoc(
+        docRef,
+        {
+          count: newCount,
+          expiresAt: Timestamp.fromDate(expiresAt),
+          updatedAt: Timestamp.now(),
+        },
+        { merge: true }
+      );
     }
 
     return newCount;
@@ -232,6 +248,34 @@ export async function checkRateLimit(
   operation: RateLimitOperation
 ): Promise<RateLimitCheckResult> {
   try {
+    // Get current authenticated user
+    const auth = getAuth(getFirebaseApp());
+    const currentUser = auth.currentUser;
+
+    // Only check rate limits if authenticated user matches the target userId
+    // This prevents permission errors when operations run on behalf of another user
+    if (!currentUser || currentUser.uid !== userId) {
+      // Return allowed=true to not block operations running cross-user
+      // (e.g., sender checking recipient's rate limits won't work due to permissions)
+      return {
+        allowed: true,
+        status: {
+          operation,
+          hourly: {
+            used: 0,
+            limit: RATE_LIMITS[operation].perHour,
+            remaining: RATE_LIMITS[operation].perHour,
+          },
+          daily: {
+            used: 0,
+            limit: RATE_LIMITS[operation].perDay,
+            remaining: RATE_LIMITS[operation].perDay,
+          },
+          message: 'Rate limit check skipped (auth mismatch)',
+        },
+        reason: undefined,
+      };
+    }
     const now = new Date();
     const limits = RATE_LIMITS[operation];
 
@@ -281,7 +325,9 @@ export async function checkRateLimit(
     } else if (dailyLimitReached) {
       allowed = false;
       reason = 'daily_limit';
-      const hoursUntilReset = Math.ceil((dailyResetAt.getTime() - now.getTime()) / (60 * 60 * 1000));
+      const hoursUntilReset = Math.ceil(
+        (dailyResetAt.getTime() - now.getTime()) / (60 * 60 * 1000)
+      );
       status.message = `You've reached your daily limit for this operation (${limits.perDay} requests/day). Please try again in ${hoursUntilReset} hour${hoursUntilReset !== 1 ? 's' : ''}.`;
     }
 
@@ -334,6 +380,15 @@ export async function incrementOperationCount(
   operation: RateLimitOperation
 ): Promise<void> {
   try {
+    // Get current authenticated user
+    const auth = getAuth(getFirebaseApp());
+    const currentUser = auth.currentUser;
+
+    // Only increment if authenticated user matches the target userId
+    // This prevents permission errors when operations run on behalf of another user
+    if (!currentUser || currentUser.uid !== userId) {
+      return;
+    }
     const now = new Date();
     const limits = RATE_LIMITS[operation];
 
@@ -370,9 +425,13 @@ export async function incrementOperationCount(
         await sendRateLimitWarning(operation, hourlyPercent, 'hourly', hourlyExpiresAt);
 
         // Mark that we've sent notification for this window
-        await setDoc(hourlyDocRef, {
-          warningNotificationSent: true,
-        }, { merge: true });
+        await setDoc(
+          hourlyDocRef,
+          {
+            warningNotificationSent: true,
+          },
+          { merge: true }
+        );
       }
     }
 
@@ -387,9 +446,13 @@ export async function incrementOperationCount(
         await sendRateLimitWarning(operation, dailyPercent, 'daily', dailyExpiresAt);
 
         // Mark that we've sent notification for this window
-        await setDoc(dailyDocRef, {
-          warningNotificationSent: true,
-        }, { merge: true });
+        await setDoc(
+          dailyDocRef,
+          {
+            warningNotificationSent: true,
+          },
+          { merge: true }
+        );
       }
     }
   } catch (error) {
@@ -447,7 +510,9 @@ export async function cleanupExpiredRateLimits(): Promise<void> {
     const deletePromises = snapshot.docs.map((doc) => deleteDoc(doc.ref));
     await Promise.all(deletePromises);
 
-    console.log(`[aiRateLimitService] Cleaned up ${snapshot.docs.length} expired rate limit documents`);
+    console.warn(
+      `[aiRateLimitService] Cleaned up ${snapshot.docs.length} expired rate limit documents`
+    );
   } catch (error) {
     console.error('[aiRateLimitService] Error cleaning up expired rate limits:', error);
     // Non-critical - don't throw
@@ -475,9 +540,10 @@ async function sendRateLimitWarning(
   try {
     const operationLabel = operation.replace(/_/g, ' ');
     const timeUntilReset = Math.ceil((resetTime.getTime() - Date.now()) / (60 * 1000));
-    const timeLabel = timeUntilReset > 60
-      ? `${Math.ceil(timeUntilReset / 60)} hour${Math.ceil(timeUntilReset / 60) !== 1 ? 's' : ''}`
-      : `${timeUntilReset} minute${timeUntilReset !== 1 ? 's' : ''}`;
+    const timeLabel =
+      timeUntilReset > 60
+        ? `${Math.ceil(timeUntilReset / 60)} hour${Math.ceil(timeUntilReset / 60) !== 1 ? 's' : ''}`
+        : `${timeUntilReset} minute${timeUntilReset !== 1 ? 's' : ''}`;
 
     await Notifications.scheduleNotificationAsync({
       content: {
@@ -495,7 +561,9 @@ async function sendRateLimitWarning(
       trigger: null, // Show immediately
     });
 
-    console.log(`[aiRateLimitService] Sent rate limit warning for ${operation} (${percentUsed}% of ${limitType} limit)`);
+    console.warn(
+      `[aiRateLimitService] Sent rate limit warning for ${operation} (${percentUsed}% of ${limitType} limit)`
+    );
   } catch (error) {
     console.error('[aiRateLimitService] Error sending rate limit warning:', error);
     // Non-blocking - don't throw

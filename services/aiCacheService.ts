@@ -10,8 +10,8 @@
  */
 
 import { getFirestore, doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { getFirebaseApp } from './firebase';
-import type { MessageCategory, OpportunityType } from './aiClientService';
 
 /**
  * Default cache TTL in milliseconds (1 hour)
@@ -41,19 +41,19 @@ interface CachedResult {
   operation: string;
 
   /** Cached result data */
-  result: any;
+  result: string;
 
   /** Timestamp when cache entry was created */
-  cachedAt: any; // firebase.firestore.Timestamp
+  cachedAt: Timestamp;
 
   /** Timestamp when cache entry expires */
-  expiresAt: any; // firebase.firestore.Timestamp
+  expiresAt: Timestamp;
 
   /** Number of times this cache entry has been hit */
   hitCount: number;
 
   /** Timestamp of last cache hit */
-  lastHitAt?: any; // firebase.firestore.Timestamp
+  lastHitAt?: Timestamp;
 }
 
 /**
@@ -116,11 +116,17 @@ export function generateCacheKey(content: string, operation: string): string {
  * }
  * ```
  */
-export async function getCachedResult(
-  cacheKey: string,
-  userId: string
-): Promise<any | null> {
+export async function getCachedResult(cacheKey: string, userId: string): Promise<unknown | null> {
   try {
+    // Authentication guard - only read cache if authenticated user matches target
+    const auth = getAuth(getFirebaseApp());
+    const currentUser = auth.currentUser;
+
+    if (!currentUser || currentUser.uid !== userId) {
+      // Graceful degradation - cache miss, operation will proceed without cache
+      return null;
+    }
+
     const db = getDb();
     const cacheRef = doc(db, `users/${userId}/ai_cache`, cacheKey);
     const cacheDoc = await getDoc(cacheRef);
@@ -152,7 +158,13 @@ export async function getCachedResult(
       console.error('[aiCacheService] Failed to update hit count:', error);
     });
 
-    return cached.result;
+    // Deserialize result from JSON string
+    try {
+      return JSON.parse(cached.result);
+    } catch {
+      // If not a JSON string (legacy data), return as-is
+      return cached.result;
+    }
   } catch (error) {
     console.error('[aiCacheService] Failed to get cached result:', error);
     return null;
@@ -186,10 +198,19 @@ export async function setCachedResult(
   cacheKey: string,
   userId: string,
   operation: keyof typeof CACHE_TTL_BY_OPERATION,
-  result: any,
+  result: unknown,
   ttlMs?: number
 ): Promise<void> {
   try {
+    // Authentication guard - only write cache if authenticated user matches target
+    const auth = getAuth(getFirebaseApp());
+    const currentUser = auth.currentUser;
+
+    if (!currentUser || currentUser.uid !== userId) {
+      // Graceful degradation - silently skip caching
+      return;
+    }
+
     // Don't cache if TTL is 0 (e.g., daily_agent operations)
     const ttl =
       ttlMs !== undefined
@@ -208,10 +229,13 @@ export async function setCachedResult(
     const now = Timestamp.now();
     const expiresAt = Timestamp.fromMillis(Date.now() + ttl);
 
+    // Serialize result to JSON string to avoid Firestore nested array issues
+    const serializedResult = JSON.stringify(result);
+
     const cachedResult: CachedResult = {
       key: cacheKey,
       operation,
-      result,
+      result: serializedResult, // Store as JSON string
       cachedAt: now,
       expiresAt,
       hitCount: 0,

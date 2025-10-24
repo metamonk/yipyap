@@ -86,7 +86,7 @@ export function initPinecone(): Pinecone {
   if (!apiKey) {
     throw new Error(
       'PINECONE_API_KEY environment variable is required but not set. ' +
-      'Please configure it in Vercel Dashboard > Environment Variables.'
+        'Please configure it in Vercel Dashboard > Environment Variables.'
     );
   }
 
@@ -122,13 +122,7 @@ export async function queryFAQMatches(
   embedding: number[],
   options: QueryOptions = {}
 ): Promise<FAQMatch[]> {
-  const {
-    topK = 3,
-    minScore = 0,
-    creatorId,
-    activeOnly = true,
-    category,
-  } = options;
+  const { topK = 3, minScore = 0, creatorId, activeOnly = true, category } = options;
 
   // Validate embedding dimension
   if (embedding.length !== PINECONE_CONFIG.dimension) {
@@ -142,7 +136,7 @@ export async function queryFAQMatches(
     const index = pinecone.index(PINECONE_CONFIG.indexName);
 
     // Build metadata filter
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const filter: Record<string, any> = {};
 
     if (creatorId) {

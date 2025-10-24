@@ -25,12 +25,14 @@
 5. Model selection logic implemented (fast vs quality vs cost)
 6. Error handling and fallback mechanisms in place
 7. Basic monitoring and logging for AI operations
+8. **Authentication guards implemented for all AI services that write to user subcollections**
 
 **Integration Verification:**
 
 - IV1: Existing Firebase functions continue operating normally
 - IV2: No impact on current message send/receive latency
 - IV3: App functions normally with AI services disabled
+- IV4: **Cross-user operations (e.g., User A triggers AI for User B) handle gracefully without permission errors**
 
 ## Story 5.2: Message Categorization (Edge-Powered)
 
@@ -107,16 +109,17 @@
 1. Cloud Function for voice matching (needs Firestore access)
 2. Training data extraction from creator's message history
 3. High-quality model selection (GPT-4 Turbo for best accuracy)
-4. Response suggestion UI in compose area
-5. Swipe gestures for accept/reject/edit
+4. Response suggestion UI in compose area with Accept/Reject button interface
+5. Feedback tracking for suggestion quality (accepted/rejected/edited)
 6. Weekly retraining scheduled job
 7. 80%+ creator satisfaction with voice matching
 
 **Integration Verification:**
 
-- IV1: Response generation doesn't block manual typing
+- IV1: Response generation doesn't block manual typing - suggestions auto-hide when user types
 - IV2: Suggested responses respect conversation context
 - IV3: Training process doesn't impact app performance
+- IV4: **Rate limiting and performance tracking respect authentication boundaries (no cross-user writes)**
 
 ## Story 5.6: Business Opportunity Scoring
 
@@ -194,15 +197,24 @@
 1. Response time tracking for each AI operation
 2. Cost monitoring dashboard with daily/monthly views
 3. Model performance A/B testing framework
-4. Cache optimization for frequent operations
-5. Rate limiting and quota management
+4. Cache optimization for frequent operations (with JSON serialization for nested arrays)
+5. Rate limiting and quota management (with authentication guards)
 6. Alerts for performance degradation or cost overruns
 7. Optimization recommendations based on usage patterns
 
+**Technical Implementation Notes:**
+
+- All monitoring services (performance, rate limit, cache) implement authentication guards
+- Pattern: `if (currentUser.uid !== targetUserId) return gracefully`
+- Prevents permission errors when sender triggers AI for recipient
+- Cache serializes results to JSON to avoid Firestore nested array errors
+- Performance tracking only writes to authenticated user's subcollection
+
 **Integration Verification:**
 
-- IV1: Monitoring doesn't impact user-facing performance
+- IV1: Monitoring doesn't impact user-facing performance (<5ms overhead)
 - IV2: Existing Firebase monitoring continues working
 - IV3: Cost controls prevent runway issues
+- IV4: **No permission errors in cross-user scenarios (User A sends to User B)**
 
 ---
