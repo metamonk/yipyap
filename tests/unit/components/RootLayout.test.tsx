@@ -46,7 +46,7 @@ describe('RootLayout - Protected Route Pattern', () => {
   });
 
   describe('Initial App Load - Auth State Check', () => {
-    it('should show loading screen while checking auth state', () => {
+    it('should not redirect while checking auth state', () => {
       mockUseAuth.mockReturnValue({
         isAuthenticated: false,
         isLoading: true,
@@ -63,12 +63,10 @@ describe('RootLayout - Protected Route Pattern', () => {
       });
       mockUseSegments.mockReturnValue([] as any);
 
-      const { UNSAFE_getByType } = render(<RootLayout />);
+      render(<RootLayout />);
 
-      // Should show ActivityIndicator (loading screen)
-      const ActivityIndicator = require('react-native').ActivityIndicator;
-      expect(UNSAFE_getByType(ActivityIndicator)).toBeTruthy();
-      // Verify no redirects happen while loading
+      // RootLayout should not redirect while auth is loading
+      // Note: Loading screen is now handled by app/index.tsx
       expect(mockReplace).not.toHaveBeenCalled();
     });
 

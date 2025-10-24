@@ -7,11 +7,18 @@ import { useAuth } from '@/hooks/useAuth';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getFirebaseAuth } from '@/services/firebase';
 import * as authService from '@/services/authService';
+import { presenceService } from '@/services/presenceService';
 
 // Mock dependencies
 jest.mock('firebase/auth');
 jest.mock('@/services/firebase');
 jest.mock('@/services/authService');
+jest.mock('@/services/presenceService', () => ({
+  presenceService: {
+    cleanup: jest.fn().mockResolvedValue(undefined),
+    initialize: jest.fn().mockResolvedValue(undefined),
+  },
+}));
 
 describe('useAuth', () => {
   const mockAuth = { name: 'mockAuth' };
@@ -250,6 +257,7 @@ describe('useAuth', () => {
   describe('signOut', () => {
     it('should successfully sign out', async () => {
       (authService.signOut as jest.Mock).mockResolvedValue(undefined);
+      (presenceService.cleanup as jest.Mock).mockResolvedValue(undefined);
 
       const { result } = renderHook(() => useAuth());
 
@@ -257,7 +265,14 @@ describe('useAuth', () => {
         await result.current.signOut();
       });
 
+      // Verify presence cleanup happens BEFORE auth signout
+      expect(presenceService.cleanup).toHaveBeenCalled();
       expect(authService.signOut).toHaveBeenCalled();
+
+      // Verify presence cleanup was called before signOut
+      const presenceCleanupOrder = (presenceService.cleanup as jest.Mock).mock.invocationCallOrder[0];
+      const signOutOrder = (authService.signOut as jest.Mock).mock.invocationCallOrder[0];
+      expect(presenceCleanupOrder).toBeLessThan(signOutOrder);
     });
 
     it('should handle sign-out errors', async () => {
@@ -267,6 +282,7 @@ describe('useAuth', () => {
         userMessage: 'Network error. Please check your connection and try again.',
       };
 
+      (presenceService.cleanup as jest.Mock).mockResolvedValue(undefined);
       (authService.signOut as jest.Mock).mockRejectedValue(mockError);
 
       const { result } = renderHook(() => useAuth());
@@ -279,6 +295,9 @@ describe('useAuth', () => {
         expect(result.current.error).toEqual(mockError);
         expect(result.current.isLoading).toBe(false);
       });
+
+      // Verify cleanup was still called even though signOut failed
+      expect(presenceService.cleanup).toHaveBeenCalled();
     });
   });
 

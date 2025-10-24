@@ -139,7 +139,12 @@ export function useConversations(userId: string): UseConversationsResult {
 
   // Subscribe to opportunity scores for all conversations (Story 5.6 - Task 8)
   useEffect(() => {
-    if (conversations.length === 0) {
+    // Don't set up listeners if user is not authenticated or no conversations
+    if (!userId || conversations.length === 0) {
+      // Clear scores when user logs out
+      if (!userId) {
+        setOpportunityScores({});
+      }
       return;
     }
 
@@ -175,7 +180,7 @@ export function useConversations(userId: string): UseConversationsResult {
     return () => {
       unsubscribes.forEach((unsubscribe) => unsubscribe());
     };
-  }, [conversations]);
+  }, [userId, conversations]);
 
   /**
    * Sort conversations with priority sorting (Story 5.6 - Task 8):

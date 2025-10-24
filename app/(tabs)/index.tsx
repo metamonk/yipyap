@@ -249,7 +249,7 @@ export default function HomeScreen() {
       }
 
       // Call signOut from auth service
-      // Root layout will handle redirect to login after auth state changes
+      // RootLayout's reactive routing will handle redirect to login after auth state changes
       await signOut();
     } catch (logoutError) {
       console.error('Logout error:', logoutError);

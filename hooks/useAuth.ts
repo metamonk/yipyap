@@ -31,6 +31,7 @@ import {
   signOut as authSignOut,
 } from '@/services/authService';
 import { getUserProfile } from '@/services/userService';
+import { presenceService } from '@/services/presenceService';
 import { AuthError } from '@/types/auth';
 import { User } from '@/types/user';
 
@@ -171,6 +172,7 @@ export function useAuth(): UseAuthReturn {
         unsubscribe();
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty dependency array - setup only once on mount
 
   /**
@@ -232,11 +234,19 @@ export function useAuth(): UseAuthReturn {
 
   /**
    * Sign out current user
+   *
+   * @remarks
+   * CRITICAL: Cleans up presence BEFORE auth signout to prevent permission errors.
+   * Presence writes require authentication, so cleanup must happen while user is still authenticated.
    */
   const signOut = useCallback(async (): Promise<void> => {
     try {
       setIsLoading(true);
       setError(null);
+
+      // CRITICAL: Cleanup presence BEFORE signing out
+      // This ensures user is still authenticated when writing offline status to RTDB
+      await presenceService.cleanup();
 
       await authSignOut();
       // User state will be updated by onAuthStateChanged listener

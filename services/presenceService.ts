@@ -120,7 +120,9 @@ class PresenceService {
    * @returns Promise that resolves when updated
    */
   private async setDevicePresence(state: 'online' | 'offline'): Promise<void> {
-    if (!this.devicePresenceRef || !this.deviceId) return;
+    // Guard: Don't write if service is cleaned up (userId is null)
+    // This prevents permission errors during logout when connection listener fires
+    if (!this.userId || !this.devicePresenceRef || !this.deviceId) return;
 
     try {
       const devicePresence: DevicePresence = {
@@ -152,7 +154,8 @@ class PresenceService {
    * See: docs/architecture/real-time-data-patterns.md#pattern-2-aggregate-data-race-conditions
    */
   private async updateAggregatedPresence(): Promise<void> {
-    if (!this.userPresenceRef) return;
+    // Guard: Don't write if service is cleaned up (userId is null)
+    if (!this.userId || !this.userPresenceRef) return;
 
     try {
       // 1. READ all device data first
@@ -263,33 +266,20 @@ class PresenceService {
    */
   public async cleanup(): Promise<void> {
     try {
-      // Set offline status
-      if (this.devicePresenceRef) {
-        try {
-          await this.setDevicePresence('offline');
+      // CRITICAL: Store refs locally and clear userId FIRST to prevent race conditions
+      // This guards against queued connection listener callbacks that might fire during cleanup
+      const localDevicePresenceRef = this.devicePresenceRef;
+      const localUserId = this.userId;
+      const localIsConnected = this.isConnected;
 
-          // Cancel onDisconnect handlers (only if database is connected)
-          // Additional safety check: ensure ref has valid internal state before calling onDisconnect
-          if (this.isConnected && this.devicePresenceRef) {
-            try {
-              // @ts-ignore - accessing internal _repo property for safety check
-              if (this.devicePresenceRef._repo !== null && this.devicePresenceRef._repo !== undefined) {
-                await onDisconnect(this.devicePresenceRef).cancel();
-              }
-            } catch (disconnectError) {
-              console.warn('Failed to cancel onDisconnect:', disconnectError);
-            }
-          }
-        } catch (refError) {
-          // Database ref might be invalid if Firebase already cleaned up
-          console.warn('Failed to cancel onDisconnect handler:', refError);
-        }
-      }
+      // Immediately null userId to guard setDevicePresence and updateAggregatedPresence
+      this.userId = null;
+      this.deviceId = null;
 
       // Clear away timer
       this.clearAwayTimer();
 
-      // Remove connection listener
+      // Remove connection listener (prevents writes during cleanup)
       if (this.connectionUnsubscribe) {
         try {
           this.connectionUnsubscribe();
@@ -309,12 +299,39 @@ class PresenceService {
         this.appStateSubscription = null;
       }
 
+      // Now safely set offline status using locally stored refs
+      // This happens AFTER userId is null, so queued callbacks are guarded
+      if (localDevicePresenceRef && localUserId) {
+        try {
+          // Directly set offline using stored ref (bypass guard in setDevicePresence)
+          const devicePresence: DevicePresence = {
+            state: 'offline',
+            platform: getPlatform(),
+            lastActivity: rtdbServerTimestamp() as unknown as number,
+          };
+          await set(localDevicePresenceRef, devicePresence);
+
+          // Cancel onDisconnect handlers (only if database is connected)
+          if (localIsConnected && localDevicePresenceRef) {
+            try {
+              // @ts-expect-error - accessing internal _repo property for safety check
+              if (localDevicePresenceRef._repo !== null && localDevicePresenceRef._repo !== undefined) {
+                await onDisconnect(localDevicePresenceRef).cancel();
+              }
+            } catch (disconnectError) {
+              console.warn('Failed to cancel onDisconnect:', disconnectError);
+            }
+          }
+        } catch (refError) {
+          // Database ref might be invalid if Firebase already cleaned up, or permission denied
+          console.warn('Failed to set offline or cancel onDisconnect:', refError);
+        }
+      }
+
       // Clear references
       this.userPresenceRef = null;
       this.devicePresenceRef = null;
       this.connectionRef = null;
-      this.userId = null;
-      this.deviceId = null;
       this.currentState = 'offline';
     } catch (error) {
       console.error('Failed to cleanup presence:', error);

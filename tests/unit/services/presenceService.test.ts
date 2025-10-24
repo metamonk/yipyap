@@ -46,6 +46,8 @@ describe('PresenceService (RTDB)', () => {
   const mockDb = {} as any;
   const mockDeviceId = 'test-device-123';
   const mockUserId = 'user-456';
+  // Create a reusable mock ref object with _repo property for onDisconnect checks
+  const mockRefObj = { _repo: {} };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -54,7 +56,8 @@ describe('PresenceService (RTDB)', () => {
     (getFirebaseRealtimeDb as jest.Mock).mockReturnValue(mockDb);
     (getDeviceId as jest.Mock).mockResolvedValue(mockDeviceId);
 
-    mockRef.mockReturnValue('mockRef');
+    // Mock ref to return the same object (so reference equality checks work)
+    mockRef.mockReturnValue(mockRefObj);
     mockSet.mockResolvedValue(undefined);
     mockGet.mockResolvedValue({ val: () => null });
     mockUpdate.mockResolvedValue(undefined);
@@ -75,7 +78,7 @@ describe('PresenceService (RTDB)', () => {
       // Setup connection state callback
       let connectionCallback: ((snapshot: any) => void) | null = null;
       mockOnValue.mockImplementation((ref: any, callback: (snapshot: any) => void) => {
-        if (ref === 'mockRef') {
+        if (ref === mockRefObj) {
           connectionCallback = callback;
         }
         return jest.fn();
@@ -128,7 +131,7 @@ describe('PresenceService (RTDB)', () => {
 
       mockOnValue.mockImplementation((ref: any, callback: (snapshot: any) => void) => {
         // Immediately trigger connected state
-        if (ref === 'mockRef') {
+        if (ref === mockRefObj) {
           setTimeout(() => callback({ val: () => true }), 0);
         }
         return jest.fn();
@@ -172,8 +175,23 @@ describe('PresenceService (RTDB)', () => {
 
   describe('cleanup', () => {
     beforeEach(async () => {
-      mockOnValue.mockReturnValue(jest.fn());
+      // Setup connection callback to simulate being connected
+      let connectionCallback: ((snapshot: any) => void) | null = null;
+      mockOnValue.mockImplementation((ref: any, callback: (snapshot: any) => void) => {
+        connectionCallback = callback;
+        return jest.fn();
+      });
+
       await presenceService.initialize(mockUserId);
+
+      // Simulate connection to set isConnected = true
+      if (connectionCallback) {
+        connectionCallback({ val: () => true });
+      }
+
+      // Wait for async operations
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
       jest.clearAllMocks();
     });
 
@@ -257,7 +275,7 @@ describe('PresenceService (RTDB)', () => {
     it('should handle connection lost', async () => {
       let connectionCallback: ((snapshot: any) => void) | null = null;
       mockOnValue.mockImplementation((ref: any, callback: (snapshot: any) => void) => {
-        if (ref === 'mockRef') {
+        if (ref === mockRefObj) {
           connectionCallback = callback;
         }
         return jest.fn();
@@ -284,7 +302,7 @@ describe('PresenceService (RTDB)', () => {
     it('should handle connection restored', async () => {
       let connectionCallback: ((snapshot: any) => void) | null = null;
       mockOnValue.mockImplementation((ref: any, callback: (snapshot: any) => void) => {
-        if (ref === 'mockRef') {
+        if (ref === mockRefObj) {
           connectionCallback = callback;
         }
         return jest.fn();
@@ -333,7 +351,7 @@ describe('PresenceService (RTDB)', () => {
 
       let connectionCallback: ((snapshot: any) => void) | null = null;
       mockOnValue.mockImplementation((ref: any, callback: (snapshot: any) => void) => {
-        if (ref === 'mockRef') {
+        if (ref === mockRefObj) {
           connectionCallback = callback;
         }
         return jest.fn();
@@ -362,7 +380,7 @@ describe('PresenceService (RTDB)', () => {
     beforeEach(async () => {
       let connectionCallback: ((snapshot: any) => void) | null = null;
       mockOnValue.mockImplementation((ref: any, callback: (snapshot: any) => void) => {
-        if (ref === 'mockRef') {
+        if (ref === mockRefObj) {
           connectionCallback = callback;
         }
         return jest.fn();
