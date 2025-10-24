@@ -119,7 +119,7 @@ export const ResponseSuggestions: FC<ResponseSuggestionsProps> = ({
       console.error('Failed to load suggestions:', err);
 
       // Handle specific error types
-      const errorType = err.type as VoiceMatchingErrorType;
+      const errorType = (err as { type?: VoiceMatchingErrorType }).type;
       switch (errorType) {
         case VoiceMatchingErrorType.PROFILE_NOT_FOUND:
           setError(
