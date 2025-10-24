@@ -142,6 +142,7 @@ export async function queryFAQMatches(
     const index = pinecone.index(PINECONE_CONFIG.indexName);
 
     // Build metadata filter
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const filter: Record<string, any> = {};
 
     if (creatorId) {

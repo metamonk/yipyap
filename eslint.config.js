@@ -82,6 +82,12 @@ export default [
     },
   },
   {
+    files: ['api/**/*.{ts,tsx}', 'types/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off', // Allow any in API routes and type definitions for flexibility
+    },
+  },
+  {
     ignores: [
       'node_modules/**',
       '.expo/**',

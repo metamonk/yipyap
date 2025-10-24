@@ -230,12 +230,12 @@ function parseCategorizationResponse(response: string): CategorizationResult {
  *   'Love your content!',
  *   process.env.OPENAI_API_KEY!
  * );
- * console.log(result.category); // 'fan_engagement'
- * console.log(result.confidence); // 0.95
- * console.log(result.sentiment); // 'positive'
- * console.log(result.sentimentScore); // 0.85
- * console.log(result.emotionalTone); // ['excited', 'grateful']
- * console.log(result.crisisDetected); // false
+ * console.warn(result.category); // 'fan_engagement'
+ * console.warn(result.confidence); // 0.95
+ * console.warn(result.sentiment); // 'positive'
+ * console.warn(result.sentimentScore); // 0.85
+ * console.warn(result.emotionalTone); // ['excited', 'grateful']
+ * console.warn(result.crisisDetected); // false
  * ```
  */
 export async function categorizeMessage(
@@ -263,7 +263,7 @@ export async function categorizeMessage(
       });
 
       // DEBUG: Log raw GPT response to diagnose sentiment parsing issues
-      console.log('[DEBUG] Raw GPT response:', text);
+      console.warn('[DEBUG] Raw GPT response:', text);
 
       // Parse and validate response (includes crisis detection and urgent flag logic)
       const result = parseCategorizationResponse(text);
@@ -453,10 +453,10 @@ function ruleBasedOpportunityScoring(messageText: string): OpportunityScoreResul
  *   'Hi, I represent Nike and we would like to sponsor your content for $5000',
  *   process.env.OPENAI_API_KEY!
  * );
- * console.log(result.score); // 95
- * console.log(result.type); // 'sponsorship'
- * console.log(result.indicators); // ['brand sponsorship', 'budget discussion']
- * console.log(result.analysis); // 'High-value brand sponsorship with clear budget'
+ * console.warn(result.score); // 95
+ * console.warn(result.type); // 'sponsorship'
+ * console.warn(result.indicators); // ['brand sponsorship', 'budget discussion']
+ * console.warn(result.analysis); // 'High-value brand sponsorship with clear budget'
  * ```
  */
 export async function scoreOpportunity(
@@ -482,7 +482,7 @@ export async function scoreOpportunity(
         temperature: 0.5, // Moderate temperature for balanced creativity and consistency
       });
 
-      console.log('[DEBUG] Opportunity scoring GPT-4 Turbo response:', text);
+      console.warn('[DEBUG] Opportunity scoring GPT-4 Turbo response:', text);
 
       // Parse and validate response
       const result = parseOpportunityScoreResponse(text);

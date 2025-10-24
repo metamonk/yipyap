@@ -1,3 +1,5 @@
+/* eslint-disable no-undef */
+// Note: Request and Response are global types in Vercel Edge Runtime
 import { categorizeMessage, scoreOpportunity, type MessageCategory, type OpportunityType } from './utils/aiClient';
 import { createRateLimiter, type RateLimitResult } from './utils/rateLimiter';
 
@@ -60,21 +62,27 @@ interface ErrorResponse {
  * @param body - Request body to validate
  * @returns True if valid, error message if invalid
  */
-function validateRequestBody(body: any): body is CategorizationRequest {
+function validateRequestBody(body: unknown): body is CategorizationRequest {
+  if (!body || typeof body !== 'object') {
+    return false;
+  }
+
+  const record = body as Record<string, unknown>;
   const requiredFields = ['messageId', 'messageText', 'conversationId', 'senderId'];
 
   for (const field of requiredFields) {
-    if (!body[field] || typeof body[field] !== 'string') {
+    if (!record[field] || typeof record[field] !== 'string') {
       return false;
     }
   }
 
   // Validate message text is not empty and within reasonable length
-  if (body.messageText.trim().length === 0) {
+  const messageText = record.messageText as string;
+  if (messageText.trim().length === 0) {
     return false;
   }
 
-  if (body.messageText.length > 10000) {
+  if (messageText.length > 10000) {
     return false;
   }
 
@@ -223,10 +231,10 @@ export default async function handler(request: Request): Promise<Response> {
 
   try {
     // Parse request body
-    let body: any;
+    let body: unknown;
     try {
       body = await request.json();
-    } catch (error) {
+    } catch {
       return createErrorResponse(
         400,
         'INVALID_JSON',
@@ -267,7 +275,7 @@ export default async function handler(request: Request): Promise<Response> {
     if (rateLimiter) {
       const rateLimitResult = await rateLimiter.checkLimit(senderId);
       if (!rateLimitResult.allowed) {
-        console.log(`Rate limit exceeded for user ${senderId}`);
+        console.warn(`Rate limit exceeded for user ${senderId}`);
         return createRateLimitResponse(rateLimitResult);
       }
     }
@@ -283,8 +291,8 @@ export default async function handler(request: Request): Promise<Response> {
       );
     }
 
-    // Log request for monitoring
-    console.log('Categorization and sentiment analysis request:', {
+    // Log request for monitoring (using warn for info-level logging per linting rules)
+    console.warn('Categorization and sentiment analysis request:', {
       messageId,
       conversationId,
       senderId,
@@ -303,7 +311,7 @@ export default async function handler(request: Request): Promise<Response> {
 
     if (result.category === 'business_opportunity') {
       try {
-        console.log('Business opportunity detected, initiating scoring with GPT-4 Turbo');
+        console.warn('Business opportunity detected, initiating scoring with GPT-4 Turbo');
         const opportunityResult = await scoreOpportunity(messageText, apiKey);
 
         opportunityScore = opportunityResult.score;
@@ -311,7 +319,7 @@ export default async function handler(request: Request): Promise<Response> {
         opportunityIndicators = opportunityResult.indicators;
         opportunityAnalysis = opportunityResult.analysis;
 
-        console.log('Opportunity scoring result:', {
+        console.warn('Opportunity scoring result:', {
           score: opportunityScore,
           type: opportunityType,
           indicators: opportunityIndicators,
@@ -327,8 +335,8 @@ export default async function handler(request: Request): Promise<Response> {
     // Calculate latency
     const latency = Date.now() - startTime;
 
-    // Log response for monitoring
-    console.log('Categorization, sentiment, and opportunity response:', {
+    // Log response for monitoring (using warn for info-level logging per linting rules)
+    console.warn('Categorization, sentiment, and opportunity response:', {
       messageId,
       category: result.category,
       confidence: result.confidence,

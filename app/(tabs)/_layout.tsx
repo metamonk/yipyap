@@ -29,7 +29,7 @@ export default function TabsLayout() {
     const unsubscribe = opportunityService.subscribeToOpportunities(
       user.uid,
       70, // High-value threshold
-      (newOpportunity) => {
+      (_newOpportunity) => {
         // Increment badge count for new high-value opportunities
         setNewOpportunityCount((prev) => prev + 1);
       }

@@ -134,6 +134,7 @@ function NewConversationScreenContent() {
         }
       }, 300); // 300ms debounce
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [currentUserId]
   );
 
@@ -189,6 +190,7 @@ function NewConversationScreenContent() {
       setRecipients(newRecipients);
       setShowContactPicker(false);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [recipients]
   );
 

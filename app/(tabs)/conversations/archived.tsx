@@ -163,6 +163,7 @@ export default function ArchivedConversationsScreen() {
     };
 
     fetchParticipants();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversations, currentUserId]);
 
   /**

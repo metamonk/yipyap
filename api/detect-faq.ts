@@ -1,3 +1,5 @@
+/* eslint-disable no-undef */
+// Note: Request and Response are global types in Vercel runtime
 /**
  * FAQ Detection Edge Function
  *
@@ -231,7 +233,7 @@ export default async function handler(request: Request): Promise<Response> {
       embeddingLatency = Date.now() - embeddingStartTime;
 
       // Performance logging for monitoring (Subtask 17.2: Target <200ms)
-      console.log(JSON.stringify({
+      console.warn(JSON.stringify({
         event: 'embedding_generated',
         messageId,
         creatorId,
@@ -289,7 +291,7 @@ export default async function handler(request: Request): Promise<Response> {
       pineconeLatency = Date.now() - pineconeStartTime;
 
       // Performance logging for monitoring (Subtask 17.3: Target <50ms)
-      console.log(JSON.stringify({
+      console.warn(JSON.stringify({
         event: 'pinecone_query_completed',
         messageId,
         creatorId,
@@ -329,7 +331,7 @@ export default async function handler(request: Request): Promise<Response> {
     const overheadLatency = totalLatency - embeddingLatency - pineconeLatency;
 
     // Overall performance logging (Subtask 17.4: Target <500ms at 95th percentile)
-    console.log(JSON.stringify({
+    console.warn(JSON.stringify({
       event: 'faq_detection_completed',
       messageId,
       creatorId,

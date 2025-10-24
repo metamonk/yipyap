@@ -4,17 +4,17 @@
  */
 
 declare global {
-  // eslint-disable-next-line no-var
+   
   var __FIREBASE_INITIALIZED__: boolean;
-  // eslint-disable-next-line no-var
+   
   var __FIREBASE_APP__: any;
-  // eslint-disable-next-line no-var
+   
   var __FIREBASE_DB__: any;
-  // eslint-disable-next-line no-var
+   
   var __FIREBASE_REALTIME_DB__: any;
-  // eslint-disable-next-line no-var
+   
   var __FIREBASE_AUTH__: any;
-  // eslint-disable-next-line no-var
+   
   var __FIREBASE_STORAGE__: any;
 }
 

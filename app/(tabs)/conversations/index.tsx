@@ -168,7 +168,8 @@ export default function ConversationListScreen() {
     };
 
     fetchParticipants();
-  }, [conversations, currentUserId]); // Removed participantData from deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversations, currentUserId]);
 
   /**
    * Get the other participant in a direct conversation

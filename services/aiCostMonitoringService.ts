@@ -212,6 +212,32 @@ export async function trackModelUsage(
 }
 
 /**
+ * Simplified daily cost data for UI display
+ */
+export interface DailyCost {
+  /** Date for this cost entry */
+  date: Date;
+  /** Total cost in USD cents */
+  totalCostCents: number;
+  /** Cost breakdown by operation type */
+  operationCosts: Record<string, number>;
+}
+
+/**
+ * Simplified monthly cost data for UI display
+ */
+export interface MonthlyCost {
+  /** Year for this cost entry */
+  year: number;
+  /** Month (1-12) for this cost entry */
+  month: number;
+  /** Total cost in USD cents */
+  totalCostCents: number;
+  /** Cost breakdown by operation type */
+  operationCosts: Record<string, number>;
+}
+
+/**
  * Get daily cost metrics for a specific date
  *
  * @param userId - User ID to retrieve costs for
@@ -222,13 +248,13 @@ export async function trackModelUsage(
  *
  * @example
  * ```typescript
- * const todayCosts = await getDailyCosts('user123');
+ * const todayCosts = await getDailyCost('user123');
  * if (todayCosts) {
  *   console.log(`Today's cost: $${todayCosts.totalCostCents / 100}`);
  * }
  * ```
  */
-export async function getDailyCosts(userId: string, date?: Date): Promise<CostMetrics | null> {
+export async function getDailyCost(userId: string, date?: Date): Promise<CostMetrics | null> {
   try {
     const db = getDb();
     const targetDate = date || new Date();
@@ -253,6 +279,64 @@ export async function getDailyCosts(userId: string, date?: Date): Promise<CostMe
 }
 
 /**
+ * Get daily cost metrics for the last N days
+ *
+ * @param userId - User ID to retrieve costs for
+ * @param days - Number of days to retrieve (defaults to 30)
+ * @returns Array of daily cost data
+ *
+ * @throws {Error} When Firestore query fails
+ *
+ * @example
+ * ```typescript
+ * const last30Days = await getDailyCosts('user123', 30);
+ * console.log(`Found ${last30Days.length} days of cost data`);
+ * ```
+ */
+export async function getDailyCosts(userId: string, days: number = 30): Promise<DailyCost[]> {
+  try {
+    const db = getDb();
+    const results: DailyCost[] = [];
+    const now = new Date();
+
+    // Fetch costs for each of the last N days
+    for (let i = days - 1; i >= 0; i--) {
+      // Create a new date by calculating milliseconds offset
+      const targetDate = new Date(now.getTime() - (i * 24 * 60 * 60 * 1000));
+      const year = targetDate.getFullYear();
+      const month = targetDate.getMonth() + 1;
+      const day = targetDate.getDate();
+
+      const periodId = `daily-${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+      const costMetricsRef = doc(db, `users/${userId}/ai_cost_metrics`, periodId);
+      const costMetricsDoc = await getDoc(costMetricsRef);
+
+      if (costMetricsDoc.exists()) {
+        const data = costMetricsDoc.data() as CostMetrics;
+        results.push({
+          date: new Date(year, targetDate.getMonth(), day),
+          totalCostCents: data.totalCostCents,
+          operationCosts: data.costByOperation,
+        });
+      } else {
+        // Add zero-cost entry for days with no data
+        results.push({
+          date: new Date(year, targetDate.getMonth(), day),
+          totalCostCents: 0,
+          operationCosts: {},
+        });
+      }
+    }
+
+    return results;
+  } catch (error) {
+    console.error('[aiCostMonitoringService] Failed to retrieve daily costs:', error);
+    throw new Error('Unable to load daily cost metrics. Please try again.');
+  }
+}
+
+/**
  * Get monthly cost metrics for a specific month
  *
  * @param userId - User ID to retrieve costs for
@@ -264,13 +348,13 @@ export async function getDailyCosts(userId: string, date?: Date): Promise<CostMe
  *
  * @example
  * ```typescript
- * const octCosts = await getMonthlyCosts('user123', 2025, 10);
+ * const octCosts = await getMonthlyCost('user123', 2025, 10);
  * if (octCosts) {
  *   console.log(`October cost: $${octCosts.totalCostCents / 100}`);
  * }
  * ```
  */
-export async function getMonthlyCosts(
+export async function getMonthlyCost(
   userId: string,
   year?: number,
   month?: number
@@ -294,6 +378,64 @@ export async function getMonthlyCosts(
       userId,
       ...costMetricsDoc.data(),
     } as CostMetrics;
+  } catch (error) {
+    console.error('[aiCostMonitoringService] Failed to retrieve monthly costs:', error);
+    throw new Error('Unable to load monthly cost metrics. Please try again.');
+  }
+}
+
+/**
+ * Get monthly cost metrics for the last N months
+ *
+ * @param userId - User ID to retrieve costs for
+ * @param months - Number of months to retrieve (defaults to 12)
+ * @returns Array of monthly cost data
+ *
+ * @throws {Error} When Firestore query fails
+ *
+ * @example
+ * ```typescript
+ * const last12Months = await getMonthlyCosts('user123', 12);
+ * console.log(`Found ${last12Months.length} months of cost data`);
+ * ```
+ */
+export async function getMonthlyCosts(userId: string, months: number = 12): Promise<MonthlyCost[]> {
+  try {
+    const db = getDb();
+    const results: MonthlyCost[] = [];
+    const today = new Date();
+
+    // Fetch costs for each of the last N months
+    for (let i = months - 1; i >= 0; i--) {
+      const targetDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const targetYear = targetDate.getFullYear();
+      const targetMonth = targetDate.getMonth() + 1; // Convert to 1-12
+
+      const periodId = `monthly-${targetYear}-${String(targetMonth).padStart(2, '0')}`;
+
+      const costMetricsRef = doc(db, `users/${userId}/ai_cost_metrics`, periodId);
+      const costMetricsDoc = await getDoc(costMetricsRef);
+
+      if (costMetricsDoc.exists()) {
+        const data = costMetricsDoc.data() as CostMetrics;
+        results.push({
+          year: targetYear,
+          month: targetMonth,
+          totalCostCents: data.totalCostCents,
+          operationCosts: data.costByOperation,
+        });
+      } else {
+        // Add zero-cost entry for months with no data
+        results.push({
+          year: targetYear,
+          month: targetMonth,
+          totalCostCents: 0,
+          operationCosts: {},
+        });
+      }
+    }
+
+    return results;
   } catch (error) {
     console.error('[aiCostMonitoringService] Failed to retrieve monthly costs:', error);
     throw new Error('Unable to load monthly cost metrics. Please try again.');
@@ -330,7 +472,7 @@ export async function checkBudgetThreshold(
   budgetLimitCents: number;
 }> {
   try {
-    const costs = await getDailyCosts(userId);
+    const costs = await getDailyCost(userId);
 
     if (!costs) {
       // No costs recorded today
@@ -360,5 +502,32 @@ export async function checkBudgetThreshold(
       totalCostCents: 0,
       budgetLimitCents: DEFAULT_DAILY_BUDGET_CENTS,
     };
+  }
+}
+
+/**
+ * Get total cumulative cost across all time periods
+ *
+ * @param userId - User ID to calculate total cost for
+ * @returns Total cost in USD cents
+ *
+ * @remarks
+ * Sums up all daily and monthly cost metrics for the user.
+ * This is a convenience function for dashboard display.
+ *
+ * @example
+ * ```typescript
+ * const totalCost = await getTotalCost('user123');
+ * console.log(`Total AI costs: $${totalCost / 100}`);
+ * ```
+ */
+export async function getTotalCost(userId: string): Promise<number> {
+  try {
+    const dailyCosts = await getDailyCosts(userId, 365); // Get last year of daily data
+    const totalCents = dailyCosts.reduce((sum, day) => sum + day.totalCostCents, 0);
+    return totalCents;
+  } catch (error) {
+    console.error('[aiCostMonitoringService] Failed to retrieve total cost:', error);
+    return 0;
   }
 }

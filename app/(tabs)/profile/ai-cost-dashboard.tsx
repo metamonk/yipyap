@@ -28,8 +28,9 @@ import {
   Share,
   Alert,
 } from 'react-native';
-import { Stack } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { NavigationHeader } from '../../_components/NavigationHeader';
 import { getFirebaseAuth } from '@/services/firebase';
 import {
   getDailyCosts,
@@ -46,6 +47,7 @@ type TimePeriod = 'daily' | 'monthly';
  * AI Cost Dashboard Screen Component
  */
 export default function AICostDashboardScreen() {
+  const router = useRouter();
   const [period, setPeriod] = useState<TimePeriod>('daily');
   const [dailyCosts, setDailyCosts] = useState<DailyCost[]>([]);
   const [monthlyCosts, setMonthlyCosts] = useState<MonthlyCost[]>([]);
@@ -183,24 +185,27 @@ export default function AICostDashboardScreen() {
   ];
 
   return (
-    <>
-      <Stack.Screen
-        options={{
-          title: 'AI Cost Monitoring',
-          headerRight: () => (
-            <TouchableOpacity
-              onPress={handleRefresh}
-              style={styles.headerButton}
-              accessibilityLabel="Refresh cost data"
-              accessibilityRole="button"
-            >
-              <Ionicons name="refresh" size={24} color="#3182CE" />
-            </TouchableOpacity>
-          ),
+    <View style={styles.container}>
+      <NavigationHeader
+        title="AI Cost Monitoring"
+        variant="modal"
+        leftAction={{
+          icon: 'arrow-back',
+          onPress: () => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(tabs)/profile');
+            }
+          },
+        }}
+        rightAction={{
+          icon: 'refresh',
+          onPress: handleRefresh,
         }}
       />
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.contentContainer}>
         {/* Period Toggle */}
         <View style={styles.periodToggle}>
           <TouchableOpacity
@@ -323,7 +328,7 @@ export default function AICostDashboardScreen() {
           </>
         )}
       </ScrollView>
-    </>
+    </View>
   );
 }
 
@@ -332,11 +337,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F9FAFB',
   },
+  scrollContainer: {
+    flex: 1,
+  },
   contentContainer: {
     padding: 16,
-  },
-  headerButton: {
-    marginRight: 16,
   },
   periodToggle: {
     flexDirection: 'row',
