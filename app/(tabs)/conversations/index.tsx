@@ -77,8 +77,8 @@ export default function ConversationListScreen() {
   const { user } = useAuth();
   const currentUserId = user?.uid || '';
 
-  // Load conversations using custom hook
-  const { conversations, loading, error, refresh, refreshing } = useConversations(currentUserId);
+  // Load conversations using custom hook (Story 5.6 - Task 8: Priority sorting)
+  const { conversations, loading, error, refresh, refreshing, opportunityScores } = useConversations(currentUserId);
 
   // Network status hooks
   const { connectionStatus } = useNetworkStatus();
@@ -510,9 +510,26 @@ export default function ConversationListScreen() {
   };
 
   /**
+   * Check if we should show the priority separator after this conversation (Story 5.6 - Task 8)
+   * Shows separator when transitioning from priority (score >= 70) to regular conversations
+   */
+  const shouldShowSeparator = (index: number): boolean => {
+    if (index >= conversations.length - 1) return false; // No separator after last item
+
+    const currentConversation = conversations[index];
+    const nextConversation = conversations[index + 1];
+
+    const currentScore = opportunityScores[currentConversation.id] || 0;
+    const nextScore = opportunityScores[nextConversation.id] || 0;
+
+    // Show separator when current is priority (>= 70) and next is not
+    return currentScore >= 70 && nextScore < 70;
+  };
+
+  /**
    * Render a single conversation item
    */
-  const renderItem = ({ item }: { item: Conversation }) => {
+  const renderItem = ({ item, index }: { item: Conversation; index: number }) => {
     const otherParticipantId = getOtherParticipantId(item);
     const otherParticipant = participantData[otherParticipantId];
 
@@ -525,22 +542,34 @@ export default function ConversationListScreen() {
     const photoURL =
       item.type === 'group' ? item.groupPhotoURL || null : otherParticipant?.photoURL || null;
 
+    const showSeparator = shouldShowSeparator(index);
+
     return (
-      <ConversationListItem
-        conversation={item}
-        currentUserId={currentUserId}
-        otherParticipantName={displayName}
-        otherParticipantPhoto={photoURL}
-        otherParticipantId={item.type === 'direct' ? otherParticipantId : undefined}
-        onPress={handleConversationPress}
-        onArchive={handleArchive}
-        onDelete={handleDelete}
-        // Selection mode props (Story 4.7)
-        isSelectionMode={isSelectionMode}
-        isSelected={selectedConversationIds.has(item.id)}
-        onLongPress={() => enterSelectionMode(item.id)}
-        onToggleSelect={() => toggleSelection(item.id)}
-      />
+      <>
+        <ConversationListItem
+          conversation={item}
+          currentUserId={currentUserId}
+          otherParticipantName={displayName}
+          otherParticipantPhoto={photoURL}
+          otherParticipantId={item.type === 'direct' ? otherParticipantId : undefined}
+          onPress={handleConversationPress}
+          onArchive={handleArchive}
+          onDelete={handleDelete}
+          // Selection mode props (Story 4.7)
+          isSelectionMode={isSelectionMode}
+          isSelected={selectedConversationIds.has(item.id)}
+          onLongPress={() => enterSelectionMode(item.id)}
+          onToggleSelect={() => toggleSelection(item.id)}
+        />
+        {/* Priority separator (Story 5.6 - Task 8) */}
+        {showSeparator && (
+          <View style={styles.prioritySeparator}>
+            <View style={styles.separatorLine} />
+            <Text style={styles.separatorText}>Other Conversations</Text>
+            <View style={styles.separatorLine} />
+          </View>
+        )}
+      </>
     );
   };
 
@@ -853,5 +882,26 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Priority separator (Story 5.6 - Task 8)
+  prioritySeparator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#F9FAFB',
+  },
+  separatorLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E5E7EB',
+  },
+  separatorText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginHorizontal: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
 });

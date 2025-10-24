@@ -12,11 +12,13 @@ import { getReactNativePersistence } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   initializeFirestore,
+  getFirestore,
   Firestore,
   persistentLocalCache,
 } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { getDatabase, Database } from 'firebase/database';
+import { getFunctions as getFirebaseFunctions, Functions } from 'firebase/functions';
 import { Config } from '@/constants/Config';
 
 /**
@@ -43,6 +45,11 @@ let storage: FirebaseStorage;
  * Firebase Realtime Database instance
  */
 let realtimeDb: Database;
+
+/**
+ * Firebase Functions instance
+ */
+let functions: Functions;
 
 /**
  * Initializes Firebase services with configuration from environment variables
@@ -90,7 +97,6 @@ export function initializeFirebase(): void {
     }
 
     // Initialize Firestore with offline persistence enabled
-
     // This caches data locally for faster access and offline support
     // Offline behavior:
     // - All reads cached locally
@@ -98,9 +104,16 @@ export function initializeFirebase(): void {
     // - Queued writes automatically sent when connection restored
     // - Real-time listeners (onSnapshot) automatically reconnect
     // - Cached data available instantly on app restart
-    db = initializeFirestore(app, {
-      localCache: persistentLocalCache(),
-    });
+
+    // CRITICAL FIX: Check if Firestore is already initialized to prevent errors during hot reload
+    try {
+      db = getFirestore(app);
+    } catch {
+      // Firestore not initialized yet, initialize it now
+      db = initializeFirestore(app, {
+        localCache: persistentLocalCache(),
+      });
+    }
 
     storage = getStorage(app);
 
@@ -109,6 +122,9 @@ export function initializeFirebase(): void {
     // Used for presence and typing indicators (not for primary data storage)
 
     realtimeDb = getDatabase(app);
+
+    // Initialize Firebase Functions for calling Cloud Functions
+    functions = getFirebaseFunctions(app);
 
     // CRITICAL FIX: Removed conflicting network management
     // Firestore handles network state automatically with offline persistence
@@ -170,4 +186,34 @@ export function getFirebaseRealtimeDb(): Database {
     throw new Error('Firebase not initialized. Call initializeFirebase() first.');
   }
   return realtimeDb;
+}
+
+/**
+ * Returns the Firebase Functions instance
+ * @returns Firebase Functions instance for calling Cloud Functions
+ * @throws {Error} When Firebase has not been initialized
+ * @remarks
+ * Use this to call Cloud Functions from the client.
+ * Example: httpsCallable(getFunctions(), 'functionName')
+ */
+export function getFunctions(): Functions {
+  if (!functions) {
+    throw new Error('Firebase not initialized. Call initializeFirebase() first.');
+  }
+  return functions;
+}
+
+/**
+ * Returns the Firebase App instance
+ * @returns Firebase App instance
+ * @throws {Error} When Firebase has not been initialized
+ * @remarks
+ * Use this to access the root Firebase app instance.
+ * Most services should use the specific getters (getFirebaseDb, getFirebaseAuth, etc.)
+ */
+export function getFirebaseApp(): FirebaseApp {
+  if (!app) {
+    throw new Error('Firebase not initialized. Call initializeFirebase() first.');
+  }
+  return app;
 }

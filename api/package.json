@@ -1,0 +1,17 @@
+{
+  "name": "yipyap-edge-functions",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Vercel Edge Functions for yipyap AI features",
+  "dependencies": {
+    "@ai-sdk/openai": "^2.0.53",
+    "@upstash/redis": "^1.35.6",
+    "ai": "^5.0.78",
+    "firebase-admin": "^14.1.0"
+  },
+  "devDependencies": {
+    "@pinecone-database/pinecone": "^6.1.2"
+  },
+  "note": "Pinecone moved to devDependencies - incompatible with Edge Runtime. FAQ detection (detect-faq.ts) will need separate serverless function or alternative vector search."
+}

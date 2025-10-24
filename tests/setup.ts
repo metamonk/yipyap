@@ -45,29 +45,43 @@ const mockTimestamp = () => ({
   nanoseconds: (Date.now() % 1000) * 1000000,
 });
 
-jest.mock('firebase/firestore', () => ({
-  Timestamp: {
-    now: jest.fn(mockTimestamp),
-    fromMillis: jest.fn((millis: number) => ({
-      toMillis: () => millis,
-      seconds: Math.floor(millis / 1000),
-      nanoseconds: (millis % 1000) * 1000000,
-    })),
-  },
-  getFirestore: jest.fn(),
-  collection: jest.fn(),
-  doc: jest.fn(),
-  getDoc: jest.fn(),
-  getDocs: jest.fn(),
-  setDoc: jest.fn(),
-  updateDoc: jest.fn(),
-  deleteDoc: jest.fn(),
-  query: jest.fn(),
-  where: jest.fn(),
-  orderBy: jest.fn(),
-  limit: jest.fn(),
-  onSnapshot: jest.fn(),
-}));
+jest.mock('firebase/firestore', () => {
+  class FirestoreError extends Error {
+    constructor(code: string, message: string) {
+      super(message);
+      this.name = 'FirestoreError';
+      this.code = code;
+    }
+    code: string;
+  }
+
+  return {
+    Timestamp: {
+      now: jest.fn(mockTimestamp),
+      fromMillis: jest.fn((millis: number) => ({
+        toMillis: () => millis,
+        seconds: Math.floor(millis / 1000),
+        nanoseconds: (millis % 1000) * 1000000,
+      })),
+    },
+    FirestoreError,
+    getFirestore: jest.fn(),
+    collection: jest.fn(),
+    doc: jest.fn(),
+    getDoc: jest.fn(),
+    getDocs: jest.fn(),
+    setDoc: jest.fn(),
+    updateDoc: jest.fn(),
+    deleteDoc: jest.fn(),
+    query: jest.fn(),
+    where: jest.fn(),
+    orderBy: jest.fn(),
+    limit: jest.fn(),
+    onSnapshot: jest.fn(),
+    serverTimestamp: jest.fn(() => mockTimestamp()),
+    increment: jest.fn((value: number) => ({ _increment: value })),
+  };
+});
 
 // Mock Firebase Database
 jest.mock('firebase/database', () => ({
@@ -99,6 +113,12 @@ jest.mock('firebase/storage', () => ({
   getDownloadURL: jest.fn(),
 }));
 
+// Mock Firebase Functions
+jest.mock('firebase/functions', () => ({
+  getFunctions: jest.fn(),
+  httpsCallable: jest.fn(),
+}));
+
 // Mock React Native Alert separately
 jest.mock('react-native/Libraries/Alert/Alert', () => ({
   __esModule: true,
@@ -109,13 +129,22 @@ jest.mock('react-native/Libraries/Alert/Alert', () => ({
 
 // Mock react-native-reanimated
 jest.mock('react-native-reanimated', () => {
-  const View = require('react-native').View;
+  const React = require('react');
+  const { View } = require('react-native');
+
   return {
     default: {
       View,
-       
       createAnimatedComponent: (component: any) => component,
     },
+    View: View,
+    useSharedValue: jest.fn((initialValue: any) => ({ value: initialValue })),
+    useAnimatedStyle: jest.fn((styleGetter: () => any) => styleGetter()),
+    useAnimatedGestureHandler: jest.fn((handlers: any) => handlers),
+    withSpring: jest.fn((value: any) => value),
+    withTiming: jest.fn((value: any) => value),
+    runOnJS: jest.fn((fn: any) => fn),
+    runOnUI: jest.fn((fn: any) => fn),
     SlideInUp: {
       duration: jest.fn(() => ({ duration: 300 })),
     },
@@ -128,6 +157,29 @@ jest.mock('react-native-reanimated', () => {
     FadeOut: {
       duration: jest.fn(() => ({ duration: 300 })),
     },
+  };
+});
+
+// Mock react-native-gesture-handler
+jest.mock('react-native-gesture-handler', () => {
+  const View = require('react-native').View;
+  return {
+    GestureHandlerRootView: View,
+    PanGestureHandler: View,
+    State: {},
+    Directions: {},
+  };
+});
+
+// Mock react-native-draggable-flatlist
+jest.mock('react-native-draggable-flatlist', () => {
+  const React = require('react');
+  const { FlatList, View } = require('react-native');
+
+  return {
+    __esModule: true,
+    default: (props: any) => React.createElement(FlatList, props),
+    ScaleDecorator: ({ children }: any) => React.createElement(View, {}, children),
   };
 });
 

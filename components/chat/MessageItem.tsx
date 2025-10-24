@@ -12,8 +12,11 @@ import { View, Text, StyleSheet, Animated } from 'react-native';
 import { Avatar } from '@/components/common/Avatar';
 import { MessageStatus } from '@/components/chat/MessageStatus';
 import { ReadReceiptModal } from '@/components/chat/ReadReceiptModal';
+import { AutoReplyBadge } from '@/components/chat/AutoReplyBadge';
+import { SuggestedFAQButton } from '@/components/chat/SuggestedFAQButton';
 import { PresenceIndicator } from '@/components/PresenceIndicator';
 import { formatMessageTime } from '@/utils/dateHelpers';
+import { sendSuggestedFAQ } from '@/services/faqService';
 import type { Message } from '@/types/models';
 
 /**
@@ -44,6 +47,22 @@ export interface MessageItemProps {
   /** Whether this message's read receipt is being retried */
   isRetrying?: boolean;
 }
+
+/**
+ * Helper function to determine sentiment tint color based on score
+ * @param score - Sentiment score from -1 (very negative) to 1 (very positive)
+ * @returns RGBA color string for background tint
+ */
+const getSentimentTint = (score: number | undefined): string => {
+  if (score === undefined) return 'transparent';
+
+  if (score <= -0.7) return 'rgba(255, 59, 48, 0.08)'; // Strong negative - red
+  if (score <= -0.3) return 'rgba(255, 149, 0, 0.05)'; // Moderate negative - orange
+  if (score >= 0.7) return 'rgba(52, 199, 89, 0.08)'; // Strong positive - green
+  if (score >= 0.3) return 'rgba(52, 199, 89, 0.05)'; // Moderate positive - light green
+
+  return 'transparent'; // Neutral (-0.29 to 0.29)
+};
 
 /**
  * Displays a single message within a chat conversation
@@ -98,6 +117,12 @@ export const MessageItem: FC<MessageItemProps> = memo(
       if (isGroupChat && participantIds.length > 0) {
         setShowReadReceiptModal(true);
       }
+    };
+
+    // Handler to send suggested FAQ response
+    const handleSendSuggestedFAQ = async (templateId: string, answer: string) => {
+      await sendSuggestedFAQ(message, templateId, answer);
+      // Success feedback is shown by the service layer via message update
     };
 
     useEffect(() => {
@@ -160,8 +185,21 @@ export const MessageItem: FC<MessageItemProps> = memo(
           {/* Sender name - shown for received messages, hidden for own messages */}
           {showSenderInfo && <Text style={styles.senderName}>{senderDisplayName}</Text>}
 
-          {/* Message bubble */}
+          {/* Message bubble with sentiment tint overlay */}
           <View style={[styles.bubble, isOwnMessage ? styles.sentBubble : styles.receivedBubble]}>
+            {/* Sentiment tint overlay */}
+            {message.metadata?.sentimentScore !== undefined && (
+              <View
+                style={[
+                  StyleSheet.absoluteFill,
+                  styles.bubble,
+                  isOwnMessage
+                    ? { borderBottomRightRadius: 4 }
+                    : { borderBottomLeftRadius: 4 },
+                  { backgroundColor: getSentimentTint(message.metadata.sentimentScore) },
+                ]}
+              />
+            )}
             <Text
               style={[styles.messageText, isOwnMessage ? styles.sentText : styles.receivedText]}
             >
@@ -193,6 +231,12 @@ export const MessageItem: FC<MessageItemProps> = memo(
               />
             )}
           </View>
+
+          {/* Auto-Reply Badge (Story 5.4) - shown for FAQ auto-responses */}
+          <AutoReplyBadge message={message} />
+
+          {/* Suggested FAQ Button (Story 5.4 - Task 11) - shown for medium-confidence FAQ suggestions */}
+          {!isOwnMessage && <SuggestedFAQButton message={message} onSend={handleSendSuggestedFAQ} />}
         </View>
 
         {/* No spacer needed - own messages go to edge without gap */}

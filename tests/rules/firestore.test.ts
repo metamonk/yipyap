@@ -399,6 +399,288 @@ describe('Firestore Security Rules', () => {
     });
   });
 
+  describe('FAQ Templates Collection - Read Access (Story 5.4, Subtask 4.2)', () => {
+    beforeEach(async () => {
+      // Seed FAQ template for tests
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const firestore = context.firestore();
+        await firestore.collection('faq_templates').doc('faq1').set({
+          creatorId: 'alice-uid',
+          question: 'What are your rates?',
+          answer: 'My rates start at $100 per hour.',
+          keywords: ['pricing', 'rates', 'cost'],
+          category: 'pricing',
+          isActive: true,
+          useCount: 0,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      });
+    });
+
+    it('allows creator to read their own FAQ template', async () => {
+      const alice = testEnv.authenticatedContext('alice-uid');
+      const faqDoc = alice.firestore().collection('faq_templates').doc('faq1');
+
+      await assertSucceeds(faqDoc.get());
+    });
+
+    it('denies non-creator from reading FAQ template', async () => {
+      const bob = testEnv.authenticatedContext('bob-uid');
+      const faqDoc = bob.firestore().collection('faq_templates').doc('faq1');
+
+      await assertFails(faqDoc.get());
+    });
+
+    it('denies unauthenticated user from reading FAQ templates', async () => {
+      const unauthed = testEnv.unauthenticatedContext();
+      const faqDoc = unauthed.firestore().collection('faq_templates').doc('faq1');
+
+      await assertFails(faqDoc.get());
+    });
+  });
+
+  describe('FAQ Templates Collection - Create Access (Story 5.4, Subtask 4.3)', () => {
+    it('allows user to create FAQ template with valid data', async () => {
+      const alice = testEnv.authenticatedContext('alice-uid');
+      const faqDoc = alice.firestore().collection('faq_templates').doc('faq-new');
+
+      await assertSucceeds(
+        faqDoc.set({
+          creatorId: 'alice-uid',
+          question: 'What are your rates?',
+          answer: 'My rates start at $100 per hour.',
+          keywords: ['pricing', 'rates', 'cost'],
+          category: 'pricing',
+          isActive: true,
+          useCount: 0,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+      );
+    });
+
+    it('denies creating FAQ template with mismatched creatorId', async () => {
+      const alice = testEnv.authenticatedContext('alice-uid');
+      const faqDoc = alice.firestore().collection('faq_templates').doc('faq-new');
+
+      await assertFails(
+        faqDoc.set({
+          creatorId: 'bob-uid', // Mismatch with authenticated user
+          question: 'What are your rates?',
+          answer: 'My rates start at $100 per hour.',
+          keywords: ['pricing', 'rates', 'cost'],
+          category: 'pricing',
+          isActive: true,
+          useCount: 0,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+      );
+    });
+
+    it('denies creating FAQ template without required fields', async () => {
+      const alice = testEnv.authenticatedContext('alice-uid');
+      const faqDoc = alice.firestore().collection('faq_templates').doc('faq-new');
+
+      await assertFails(
+        faqDoc.set({
+          creatorId: 'alice-uid',
+          question: 'What are your rates?',
+          // Missing answer, keywords, category, etc.
+        })
+      );
+    });
+
+    it('denies creating FAQ template with empty question', async () => {
+      const alice = testEnv.authenticatedContext('alice-uid');
+      const faqDoc = alice.firestore().collection('faq_templates').doc('faq-new');
+
+      await assertFails(
+        faqDoc.set({
+          creatorId: 'alice-uid',
+          question: '', // Empty question
+          answer: 'My rates start at $100 per hour.',
+          keywords: ['pricing', 'rates', 'cost'],
+          category: 'pricing',
+          isActive: true,
+          useCount: 0,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+      );
+    });
+
+    it('denies creating FAQ template with non-zero useCount', async () => {
+      const alice = testEnv.authenticatedContext('alice-uid');
+      const faqDoc = alice.firestore().collection('faq_templates').doc('faq-new');
+
+      await assertFails(
+        faqDoc.set({
+          creatorId: 'alice-uid',
+          question: 'What are your rates?',
+          answer: 'My rates start at $100 per hour.',
+          keywords: ['pricing', 'rates', 'cost'],
+          category: 'pricing',
+          isActive: true,
+          useCount: 5, // Must start at 0
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+      );
+    });
+
+    it('denies unauthenticated user from creating FAQ templates', async () => {
+      const unauthed = testEnv.unauthenticatedContext();
+      const faqDoc = unauthed.firestore().collection('faq_templates').doc('faq-new');
+
+      await assertFails(
+        faqDoc.set({
+          creatorId: 'alice-uid',
+          question: 'What are your rates?',
+          answer: 'My rates start at $100 per hour.',
+          keywords: ['pricing', 'rates', 'cost'],
+          category: 'pricing',
+          isActive: true,
+          useCount: 0,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+      );
+    });
+  });
+
+  describe('FAQ Templates Collection - Update Access (Story 5.4, Subtask 4.4 - CreatorId Immutability)', () => {
+    beforeEach(async () => {
+      // Seed FAQ template for update tests
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const firestore = context.firestore();
+        await firestore.collection('faq_templates').doc('faq1').set({
+          creatorId: 'alice-uid',
+          question: 'What are your rates?',
+          answer: 'My rates start at $100 per hour.',
+          keywords: ['pricing', 'rates', 'cost'],
+          category: 'pricing',
+          isActive: true,
+          useCount: 0,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      });
+    });
+
+    it('allows creator to update their own FAQ template', async () => {
+      const alice = testEnv.authenticatedContext('alice-uid');
+      const faqDoc = alice.firestore().collection('faq_templates').doc('faq1');
+
+      await assertSucceeds(
+        faqDoc.update({
+          answer: 'Updated rates: $150 per hour.',
+          updatedAt: new Date(),
+        })
+      );
+    });
+
+    it('denies non-creator from updating FAQ template', async () => {
+      const bob = testEnv.authenticatedContext('bob-uid');
+      const faqDoc = bob.firestore().collection('faq_templates').doc('faq1');
+
+      await assertFails(
+        faqDoc.update({
+          answer: 'Hacked answer!',
+        })
+      );
+    });
+
+    it('denies changing creatorId during update', async () => {
+      const alice = testEnv.authenticatedContext('alice-uid');
+      const faqDoc = alice.firestore().collection('faq_templates').doc('faq1');
+
+      await assertFails(
+        faqDoc.update({
+          creatorId: 'bob-uid', // Attempt to change creatorId
+          answer: 'Updated answer',
+        })
+      );
+    });
+
+    it('allows updating isActive status', async () => {
+      const alice = testEnv.authenticatedContext('alice-uid');
+      const faqDoc = alice.firestore().collection('faq_templates').doc('faq1');
+
+      await assertSucceeds(
+        faqDoc.update({
+          isActive: false,
+          updatedAt: new Date(),
+        })
+      );
+    });
+
+    it('allows updating useCount', async () => {
+      const alice = testEnv.authenticatedContext('alice-uid');
+      const faqDoc = alice.firestore().collection('faq_templates').doc('faq1');
+
+      await assertSucceeds(
+        faqDoc.update({
+          useCount: 5,
+          lastUsedAt: new Date(),
+        })
+      );
+    });
+
+    it('denies unauthenticated user from updating FAQ templates', async () => {
+      const unauthed = testEnv.unauthenticatedContext();
+      const faqDoc = unauthed.firestore().collection('faq_templates').doc('faq1');
+
+      await assertFails(
+        faqDoc.update({
+          answer: 'Unauthenticated update',
+        })
+      );
+    });
+  });
+
+  describe('FAQ Templates Collection - Delete Access (Story 5.4)', () => {
+    beforeEach(async () => {
+      // Seed FAQ template for delete tests
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const firestore = context.firestore();
+        await firestore.collection('faq_templates').doc('faq1').set({
+          creatorId: 'alice-uid',
+          question: 'What are your rates?',
+          answer: 'My rates start at $100 per hour.',
+          keywords: ['pricing', 'rates', 'cost'],
+          category: 'pricing',
+          isActive: true,
+          useCount: 0,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      });
+    });
+
+    it('allows creator to delete their own FAQ template', async () => {
+      const alice = testEnv.authenticatedContext('alice-uid');
+      const faqDoc = alice.firestore().collection('faq_templates').doc('faq1');
+
+      await assertSucceeds(faqDoc.delete());
+    });
+
+    it('denies non-creator from deleting FAQ template', async () => {
+      const bob = testEnv.authenticatedContext('bob-uid');
+      const faqDoc = bob.firestore().collection('faq_templates').doc('faq1');
+
+      await assertFails(faqDoc.delete());
+    });
+
+    it('denies unauthenticated user from deleting FAQ templates', async () => {
+      const unauthed = testEnv.unauthenticatedContext();
+      const faqDoc = unauthed.firestore().collection('faq_templates').doc('faq1');
+
+      await assertFails(faqDoc.delete());
+    });
+  });
+
   describe('Default Deny - Undefined Paths', () => {
     it('denies authenticated user from reading undefined collection', async () => {
       const alice = testEnv.authenticatedContext('alice-uid');

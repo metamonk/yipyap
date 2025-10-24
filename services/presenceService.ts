@@ -265,10 +265,25 @@ class PresenceService {
     try {
       // Set offline status
       if (this.devicePresenceRef) {
-        await this.setDevicePresence('offline');
+        try {
+          await this.setDevicePresence('offline');
 
-        // Cancel onDisconnect handlers
-        await onDisconnect(this.devicePresenceRef).cancel();
+          // Cancel onDisconnect handlers (only if database is connected)
+          // Additional safety check: ensure ref has valid internal state before calling onDisconnect
+          if (this.isConnected && this.devicePresenceRef) {
+            try {
+              // @ts-ignore - accessing internal _repo property for safety check
+              if (this.devicePresenceRef._repo !== null && this.devicePresenceRef._repo !== undefined) {
+                await onDisconnect(this.devicePresenceRef).cancel();
+              }
+            } catch (disconnectError) {
+              console.warn('Failed to cancel onDisconnect:', disconnectError);
+            }
+          }
+        } catch (refError) {
+          // Database ref might be invalid if Firebase already cleaned up
+          console.warn('Failed to cancel onDisconnect handler:', refError);
+        }
       }
 
       // Clear away timer
@@ -276,13 +291,21 @@ class PresenceService {
 
       // Remove connection listener
       if (this.connectionUnsubscribe) {
-        this.connectionUnsubscribe();
+        try {
+          this.connectionUnsubscribe();
+        } catch (unsubError) {
+          console.warn('Failed to unsubscribe from connection listener:', unsubError);
+        }
         this.connectionUnsubscribe = null;
       }
 
       // Remove app state listener
       if (this.appStateSubscription) {
-        this.appStateSubscription.remove();
+        try {
+          this.appStateSubscription.remove();
+        } catch (appStateError) {
+          console.warn('Failed to remove app state listener:', appStateError);
+        }
         this.appStateSubscription = null;
       }
 

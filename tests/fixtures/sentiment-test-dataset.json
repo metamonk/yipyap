@@ -1,0 +1,880 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "created": "2025-10-23",
+    "purpose": "Story 5.3 - Sentiment Analysis Accuracy Testing (AC 5: 90%+ accuracy)",
+    "totalMessages": 108,
+    "distribution": {
+      "positive": 27,
+      "negative": 27,
+      "neutral": 27,
+      "mixed": 27
+    }
+  },
+  "messages": [
+    {
+      "id": "pos_001",
+      "text": "I absolutely love your content! You're amazing!",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.7, 1.0],
+      "expectedEmotionalTones": ["excited", "grateful"],
+      "rationale": "Clear positive language with enthusiasm"
+    },
+    {
+      "id": "pos_002",
+      "text": "Thank you so much for everything you do. You've really helped me!",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.6, 0.9],
+      "expectedEmotionalTones": ["grateful", "hopeful"],
+      "rationale": "Genuine appreciation"
+    },
+    {
+      "id": "pos_003",
+      "text": "This is incredible! Best thing I've seen all week!",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.8, 1.0],
+      "expectedEmotionalTones": ["excited", "happy"],
+      "rationale": "High enthusiasm"
+    },
+    {
+      "id": "pos_004",
+      "text": "You're doing great work, keep it up!",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.5, 0.8],
+      "expectedEmotionalTones": ["supportive", "encouraging"],
+      "rationale": "Encouragement"
+    },
+    {
+      "id": "pos_005",
+      "text": "I'm so happy to be part of this community!",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.7, 0.9],
+      "expectedEmotionalTones": ["happy", "grateful"],
+      "rationale": "Community appreciation"
+    },
+    {
+      "id": "pos_006",
+      "text": "Your videos make my day better every time",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.6, 0.9],
+      "expectedEmotionalTones": ["grateful", "content"],
+      "rationale": "Sustained positive impact"
+    },
+    {
+      "id": "pos_007",
+      "text": "Can't wait for the next update! So excited!",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.7, 0.9],
+      "expectedEmotionalTones": ["excited", "anticipating"],
+      "rationale": "Anticipatory excitement"
+    },
+    {
+      "id": "pos_008",
+      "text": "You inspire me to be better. Thank you!",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.7, 0.9],
+      "expectedEmotionalTones": ["grateful", "inspired"],
+      "rationale": "Inspirational gratitude"
+    },
+    {
+      "id": "pos_009",
+      "text": "This is exactly what I needed! Perfect timing!",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.7, 0.9],
+      "expectedEmotionalTones": ["relieved", "happy"],
+      "rationale": "Relief and satisfaction"
+    },
+    {
+      "id": "pos_010",
+      "text": "Your content is always top-notch. Never disappoints!",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.6, 0.8],
+      "expectedEmotionalTones": ["satisfied", "appreciative"],
+      "rationale": "Consistent appreciation"
+    },
+    {
+      "id": "pos_011",
+      "text": "Best creator on the platform hands down",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.8, 1.0],
+      "expectedEmotionalTones": ["admiring", "enthusiastic"],
+      "rationale": "Strong praise"
+    },
+    {
+      "id": "pos_012",
+      "text": "I appreciate your honesty and transparency",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.5, 0.7],
+      "expectedEmotionalTones": ["respectful", "grateful"],
+      "rationale": "Values-based appreciation"
+    },
+    {
+      "id": "pos_013",
+      "text": "You've changed my life for the better",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.8, 1.0],
+      "expectedEmotionalTones": ["grateful", "transformed"],
+      "rationale": "Life-changing impact"
+    },
+    {
+      "id": "pos_014",
+      "text": "This made me smile! Thanks for sharing",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.6, 0.8],
+      "expectedEmotionalTones": ["happy", "grateful"],
+      "rationale": "Emotional response"
+    },
+    {
+      "id": "pos_015",
+      "text": "You always know exactly what to say",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.6, 0.8],
+      "expectedEmotionalTones": ["appreciative", "understood"],
+      "rationale": "Feeling understood"
+    },
+    {
+      "id": "pos_016",
+      "text": "Love love love this so much!!!",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.8, 1.0],
+      "expectedEmotionalTones": ["excited", "enthusiastic"],
+      "rationale": "Extreme enthusiasm"
+    },
+    {
+      "id": "pos_017",
+      "text": "Finally someone who gets it! Thank you!",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.6, 0.8],
+      "expectedEmotionalTones": ["relieved", "grateful"],
+      "rationale": "Relief at being understood"
+    },
+    {
+      "id": "pos_018",
+      "text": "This is pure gold. Sharing with everyone I know",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.7, 0.9],
+      "expectedEmotionalTones": ["excited", "enthusiastic"],
+      "rationale": "High value perception"
+    },
+    {
+      "id": "pos_019",
+      "text": "You're the reason I joined this platform",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.7, 0.9],
+      "expectedEmotionalTones": ["admiring", "loyal"],
+      "rationale": "Strong loyalty"
+    },
+    {
+      "id": "pos_020",
+      "text": "Keep doing what you're doing. It's working!",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.5, 0.7],
+      "expectedEmotionalTones": ["supportive", "encouraging"],
+      "rationale": "Validation"
+    },
+    {
+      "id": "pos_021",
+      "text": "Your positivity is contagious!",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.6, 0.8],
+      "expectedEmotionalTones": ["appreciative", "uplifted"],
+      "rationale": "Emotional impact"
+    },
+    {
+      "id": "pos_022",
+      "text": "This is the highlight of my day",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.7, 0.9],
+      "expectedEmotionalTones": ["happy", "grateful"],
+      "rationale": "Day-making content"
+    },
+    {
+      "id": "pos_023",
+      "text": "You deserve all the success coming your way",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.6, 0.8],
+      "expectedEmotionalTones": ["supportive", "hopeful"],
+      "rationale": "Well-wishing"
+    },
+    {
+      "id": "pos_024",
+      "text": "Can't believe this is free! So valuable!",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.7, 0.9],
+      "expectedEmotionalTones": ["grateful", "amazed"],
+      "rationale": "Perceived value"
+    },
+    {
+      "id": "pos_025",
+      "text": "You make everything look so easy!",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.5, 0.7],
+      "expectedEmotionalTones": ["admiring", "impressed"],
+      "rationale": "Skill appreciation"
+    },
+    {
+      "id": "pos_026",
+      "text": "This is f***ing awesome!",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.7, 0.9],
+      "expectedEmotionalTones": ["excited", "enthusiastic"],
+      "rationale": "Profanity without negativity - extreme positive"
+    },
+    {
+      "id": "pos_027",
+      "text": "Brilliant work as always. Never stop creating!",
+      "expectedSentiment": "positive",
+      "expectedScoreRange": [0.6, 0.8],
+      "expectedEmotionalTones": ["appreciative", "supportive"],
+      "rationale": "Consistent quality praise"
+    },
+    {
+      "id": "neg_001",
+      "text": "This is complete garbage. I'm so disappointed and angry.",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-1.0, -0.7],
+      "expectedEmotionalTones": ["angry", "disappointed"],
+      "rationale": "Strong negative language indicating crisis"
+    },
+    {
+      "id": "neg_002",
+      "text": "I hate this. Waste of my time.",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.8, -0.5],
+      "expectedEmotionalTones": ["angry", "frustrated"],
+      "rationale": "Direct negative expression"
+    },
+    {
+      "id": "neg_003",
+      "text": "You've really let me down. Expected better.",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.6, -0.3],
+      "expectedEmotionalTones": ["disappointed", "frustrated"],
+      "rationale": "Disappointment"
+    },
+    {
+      "id": "neg_004",
+      "text": "This is terrible and you should be ashamed",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.9, -0.6],
+      "expectedEmotionalTones": ["angry", "judgmental"],
+      "rationale": "Attack on creator"
+    },
+    {
+      "id": "neg_005",
+      "text": "Worst content I've ever seen. Unsubscribing.",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.8, -0.5],
+      "expectedEmotionalTones": ["angry", "disgusted"],
+      "rationale": "Extreme criticism"
+    },
+    {
+      "id": "neg_006",
+      "text": "I'm so frustrated right now. Nothing works.",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.7, -0.4],
+      "expectedEmotionalTones": ["frustrated", "helpless"],
+      "rationale": "Frustration expression"
+    },
+    {
+      "id": "neg_007",
+      "text": "This is absolutely unacceptable. I'm furious.",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.9, -0.6],
+      "expectedEmotionalTones": ["angry", "outraged"],
+      "rationale": "High anger"
+    },
+    {
+      "id": "neg_008",
+      "text": "You're a fraud and everyone knows it",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.9, -0.6],
+      "expectedEmotionalTones": ["angry", "accusing"],
+      "rationale": "Personal attack"
+    },
+    {
+      "id": "neg_009",
+      "text": "I can't believe you would do this. Betrayed.",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.7, -0.4],
+      "expectedEmotionalTones": ["betrayed", "hurt"],
+      "rationale": "Betrayal feeling"
+    },
+    {
+      "id": "neg_010",
+      "text": "This made me cry. I'm heartbroken.",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.8, -0.5],
+      "expectedEmotionalTones": ["sad", "heartbroken"],
+      "rationale": "Deep sadness"
+    },
+    {
+      "id": "neg_011",
+      "text": "I'm done with you. Never coming back.",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.7, -0.4],
+      "expectedEmotionalTones": ["angry", "decisive"],
+      "rationale": "Finality in rejection"
+    },
+    {
+      "id": "neg_012",
+      "text": "You ruined everything. I'm devastated.",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.9, -0.6],
+      "expectedEmotionalTones": ["devastated", "angry"],
+      "rationale": "Extreme negative impact"
+    },
+    {
+      "id": "neg_013",
+      "text": "This is a disaster. How could you?",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.8, -0.5],
+      "expectedEmotionalTones": ["shocked", "disappointed"],
+      "rationale": "Disbelief and criticism"
+    },
+    {
+      "id": "neg_014",
+      "text": "I feel so alone. Nobody cares about me.",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.8, -0.5],
+      "expectedEmotionalTones": ["lonely", "hopeless"],
+      "rationale": "Loneliness - crisis indicator"
+    },
+    {
+      "id": "neg_015",
+      "text": "I regret to inform you this is unacceptable",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.6, -0.3],
+      "expectedEmotionalTones": ["formal", "disapproving"],
+      "rationale": "Formal negative - polite but critical"
+    },
+    {
+      "id": "neg_016",
+      "text": "Stop messaging me. Leave me alone.",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.7, -0.4],
+      "expectedEmotionalTones": ["frustrated", "annoyed"],
+      "rationale": "Rejection"
+    },
+    {
+      "id": "neg_017",
+      "text": "You're making me anxious with all these messages",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.6, -0.3],
+      "expectedEmotionalTones": ["anxious", "overwhelmed"],
+      "rationale": "Anxiety expression"
+    },
+    {
+      "id": "neg_018",
+      "text": "I can't take this anymore. It's too much.",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.8, -0.5],
+      "expectedEmotionalTones": ["overwhelmed", "hopeless"],
+      "rationale": "Crisis indicator - giving up"
+    },
+    {
+      "id": "neg_019",
+      "text": "This is pathetic. Do better.",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.7, -0.4],
+      "expectedEmotionalTones": ["contemptuous", "disappointed"],
+      "rationale": "Contempt"
+    },
+    {
+      "id": "neg_020",
+      "text": "You've lost a loyal fan today. Goodbye.",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.6, -0.3],
+      "expectedEmotionalTones": ["disappointed", "final"],
+      "rationale": "Loss statement"
+    },
+    {
+      "id": "neg_021",
+      "text": "I'm so angry I could scream",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.8, -0.5],
+      "expectedEmotionalTones": ["angry", "enraged"],
+      "rationale": "Extreme anger"
+    },
+    {
+      "id": "neg_022",
+      "text": "This is why I have trust issues now",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.7, -0.4],
+      "expectedEmotionalTones": ["hurt", "distrustful"],
+      "rationale": "Damage to trust"
+    },
+    {
+      "id": "neg_023",
+      "text": "You don't care about your fans at all",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.7, -0.4],
+      "expectedEmotionalTones": ["disappointed", "neglected"],
+      "rationale": "Feeling uncared for"
+    },
+    {
+      "id": "neg_024",
+      "text": "I'm reporting this. This crosses the line.",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.8, -0.5],
+      "expectedEmotionalTones": ["angry", "offended"],
+      "rationale": "Escalation threat"
+    },
+    {
+      "id": "neg_025",
+      "text": "Delete this immediately. This is offensive.",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.8, -0.5],
+      "expectedEmotionalTones": ["offended", "demanding"],
+      "rationale": "Demand for removal"
+    },
+    {
+      "id": "neg_026",
+      "text": "I'm going to sue you for this",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.9, -0.6],
+      "expectedEmotionalTones": ["threatening", "angry"],
+      "rationale": "Legal threat - crisis indicator"
+    },
+    {
+      "id": "neg_027",
+      "text": "My lawyer will be in touch about this",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.8, -0.5],
+      "expectedEmotionalTones": ["threatening", "formal"],
+      "rationale": "Legal threat"
+    },
+    {
+      "id": "neu_001",
+      "text": "I see. Thanks for the info.",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["neutral", "informational"],
+      "rationale": "Factual acknowledgment"
+    },
+    {
+      "id": "neu_002",
+      "text": "Okay got it",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["neutral"],
+      "rationale": "Simple confirmation"
+    },
+    {
+      "id": "neu_003",
+      "text": "What time does the event start?",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["curious", "neutral"],
+      "rationale": "Information request"
+    },
+    {
+      "id": "neu_004",
+      "text": "Can you send me the link?",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["neutral"],
+      "rationale": "Simple request"
+    },
+    {
+      "id": "neu_005",
+      "text": "I'll check it out later",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["neutral"],
+      "rationale": "Non-committal response"
+    },
+    {
+      "id": "neu_006",
+      "text": "That's interesting",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.2, 0.4],
+      "expectedEmotionalTones": ["curious", "neutral"],
+      "rationale": "Mild interest"
+    },
+    {
+      "id": "neu_007",
+      "text": "I understand what you mean",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["understanding", "neutral"],
+      "rationale": "Comprehension"
+    },
+    {
+      "id": "neu_008",
+      "text": "Let me think about it",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["thoughtful", "neutral"],
+      "rationale": "Consideration"
+    },
+    {
+      "id": "neu_009",
+      "text": "I'll let you know",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["neutral"],
+      "rationale": "Deferral"
+    },
+    {
+      "id": "neu_010",
+      "text": "Maybe",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["uncertain", "neutral"],
+      "rationale": "Uncertain response"
+    },
+    {
+      "id": "neu_011",
+      "text": "The video is 10 minutes long",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["neutral", "informational"],
+      "rationale": "Factual statement"
+    },
+    {
+      "id": "neu_012",
+      "text": "I saw your post yesterday",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["neutral"],
+      "rationale": "Observation"
+    },
+    {
+      "id": "neu_013",
+      "text": "When is the next stream?",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["curious", "neutral"],
+      "rationale": "Scheduling question"
+    },
+    {
+      "id": "neu_014",
+      "text": "Have you considered this approach?",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["curious", "suggesting"],
+      "rationale": "Suggestion question"
+    },
+    {
+      "id": "neu_015",
+      "text": "I need to go now. Talk later.",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["neutral"],
+      "rationale": "Departure statement"
+    },
+    {
+      "id": "neu_016",
+      "text": "That makes sense",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.2, 0.4],
+      "expectedEmotionalTones": ["understanding", "neutral"],
+      "rationale": "Agreement/comprehension"
+    },
+    {
+      "id": "neu_017",
+      "text": "I'm just browsing",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["neutral"],
+      "rationale": "Casual engagement"
+    },
+    {
+      "id": "neu_018",
+      "text": "Where can I find more info?",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["curious", "neutral"],
+      "rationale": "Information seeking"
+    },
+    {
+      "id": "neu_019",
+      "text": "I'm new here",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["neutral"],
+      "rationale": "Status declaration"
+    },
+    {
+      "id": "neu_020",
+      "text": "How does this work?",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["curious", "confused"],
+      "rationale": "Process question"
+    },
+    {
+      "id": "neu_021",
+      "text": "Is this available in other languages?",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["curious", "neutral"],
+      "rationale": "Feature inquiry"
+    },
+    {
+      "id": "neu_022",
+      "text": "I'm waiting for the update",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["patient", "neutral"],
+      "rationale": "Waiting statement"
+    },
+    {
+      "id": "neu_023",
+      "text": "Sure, no problem",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.2, 0.4],
+      "expectedEmotionalTones": ["agreeable", "neutral"],
+      "rationale": "Acceptance"
+    },
+    {
+      "id": "neu_024",
+      "text": "I'll pass this along",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["neutral", "helpful"],
+      "rationale": "Forwarding action"
+    },
+    {
+      "id": "neu_025",
+      "text": "Noted",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["neutral"],
+      "rationale": "Acknowledgment"
+    },
+    {
+      "id": "neu_026",
+      "text": "What's the price?",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["curious", "neutral"],
+      "rationale": "Price inquiry"
+    },
+    {
+      "id": "neu_027",
+      "text": "I'm still deciding",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["uncertain", "thoughtful"],
+      "rationale": "Deliberation"
+    },
+    {
+      "id": "mix_001",
+      "text": "I love your work but I'm frustrated with the delays",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["appreciative", "frustrated"],
+      "rationale": "Positive content appreciation + negative process frustration"
+    },
+    {
+      "id": "mix_002",
+      "text": "This is great but could be better",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.2, 0.4],
+      "expectedEmotionalTones": ["satisfied", "critical"],
+      "rationale": "Praise with constructive criticism"
+    },
+    {
+      "id": "mix_003",
+      "text": "I'm happy you're trying but frustrated it's not working",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["appreciative", "frustrated"],
+      "rationale": "Effort appreciation + result disappointment"
+    },
+    {
+      "id": "mix_004",
+      "text": "Oh great, another delay. Just what I needed.",
+      "expectedSentiment": "negative",
+      "expectedScoreRange": [-0.7, -0.4],
+      "expectedEmotionalTones": ["sarcastic", "frustrated"],
+      "rationale": "Sarcasm - appears positive but is actually negative"
+    },
+    {
+      "id": "mix_005",
+      "text": "I appreciate the effort but this isn't what I asked for",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["appreciative", "disappointed"],
+      "rationale": "Acknowledgment + dissatisfaction"
+    },
+    {
+      "id": "mix_006",
+      "text": "You're talented but this particular piece missed the mark",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.2, 0.4],
+      "expectedEmotionalTones": ["admiring", "disappointed"],
+      "rationale": "General praise + specific criticism"
+    },
+    {
+      "id": "mix_007",
+      "text": "I'm excited for the future but concerned about the present",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["hopeful", "worried"],
+      "rationale": "Future optimism + current worry"
+    },
+    {
+      "id": "mix_008",
+      "text": "Good concept, poor execution",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["appreciative", "critical"],
+      "rationale": "Idea approval + implementation criticism"
+    },
+    {
+      "id": "mix_009",
+      "text": "I want to support you but I can't with this direction",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["supportive", "conflicted"],
+      "rationale": "Desire to help + disagreement"
+    },
+    {
+      "id": "mix_010",
+      "text": "Thank you for the response, though it's not what I hoped for",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.2, 0.3],
+      "expectedEmotionalTones": ["grateful", "disappointed"],
+      "rationale": "Gratitude + disappointment"
+    },
+    {
+      "id": "mix_011",
+      "text": "I'm torn between staying and leaving",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.4, 0.2],
+      "expectedEmotionalTones": ["conflicted", "uncertain"],
+      "rationale": "Internal conflict"
+    },
+    {
+      "id": "mix_012",
+      "text": "You nailed part of it but completely missed the other part",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["appreciative", "critical"],
+      "rationale": "Partial success"
+    },
+    {
+      "id": "mix_013",
+      "text": "I love the idea but hate the implementation",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["enthusiastic", "disappointed"],
+      "rationale": "Concept vs execution"
+    },
+    {
+      "id": "mix_014",
+      "text": "This gives me hope and anxiety at the same time",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["hopeful", "anxious"],
+      "rationale": "Conflicting emotions"
+    },
+    {
+      "id": "mix_015",
+      "text": "Brilliant in theory, disappointing in practice",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["admiring", "disappointed"],
+      "rationale": "Theory vs reality"
+    },
+    {
+      "id": "mix_016",
+      "text": "I'm impressed by your ambition but worried about the execution",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.2, 0.4],
+      "expectedEmotionalTones": ["impressed", "concerned"],
+      "rationale": "Vision appreciation + practical concern"
+    },
+    {
+      "id": "mix_017",
+      "text": "Great start but needs a lot of work",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.2, 0.4],
+      "expectedEmotionalTones": ["encouraging", "critical"],
+      "rationale": "Encouragement + criticism"
+    },
+    {
+      "id": "mix_018",
+      "text": "I'm cautiously optimistic",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.1, 0.4],
+      "expectedEmotionalTones": ["hopeful", "cautious"],
+      "rationale": "Guarded hope"
+    },
+    {
+      "id": "mix_019",
+      "text": "You've improved but still have a long way to go",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.2, 0.4],
+      "expectedEmotionalTones": ["encouraging", "critical"],
+      "rationale": "Progress recognition + gap acknowledgment"
+    },
+    {
+      "id": "mix_020",
+      "text": "I'm happy for you but sad for me",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["happy", "sad"],
+      "rationale": "Conflicting personal emotions"
+    },
+    {
+      "id": "mix_021",
+      "text": "This is both exciting and terrifying",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.2, 0.4],
+      "expectedEmotionalTones": ["excited", "scared"],
+      "rationale": "Contradictory feelings"
+    },
+    {
+      "id": "mix_022",
+      "text": "I respect your decision but strongly disagree",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["respectful", "disagreeing"],
+      "rationale": "Respect + disagreement"
+    },
+    {
+      "id": "mix_023",
+      "text": "You win some, you lose some",
+      "expectedSentiment": "neutral",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["philosophical", "neutral"],
+      "rationale": "Balanced perspective"
+    },
+    {
+      "id": "mix_024",
+      "text": "It's a step in the right direction, albeit a small one",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.1, 0.4],
+      "expectedEmotionalTones": ["encouraging", "skeptical"],
+      "rationale": "Minimal progress acknowledgment"
+    },
+    {
+      "id": "mix_025",
+      "text": "I'm relieved it's over but sad it had to end",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.3, 0.3],
+      "expectedEmotionalTones": ["relieved", "sad"],
+      "rationale": "End-related conflicting emotions"
+    },
+    {
+      "id": "mix_026",
+      "text": "Your passion is admirable but your approach is flawed",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.2, 0.3],
+      "expectedEmotionalTones": ["admiring", "critical"],
+      "rationale": "Motivation praise + method criticism"
+    },
+    {
+      "id": "mix_027",
+      "text": "I'm proud of you but also a little jealous",
+      "expectedSentiment": "mixed",
+      "expectedScoreRange": [-0.2, 0.4],
+      "expectedEmotionalTones": ["proud", "envious"],
+      "rationale": "Mixed social emotions"
+    }
+  ]
+}

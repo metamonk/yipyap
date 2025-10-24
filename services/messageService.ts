@@ -39,6 +39,7 @@ import {
   getConversation,
 } from './conversationService';
 import { RetryQueue, RetryQueueItem } from './retryQueueService';
+import { categorizationService } from './categorizationService';
 
 /**
  * Optional parameters for creating a conversation if it doesn't exist
@@ -300,13 +301,34 @@ export async function sendMessage(
       console.error('Error auto-restoring deleted conversation:', restoreError);
     }
 
-    // Return message with ID and timestamp (with delivered status)
-    return {
+    // Construct the final message object to return
+    const finalMessage: Message = {
       ...messageData,
       id: messageRef.id,
       timestamp: now,
       status: 'delivered', // Return with updated status
     } as Message;
+
+    // Fire-and-forget: Trigger AI categorization in background (Story 5.2)
+    // This runs asynchronously and does NOT block message delivery
+    // Categorization failures will not affect message send success
+    categorizationService.categorizeNewMessage(finalMessage).catch((error) => {
+      console.error('Background categorization failed (non-blocking):', error);
+    });
+
+    // Fire-and-forget: Trigger FAQ detection in background (Story 5.4)
+    // This runs asynchronously and does NOT block message delivery
+    // FAQ detection failures will not affect message send success
+    // Auto-response is handled by Cloud Function watching for isFAQ=true metadata
+    (async () => {
+      const { detectFAQForNewMessage } = await import('./faqService');
+      return detectFAQForNewMessage(finalMessage);
+    })().catch((error) => {
+      console.error('Background FAQ detection failed (non-blocking):', error);
+    });
+
+    // Return message immediately - don't wait for categorization or FAQ detection
+    return finalMessage;
   } catch (error) {
     console.error('Error sending message:', error);
 

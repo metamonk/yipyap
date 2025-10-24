@@ -66,3 +66,4 @@ firestore-debug.log
 # service account
 serviceAccountKey.json
 key-info.md
+.vercel

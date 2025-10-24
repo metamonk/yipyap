@@ -32,6 +32,7 @@ import { SearchBar } from '@/components/chat/SearchBar';
 import { TypingIndicator } from '@/components/chat/TypingIndicator';
 import { Avatar } from '@/components/common/Avatar';
 import { PresenceIndicator } from '@/components/PresenceIndicator';
+import { ConversationSettings } from '@/components/conversation/ConversationSettings';
 import { useMessages } from '@/hooks/useMessages';
 import { useAuth } from '@/hooks/useAuth';
 import { useMessageSearch } from '@/hooks/useMessageSearch';
@@ -95,6 +96,7 @@ export default function ChatScreen() {
   const [conversationError, setConversationError] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const highlightOpacity = useRef(new Animated.Value(0)).current;
@@ -718,6 +720,18 @@ export default function ChatScreen() {
                 <Text style={styles.menuItemText}>Group Info</Text>
               </TouchableOpacity>
             )}
+            {conversation.type === 'direct' && (
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setShowMenu(false);
+                  setShowSettings(true);
+                }}
+              >
+                <Ionicons name="settings-outline" size={22} color="#007AFF" />
+                <Text style={styles.menuItemText}>Conversation Settings</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={styles.menuItem} onPress={handleMuteToggle}>
               <Ionicons
                 name={isMuted ? 'notifications' : 'notifications-off'}
@@ -739,6 +753,16 @@ export default function ChatScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Conversation Settings Modal (Story 5.4 - Task 13) */}
+      {user && (
+        <ConversationSettings
+          visible={showSettings}
+          onClose={() => setShowSettings(false)}
+          conversation={conversation}
+          userId={user.uid}
+        />
+      )}
 
       {/* Search Bar (conditionally shown) */}
       {showSearch && (

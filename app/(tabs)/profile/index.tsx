@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Alert,
   TouchableOpacity,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -90,7 +91,11 @@ export default function ProfileScreen() {
         }}
       />
 
-      <View style={styles.content}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Profile Photo */}
         <View style={styles.photoSection}>
           <View style={styles.photoContainer}>
@@ -131,6 +136,39 @@ export default function ProfileScreen() {
         <View style={styles.settingsSection}>
           <TouchableOpacity
             style={styles.settingsButton}
+            onPress={() => router.push('/profile/faq-library')}
+          >
+            <View style={styles.settingsContent}>
+              <Ionicons name="chatbubble-ellipses-outline" size={24} color="#007AFF" />
+              <Text style={styles.settingsText}>FAQ Library</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingsButton, styles.settingsButtonMargin]}
+            onPress={() => router.push('/profile/voice-settings')}
+          >
+            <View style={styles.settingsContent}>
+              <Ionicons name="mic-outline" size={24} color="#6C63FF" />
+              <Text style={[styles.settingsText, styles.voiceSettingsText]}>Voice Settings</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingsButton, styles.settingsButtonMargin]}
+            onPress={() => router.push('/profile/ai-cost-dashboard')}
+          >
+            <View style={styles.settingsContent}>
+              <Ionicons name="analytics-outline" size={24} color="#10B981" />
+              <Text style={styles.settingsText}>AI Cost Monitoring</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingsButton, styles.settingsButtonMargin]}
             onPress={() => router.push('/profile/settings')}
           >
             <View style={styles.settingsContent}>
@@ -140,7 +178,7 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
           </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -161,9 +199,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#000000',
   },
-  content: {
+  scrollView: {
     flex: 1,
+  },
+  scrollContent: {
     padding: 24,
+    paddingBottom: 40,
   },
   photoSection: {
     alignItems: 'center',
@@ -236,5 +277,11 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     marginLeft: 12,
     fontWeight: '500',
+  },
+  voiceSettingsText: {
+    color: '#6C63FF',
+  },
+  settingsButtonMargin: {
+    marginTop: 12,
   },
 });

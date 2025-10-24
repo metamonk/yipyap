@@ -6,7 +6,7 @@
 
 - Extend existing Firebase message schema with AI metadata fields
 - Deploy Edge Functions (Vercel) alongside existing Firebase infrastructure
-- Implement unified AI provider abstraction layer using Vercel AI SDK
+- Implement unified AI provider abstraction layer using Vercel AI SDK with OpenAI
 - Maintain full backward compatibility with existing chat features
 - Zero disruption to current real-time messaging performance
 
@@ -42,7 +42,7 @@
 
 1. Edge Function deployed for ultra-fast categorization (<500ms)
 2. Categories: Fan/Business/Spam/Urgent applied to new messages
-3. Fast model selection (GPT-4-Turbo or equivalent)
+3. Fast model selection (GPT-4o-mini for speed and cost efficiency)
 4. Category badges display in conversation list
 5. Filter UI for viewing by category
 6. Batch categorization for existing messages
@@ -106,7 +106,7 @@
 
 1. Cloud Function for voice matching (needs Firestore access)
 2. Training data extraction from creator's message history
-3. High-quality model selection (Claude-3-Opus or equivalent)
+3. High-quality model selection (GPT-4 Turbo for best accuracy)
 4. Response suggestion UI in compose area
 5. Swipe gestures for accept/reject/edit
 6. Weekly retraining scheduled job

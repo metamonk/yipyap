@@ -8,3 +8,7 @@ lib/
 
 # Node.js dependencies
 node_modules/
+
+# Environment variables (contains secrets)
+.env
+.env.local

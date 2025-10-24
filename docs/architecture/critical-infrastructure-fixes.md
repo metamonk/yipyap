@@ -301,6 +301,84 @@ export default function NewConversationScreen() {
 
 ---
 
+### Fix #8: Firebase Service Initialization Order
+
+**File**: `services/categorizationService.ts` line 40
+
+**Date Fixed**: October 23, 2025
+
+**Current Problem**:
+```typescript
+class CategorizationService {
+  private db = getFirebaseDb(); // ❌ Called during module load
+
+  // Singleton created at module load time
+}
+export const categorizationService = new CategorizationService();
+```
+
+**Error Encountered**:
+```
+ERROR  [Error: Firebase not initialized. Call initializeFirebase() first.]
+Code: firebase.ts:143
+  getFirebaseDb (services/firebase.ts:143:20)
+  CategorizationService (services/categorizationService.ts:40:29)
+  <global> (services/categorizationService.ts:388:63)
+```
+
+**Root Cause**:
+- Service singleton is instantiated when the module is imported
+- Module imports cascade during app startup **before** `initializeFirebase()` is called
+- Direct property initialization executes during class construction
+- Firebase instance doesn't exist yet → error
+
+**SOLUTION - USE LAZY GETTER PATTERN**:
+```typescript
+import { Firestore } from 'firebase/firestore';
+import { getFirebaseDb } from './firebase';
+
+class CategorizationService {
+  /**
+   * Lazy-loaded Firestore instance
+   * Uses getter to ensure Firebase is initialized before access
+   */
+  private get db(): Firestore {
+    return getFirebaseDb();
+  }
+
+  // Methods use this.db as normal
+  async categorizeMessage(messageId: string) {
+    const messageRef = doc(this.db, 'messages', messageId); // ✅ Works
+  }
+}
+
+export const categorizationService = new CategorizationService();
+```
+
+**Why This Fixes It**:
+- Getter is only invoked when `this.db` is accessed in a method
+- By that time, app has already called `initializeFirebase()`
+- No eager evaluation during module load
+- Pattern matches other services (e.g., `messageService.ts`)
+
+**Required Imports**:
+```typescript
+import { Firestore } from 'firebase/firestore'; // Add type import
+```
+
+**Service Pattern Rule**:
+- ✅ **DO**: Use lazy getters for Firebase instances in singleton services
+- ❌ **DON'T**: Initialize Firebase instances as class properties
+- ✅ **DO**: Call `getFirebaseDb()` inside function bodies (alternative pattern)
+- ❌ **DON'T**: Assume Firebase is initialized during module load
+
+**Files Using Correct Pattern**:
+- `services/messageService.ts` - calls `getFirebaseDb()` in each function
+- `services/conversationService.ts` - calls `getFirebaseDb()` in each function
+- `services/categorizationService.ts` - NOW uses lazy getter (fixed)
+
+---
+
 ## HIGH PRIORITY FIXES (Fix This Week)
 
 ### Fix #5: Firestore Indexes

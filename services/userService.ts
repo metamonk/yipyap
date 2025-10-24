@@ -347,6 +347,56 @@ export async function updateUserProfile(
 }
 
 /**
+ * Updates user settings with flexible dot notation support
+ * @param uid - User ID
+ * @param settings - Settings object with dot notation keys (e.g., {'voiceMatching.enabled': true})
+ * @returns Promise that resolves when settings are updated
+ * @throws {Error} If update fails
+ * @example
+ * ```typescript
+ * await updateUserSettings('user123', {
+ *   'voiceMatching.enabled': true,
+ *   'voiceMatching.suggestionCount': 2
+ * });
+ * ```
+ */
+export async function updateUserSettings(
+  uid: string,
+  settings: Record<string, any>
+): Promise<void> {
+  const db = getFirebaseDb();
+  const userDocRef = doc(db, 'users', uid);
+
+  try {
+    // Build update object with dot notation for nested fields
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updateData: any = {
+      updatedAt: serverTimestamp(),
+    };
+
+    // Add each setting with dot notation
+    Object.entries(settings).forEach(([key, value]) => {
+      updateData[`settings.${key}`] = value;
+    });
+
+    await updateDoc(userDocRef, updateData);
+  } catch (error) {
+    console.error('Error updating user settings:', error);
+
+    const firestoreError = error as FirestoreError;
+    if (firestoreError.code === 'not-found') {
+      throw new Error('User profile not found.');
+    }
+
+    if (firestoreError.code === 'permission-denied') {
+      throw new Error('Permission denied. You can only update your own settings.');
+    }
+
+    throw new Error('Failed to update user settings. Please try again.');
+  }
+}
+
+/**
  * Fetches a user profile by username
  * @param username - Username to look up
  * @returns Promise resolving to user profile or null if not found
@@ -584,6 +634,91 @@ export async function getNotificationPreferences(
   } catch (error) {
     console.error('Error fetching notification preferences:', error);
     throw new Error('Failed to fetch notification preferences. Please try again.');
+  }
+}
+
+/**
+ * Gets opportunity notification settings for a user (Story 5.6 - Task 9)
+ * @param uid - Firebase Auth user ID
+ * @returns Opportunity notification settings or null if not found
+ * @throws Error if fetching fails
+ * @example
+ * ```typescript
+ * const settings = await getOpportunityNotificationSettings('uid123');
+ * if (settings) {
+ *   console.log('Min score:', settings.minimumScore);
+ * }
+ * ```
+ */
+export async function getOpportunityNotificationSettings(
+  uid: string
+): Promise<User['settings']['opportunityNotifications'] | null> {
+  try {
+    const db = getFirebaseDb();
+    const userDocRef = doc(db, 'users', uid);
+    const userDoc = await getDoc(userDocRef);
+
+    if (!userDoc.exists()) {
+      return null;
+    }
+
+    const userData = userDoc.data() as User;
+    return userData.settings?.opportunityNotifications || null;
+  } catch (error) {
+    console.error('Error fetching opportunity notification settings:', error);
+    throw new Error('Failed to fetch opportunity notification settings. Please try again.');
+  }
+}
+
+/**
+ * Updates opportunity notification settings for a user (Story 5.6 - Task 9)
+ * @param uid - Firebase Auth user ID
+ * @param settings - Opportunity notification settings to save
+ * @throws Error if update fails or user not found
+ * @example
+ * ```typescript
+ * await updateOpportunityNotificationSettings('uid123', {
+ *   enabled: true,
+ *   minimumScore: 75,
+ *   notifyByType: {
+ *     sponsorship: true,
+ *     collaboration: true,
+ *     partnership: true,
+ *     sale: false,
+ *   },
+ *   quietHours: {
+ *     enabled: true,
+ *     start: '22:00',
+ *     end: '08:00',
+ *   },
+ * });
+ * ```
+ */
+export async function updateOpportunityNotificationSettings(
+  uid: string,
+  settings: NonNullable<User['settings']['opportunityNotifications']>
+): Promise<void> {
+  const db = getFirebaseDb();
+  const userDocRef = doc(db, 'users', uid);
+
+  try {
+    await updateDoc(userDocRef, {
+      'settings.opportunityNotifications': settings,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('Error updating opportunity notification settings:', error);
+
+    const firestoreError = error as FirestoreError;
+    if (firestoreError.code === 'not-found') {
+      throw new Error('User profile not found.');
+    }
+
+    if (firestoreError.code === 'permission-denied') {
+      throw new Error('Permission denied. You can only update your own settings.');
+    }
+
+    throw new Error('Failed to update opportunity notification settings. Please try again.');
   }
 }
 

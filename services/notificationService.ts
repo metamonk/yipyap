@@ -13,11 +13,18 @@ import type { EventSubscription } from 'expo-modules-core';
 import type { Message } from '@/types/models';
 import type { NotificationPreferences } from '@/types/user';
 import { fcmTokenService } from './fcmTokenService';
+import { getOpportunityNotificationSettings } from './userService';
 
 /**
- * Notification category types
+ * Notification category types (Story 5.3: Added crisis_detection, Story 5.6: Added business_opportunity)
  */
-export type NotificationCategory = 'message' | 'group' | 'system';
+export type NotificationCategory =
+  | 'message'
+  | 'group'
+  | 'system'
+  | 'crisis_detection'
+  | 'business_opportunity'
+  | 'daily_digest';
 
 /**
  * Notification payload data structure
@@ -72,6 +79,20 @@ Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     // Get notification data
     const data = notification.request.content.data as unknown as NotificationData;
+
+    // Story 5.3: Crisis alerts ALWAYS show (never suppressed)
+    const isCrisisAlert = data.type === 'crisis_detection' || data.notificationType === 'crisis_detection';
+
+    if (isCrisisAlert) {
+      // Crisis alerts bypass all suppression and always show
+      return {
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      };
+    }
 
     // Check if app is in foreground
     const appState = AppState.currentState;
@@ -196,6 +217,140 @@ class NotificationService {
         enableVibrate: true,
         showBadge: false,
       });
+
+      // Crisis alerts channel (Story 5.3)
+      await Notifications.setNotificationChannelAsync('crisis_alerts', {
+        name: 'Crisis Alerts',
+        description: 'High-priority alerts for negative sentiment detection',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 400, 200, 400],
+        lightColor: '#EF4444', // Red
+        sound: 'urgent_alert',
+        enableVibrate: true,
+        showBadge: true,
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      });
+
+      // Business opportunity alerts channel (Story 5.6)
+      await Notifications.setNotificationChannelAsync('business_opportunities', {
+        name: 'Business Opportunities',
+        description: 'High-value business opportunities and sponsorship inquiries',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 300, 150, 300],
+        lightColor: '#6C63FF', // Purple (brand color)
+        sound: 'default',
+        enableVibrate: true,
+        showBadge: true,
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
+      });
+
+      // Daily digest channel (Story 5.8)
+      await Notifications.setNotificationChannelAsync('daily_digest', {
+        name: 'Daily Digest',
+        description: 'Daily AI workflow summaries and suggestions',
+        importance: Notifications.AndroidImportance.DEFAULT,
+        vibrationPattern: [0, 200],
+        lightColor: '#0084FF', // Blue
+        sound: 'default',
+        enableVibrate: true,
+        showBadge: true,
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
+      });
+    }
+  }
+
+  /**
+   * Sends a push notification when daily digest is ready (Story 5.8 - Task 13)
+   * @param userId - The user ID receiving the notification
+   * @param digestSummary - Summary of digest contents
+   * @param digestSummary.totalHandled - Number of conversations handled automatically
+   * @param digestSummary.needReview - Number of suggestions needing review
+   * @param digestSummary.errors - Number of errors encountered
+   * @param digestSummary.digestId - ID of the digest for deep linking
+   * @param digestSummary.date - Date of the digest (YYYY-MM-DD)
+   * @returns Promise that resolves when notification is sent
+   * @throws {Error} When notification fails to send
+   * @remarks
+   * Respects user's quiet hours settings. Only sends if:
+   * - Outside quiet hours OR
+   * - User has no quiet hours configured
+   *
+   * Deep links to: yipyap://daily-digest?date={date}
+   * @example
+   * ```typescript
+   * await sendDailyDigestNotification('user123', {
+   *   totalHandled: 5,
+   *   needReview: 3,
+   *   errors: 0,
+   *   digestId: 'digest-456',
+   *   date: '2025-10-24'
+   * });
+   * ```
+   */
+  async sendDailyDigestNotification(
+    userId: string,
+    digestSummary: {
+      totalHandled: number;
+      needReview: number;
+      errors: number;
+      digestId: string;
+      date: string;
+    }
+  ): Promise<void> {
+    try {
+      // Check quiet hours - don't send if in quiet hours
+      if (this.preferences && this.isInQuietHours()) {
+        console.log('[NotificationService] Skipping daily digest notification - in quiet hours');
+        return;
+      }
+
+      const { totalHandled, needReview, errors, digestId, date } = digestSummary;
+
+      // Build notification body based on digest contents
+      let body = '';
+      if (errors > 0) {
+        body = `⚠️ ${errors} error${errors > 1 ? 's' : ''} occurred. Please review.`;
+      } else if (needReview > 0) {
+        body = `${totalHandled} handled, ${needReview} need${needReview > 1 ? '' : 's'} your review`;
+      } else if (totalHandled > 0) {
+        body = `${totalHandled} conversation${totalHandled > 1 ? 's' : ''} handled automatically`;
+      } else {
+        body = 'Your daily digest is ready';
+      }
+
+      // Build notification data for deep linking
+      const notificationData = {
+        type: 'daily_digest' as NotificationCategory,
+        timestamp: new Date().toISOString(),
+        digestId,
+        date,
+        userId,
+        // Deep link params
+        screen: 'daily-digest',
+        params: { date },
+      };
+
+      const channelId = Platform.OS === 'android' ? 'daily_digest' : undefined;
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '📊 Daily Digest Ready',
+          body,
+          data: notificationData as Record<string, unknown>,
+          sound: this.preferences?.sound !== false ? 'default' : undefined,
+          badge: (await this.getBadgeCount()) + 1,
+          ...(channelId && { channelId }),
+        },
+        trigger: null, // Show immediately
+      });
+
+      // Update badge count
+      await this.incrementBadgeCount();
+
+      console.log('[NotificationService] Daily digest notification sent successfully');
+    } catch (error) {
+      console.error('[NotificationService] Error sending daily digest notification:', error);
+      throw error;
     }
   }
 
@@ -512,6 +667,160 @@ class NotificationService {
    */
   async setBadgeCount(count: number): Promise<boolean> {
     return await Notifications.setBadgeCountAsync(count);
+  }
+}
+
+/**
+ * Checks if current time is within opportunity notification quiet hours (Story 5.6 - Task 10)
+ * @param quietHours - Quiet hours configuration from user settings
+ * @returns True if in quiet hours, false otherwise
+ * @remarks
+ * Handles midnight crossover (e.g., start: "22:00", end: "08:00")
+ * @example
+ * ```typescript
+ * const inQuietHours = isInQuietHoursForOpportunities({
+ *   start: '22:00',
+ *   end: '08:00'
+ * });
+ * ```
+ */
+export function isInQuietHoursForOpportunities(quietHours: {
+  start: string;
+  end: string;
+}): boolean {
+  const now = new Date();
+  const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+  const { start, end } = quietHours;
+
+  // Handle midnight crossover (e.g., 22:00 to 08:00)
+  if (start > end) {
+    return currentTime >= start || currentTime < end;
+  }
+
+  return currentTime >= start && currentTime < end;
+}
+
+/**
+ * Checks if an opportunity notification should be sent based on user settings (Story 5.6 - Task 10)
+ * @param userId - The recipient user ID
+ * @param message - The message with opportunity metadata
+ * @returns Promise resolving to true if notification should be sent
+ * @throws {Error} When failing to load user settings
+ * @remarks
+ * Checks:
+ * - Settings enabled
+ * - Score >= user's minimum threshold
+ * - Type is enabled in notifyByType
+ * - Not in quiet hours
+ * @example
+ * ```typescript
+ * const shouldNotify = await shouldSendOpportunityNotification('user123', message);
+ * if (shouldNotify) {
+ *   await sendOpportunityNotification('user123', message);
+ * }
+ * ```
+ */
+export async function shouldSendOpportunityNotification(
+  userId: string,
+  message: Message
+): Promise<boolean> {
+  try {
+    // Load user's opportunity notification settings
+    const settings = await getOpportunityNotificationSettings(userId);
+
+    // If no settings or disabled, don't notify
+    if (!settings || !settings.enabled) {
+      return false;
+    }
+
+    // Check if score meets minimum threshold
+    const score = message.metadata.opportunityScore || 0;
+    if (score < settings.minimumScore) {
+      return false;
+    }
+
+    // Check if type is enabled for notifications
+    const type = message.metadata.opportunityType;
+    if (type && !settings.notifyByType[type]) {
+      return false;
+    }
+
+    // Check quiet hours
+    if (settings.quietHours?.enabled && settings.quietHours.start && settings.quietHours.end) {
+      if (isInQuietHoursForOpportunities(settings.quietHours)) {
+        return false;
+      }
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error checking opportunity notification settings:', error);
+    // Fail open - if we can't check settings, don't send notification
+    return false;
+  }
+}
+
+/**
+ * Sends a push notification for a high-value business opportunity (Story 5.6 - Task 10)
+ * @param message - The message containing opportunity data
+ * @param senderName - Name of the sender
+ * @param conversationName - Name of the conversation (optional, for groups)
+ * @returns Promise that resolves when notification is sent
+ * @throws {Error} When notification fails to send
+ * @remarks
+ * Notification includes:
+ * - Title: "New Business Opportunity"
+ * - Body: Score, type, and sender info
+ * - Data: conversationId and messageId for deep linking
+ * @example
+ * ```typescript
+ * await sendOpportunityNotification(message, 'John Doe', 'Brand Deals');
+ * ```
+ */
+export async function sendOpportunityNotification(
+  message: Message,
+  senderName: string,
+  conversationName?: string
+): Promise<void> {
+  try {
+    const score = message.metadata.opportunityScore || 0;
+    const type = message.metadata.opportunityType || 'opportunity';
+    const analysis = message.metadata.opportunityAnalysis || '';
+
+    // Format type for display
+    const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
+
+    // Build notification data for deep linking
+    const notificationData = {
+      conversationId: message.conversationId,
+      senderId: message.senderId,
+      messageId: message.id,
+      type: 'business_opportunity' as NotificationCategory,
+      timestamp: new Date().toISOString(),
+      opportunityScore: score,
+      opportunityType: type,
+    };
+
+    const channelId = Platform.OS === 'android' ? 'business_opportunities' : undefined;
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: `💼 ${typeLabel} Opportunity (Score: ${score})`,
+        body: `${senderName}${conversationName ? ` in ${conversationName}` : ''}: ${analysis || message.text.substring(0, 100)}`,
+        data: notificationData as Record<string, unknown>,
+        sound: 'default',
+        badge: (await notificationService.getBadgeCount()) + 1,
+        ...(channelId && { channelId }),
+      },
+      trigger: null, // Show immediately
+    });
+
+    // Update badge count
+    await notificationService.incrementBadgeCount();
+  } catch (error) {
+    console.error('[NotificationService] Error sending opportunity notification:', error);
+    throw error;
   }
 }
 

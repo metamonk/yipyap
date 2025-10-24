@@ -35,8 +35,8 @@ This is the **DEFINITIVE technology selection** for the entire yipyap project. A
 | ----------------- | ----------------------------- | ------- | ------------------------------- | -------------------------------------------------------------------- |
 | Edge Functions    | Vercel Edge Functions         | latest  | Low-latency AI processing       | Global edge network, <100ms cold starts, WebAssembly support         |
 | AI SDK            | Vercel AI SDK                 | latest  | Unified AI provider interface   | Provider abstraction, streaming responses, built-in token management |
-| Primary LLM       | OpenAI GPT-4 Turbo            | latest  | Advanced text generation        | Best-in-class performance for complex tasks, JSON mode support       |
-| Secondary LLM     | Anthropic Claude 3 Haiku      | latest  | Fast, cost-effective processing | Rapid categorization, lower cost for high-volume operations          |
+| Quality LLM       | OpenAI GPT-4 Turbo            | latest  | Advanced text generation        | Best-in-class performance for complex tasks, JSON mode support       |
+| Speed/Cost LLM    | OpenAI GPT-4o-mini            | latest  | Fast, cost-effective processing | Rapid categorization, competitive pricing at $0.15/$0.60 per 1M tokens |
 | Embeddings        | OpenAI text-embedding-3-small | latest  | Semantic search & similarity    | Efficient vector representations for FAQ matching                    |
 | Vector Database   | Pinecone                      | latest  | Vector storage and retrieval    | Managed vector DB for FAQ and voice matching, sub-50ms query times   |
 | AI Monitoring     | Langfuse                      | latest  | LLM observability and analytics | Track AI performance, costs, user satisfaction                       |
@@ -48,11 +48,14 @@ This is the **DEFINITIVE technology selection** for the entire yipyap project. A
 
 ### AI Provider Selection Strategy
 
-- **Real-time categorization**: Claude 3 Haiku (speed priority)
-- **Response generation**: GPT-4 Turbo (quality priority)
+**Note**: yipyap uses an OpenAI-only approach for simplicity and competitive pricing. Multi-provider support can be added later if needed.
+
+- **Real-time categorization**: GPT-4o-mini (speed priority, $0.15/$0.60 per 1M tokens)
+- **Response generation**: GPT-4 Turbo (quality priority, $10.00/$30.00 per 1M tokens)
 - **FAQ matching**: OpenAI Embeddings + Pinecone (semantic search)
-- **Sentiment analysis**: Claude 3 Haiku (cost-effective)
+- **Sentiment analysis**: GPT-4o-mini (cost-effective)
 - **Opportunity scoring**: GPT-4 Turbo (accuracy critical)
+- **Fallback strategy**: Model degradation (GPT-4 Turbo → GPT-4o-mini) instead of cross-provider
 
 ### Cost Optimization Approach
 

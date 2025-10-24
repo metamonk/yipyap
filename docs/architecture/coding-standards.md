@@ -4,6 +4,7 @@
 
 - **Type Sharing:** Always define shared types in `/types` directory and import from there
 - **Firebase Access:** Never access Firebase directly from components - use service layer
+- **Firebase Initialization:** Use lazy getters or function-scoped calls for Firebase instances in services. Never initialize Firebase instances as class properties in singleton services. See: [architecture/critical-infrastructure-fixes.md#fix-8-firebase-service-initialization-order](./critical-infrastructure-fixes.md#fix-8-firebase-service-initialization-order)
 - **Environment Variables:** Access only through Config object, never process.env directly
 - **Error Handling:** All async operations must have try-catch with user-friendly error messages
 - **State Updates:** Never mutate state directly - use proper Zustand actions or setState

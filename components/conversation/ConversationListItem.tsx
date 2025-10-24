@@ -6,15 +6,19 @@
  * last message preview, timestamp, and unread count badge.
  */
 
-import React, { FC, memo, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { FC, memo, useRef, useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, AccessibilityInfo } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/common/Avatar';
 import { CompositeAvatar } from '@/components/common/CompositeAvatar';
 import { Badge } from '@/components/common/Badge';
 import { PresenceIndicator } from '@/components/PresenceIndicator';
+import { SentimentBadge } from '@/components/conversation/SentimentBadge';
+import { OpportunityBadge } from '@/components/conversation/OpportunityBadge';
 import { formatRelativeTime } from '@/utils/dateHelpers';
+import { collection, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { getFirebaseDb } from '@/services/firebase';
 import type { Conversation } from '@/types/models';
 
 /**
@@ -110,14 +114,62 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
     onLongPress,
     onToggleSelect,
   }) => {
-    const { id, type, lastMessage, lastMessageTimestamp, unreadCount, mutedBy } = conversation;
+    const { id, type, lastMessage, lastMessageTimestamp, unreadCount, mutedBy, sentimentStats } = conversation;
     const swipeableRef = useRef<Swipeable>(null);
+
+    // State for opportunity score (Story 5.6)
+    const [opportunityScore, setOpportunityScore] = useState<number>(0);
 
     // Get unread count for current user
     const userUnreadCount = unreadCount[currentUserId] || 0;
 
     // Check if conversation is muted by current user
     const isMuted = mutedBy?.[currentUserId] === true;
+
+    // Check for crisis (Story 5.3)
+    const hasCrisis = sentimentStats?.hasCrisis === true;
+    const lastSentiment = sentimentStats?.lastSentiment;
+    const lastSentimentScore = sentimentStats?.lastSentimentScore;
+
+    // Announce crisis to screen readers when crisis is detected (Story 5.3)
+    useEffect(() => {
+      if (hasCrisis) {
+        AccessibilityInfo.announceForAccessibility(
+          `Urgent: Crisis detected in conversation with ${otherParticipantName}`
+        );
+      }
+    }, [hasCrisis, otherParticipantName]);
+
+    // Subscribe to highest opportunity score in this conversation (Story 5.6)
+    useEffect(() => {
+      // Query for messages with opportunity scores in this conversation
+      const db = getFirebaseDb();
+      const messagesQuery = query(
+        collection(db, 'conversations', id, 'messages'),
+        where('metadata.opportunityScore', '>', 0),
+        orderBy('metadata.opportunityScore', 'desc'),
+        limit(1)
+      );
+
+      const unsubscribe = onSnapshot(
+        messagesQuery,
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const topMessage = snapshot.docs[0].data();
+            const score = topMessage.metadata?.opportunityScore || 0;
+            setOpportunityScore(score);
+          } else {
+            setOpportunityScore(0);
+          }
+        },
+        (error) => {
+          console.error('Failed to query opportunity score:', error);
+          setOpportunityScore(0);
+        }
+      );
+
+      return () => unsubscribe();
+    }, [id]);
 
     // Truncate last message to 50 characters
     const MAX_PREVIEW_LENGTH = 50;
@@ -189,12 +241,21 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
 
     const conversationItem = (
       <TouchableOpacity
-        style={[styles.container, isSelected && styles.selectedContainer]}
+        style={[
+          styles.container,
+          isSelected && styles.selectedContainer,
+          hasCrisis && styles.crisisContainer,
+        ]}
         onPress={handlePress}
         onLongPress={onLongPress}
         delayLongPress={500}
         testID="conversation-item"
         activeOpacity={0.7}
+        accessibilityLabel={
+          hasCrisis
+            ? `Crisis detected. Conversation with ${otherParticipantName}`
+            : `Conversation with ${otherParticipantName}`
+        }
       >
         {/* Checkbox (Story 4.7) - shown in selection mode */}
         {isSelectionMode && (
@@ -226,7 +287,7 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
 
         {/* Content */}
         <View style={styles.content}>
-          {/* Top row: name, mute icon, and timestamp */}
+          {/* Top row: name, mute icon, sentiment badge, opportunity badge, and timestamp */}
           <View style={styles.topRow}>
             <View style={styles.nameContainer}>
               <Text style={styles.name} numberOfLines={1}>
@@ -239,6 +300,21 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
                   color="#8E8E93"
                   style={styles.muteIcon}
                 />
+              )}
+              {lastSentiment && lastSentimentScore !== undefined && (
+                <View style={styles.sentimentBadgeContainer}>
+                  <SentimentBadge
+                    sentiment={lastSentiment}
+                    sentimentScore={lastSentimentScore}
+                    size="small"
+                  />
+                </View>
+              )}
+              {/* Opportunity Badge (Story 5.6) - show only for high-value (>= 70) */}
+              {opportunityScore >= 70 && (
+                <View style={styles.opportunityBadgeContainer}>
+                  <OpportunityBadge score={opportunityScore} size="small" />
+                </View>
               )}
             </View>
             <Text style={styles.timestamp}>{timeAgo}</Text>
@@ -292,6 +368,11 @@ const styles = StyleSheet.create({
   selectedContainer: {
     backgroundColor: '#E3F2FD',
   },
+  crisisContainer: {
+    backgroundColor: '#FFEBEE', // Light red background for crisis (WCAG AA compliant)
+    borderLeftWidth: 4,
+    borderLeftColor: '#EF4444', // Red accent border for crisis
+  },
   checkboxContainer: {
     justifyContent: 'center',
     marginRight: 12,
@@ -328,6 +409,12 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   muteIcon: {
+    marginLeft: 6,
+  },
+  sentimentBadgeContainer: {
+    marginLeft: 6,
+  },
+  opportunityBadgeContainer: {
     marginLeft: 6,
   },
   timestamp: {

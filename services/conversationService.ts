@@ -29,6 +29,10 @@ import {
   arrayUnion,
   arrayRemove,
   writeBatch,
+  limit,
+  startAfter,
+  QueryDocumentSnapshot,
+  DocumentData,
 } from 'firebase/firestore';
 import { getFirebaseDb } from './firebase';
 import { GROUP_SIZE_LIMIT } from '@/constants/groupLimits';
@@ -66,6 +70,20 @@ export function generateConversationId(participantIds: string[]): string {
   }
 
   return participantIds.sort().join('_');
+}
+
+/**
+ * Result type for getUserConversations with pagination support
+ */
+export interface GetConversationsResult {
+  /** Array of conversations ordered by last message timestamp (descending) */
+  conversations: Conversation[];
+
+  /** Last document snapshot for pagination (pass to next getUserConversations call) */
+  lastDoc: QueryDocumentSnapshot<DocumentData> | null;
+
+  /** Whether there are more conversations to load */
+  hasMore: boolean;
 }
 
 /**
@@ -538,33 +556,55 @@ export async function getConversation(conversationId: string): Promise<Conversat
  * Fetches all conversations for a user, sorted by last message timestamp
  *
  * @param userId - User ID to fetch conversations for
- * @returns Promise resolving to array of conversations (newest first)
+ * @param pageSize - Number of conversations to fetch per page (default: 30)
+ * @param lastVisible - Last document from previous page for pagination (optional)
+ * @returns Promise resolving to GetConversationsResult with conversations, pagination cursor, and hasMore flag
  * @throws {FirestoreError} When Firestore operation fails
  *
  * @remarks
  * Uses composite index on participantIds (array-contains) and lastMessageTimestamp (desc).
- * Filters out conversations marked as deleted by the user.
+ * Filters out conversations marked as deleted or archived by the user.
  * Returns conversations ordered by most recent activity first.
+ * Implements cursor-based pagination for cost efficiency (Story 4.8).
  *
  * @example
  * ```typescript
- * const conversations = await getUserConversations('user123');
- * conversations.forEach(conv => {
- *   console.log(`${conv.lastMessage.text} - ${conv.lastMessageTimestamp}`);
- * });
+ * // First page
+ * const result = await getUserConversations('user123', 30);
+ * console.log(`Loaded ${result.conversations.length} conversations`);
+ *
+ * // Next page
+ * if (result.hasMore) {
+ *   const nextResult = await getUserConversations('user123', 30, result.lastDoc);
+ * }
  * ```
  */
-export async function getUserConversations(userId: string): Promise<Conversation[]> {
+export async function getUserConversations(
+  userId: string,
+  pageSize: number = 30,
+  lastVisible?: QueryDocumentSnapshot<DocumentData> | null
+): Promise<GetConversationsResult> {
   try {
     const db = getFirebaseDb();
     const conversationsRef = collection(db, 'conversations');
 
-    // Query conversations where user is a participant, ordered by last message
-    const q = query(
+    // Build query with pagination
+    let q = query(
       conversationsRef,
       where('participantIds', 'array-contains', userId),
-      orderBy('lastMessageTimestamp', 'desc')
+      orderBy('lastMessageTimestamp', 'desc'),
+      limit(pageSize)
     );
+
+    if (lastVisible) {
+      q = query(
+        conversationsRef,
+        where('participantIds', 'array-contains', userId),
+        orderBy('lastMessageTimestamp', 'desc'),
+        startAfter(lastVisible),
+        limit(pageSize)
+      );
+    }
 
     const snapshot = await getDocs(q);
 
@@ -578,7 +618,17 @@ export async function getUserConversations(userId: string): Promise<Conversation
       }
     });
 
-    return conversations;
+    // Get last document for next pagination
+    const lastDoc = snapshot.docs[snapshot.docs.length - 1] || null;
+
+    // Check if there are more conversations
+    const hasMore = snapshot.docs.length === pageSize;
+
+    return {
+      conversations,
+      lastDoc,
+      hasMore,
+    };
   } catch (error) {
     console.error('Error fetching user conversations:', error);
     throw new Error('Failed to fetch conversations. Please try again.');
@@ -695,14 +745,16 @@ export async function markConversationAsRead(
  *
  * @param userId - User ID to fetch conversations for
  * @param callback - Function called with updated conversations array
+ * @param pageSize - Number of conversations to listen to (default: 30, for cost efficiency)
  * @returns Unsubscribe function to stop listening to updates
  * @throws {FirestoreError} When Firestore operation fails
  *
  * @remarks
- * Sets up a real-time listener for all conversations where the user is a participant.
+ * Sets up a real-time listener for conversations where the user is a participant.
  * The callback is invoked whenever conversations are added, modified, or removed.
- * Filters out conversations marked as deleted by the user.
+ * Filters out conversations marked as deleted or archived by the user (client-side).
  * Returns conversations ordered by most recent activity first.
+ * Listener is scoped to pageSize most recent conversations for cost efficiency (Story 4.8).
  *
  * IMPORTANT: Call the returned unsubscribe function when the component unmounts
  * to prevent memory leaks.
@@ -712,7 +764,7 @@ export async function markConversationAsRead(
  * const unsubscribe = subscribeToConversations('user123', (conversations) => {
  *   console.log(`User has ${conversations.length} conversations`);
  *   setConversations(conversations);
- * });
+ * }, 30);
  *
  * // Later, when component unmounts
  * unsubscribe();
@@ -720,17 +772,19 @@ export async function markConversationAsRead(
  */
 export function subscribeToConversations(
   userId: string,
-  callback: (conversations: Conversation[]) => void
+  callback: (conversations: Conversation[]) => void,
+  pageSize: number = 30
 ): Unsubscribe {
   try {
     const db = getFirebaseDb();
     const conversationsRef = collection(db, 'conversations');
 
-    // Query conversations where user is a participant, ordered by last message
+    // Query conversations where user is a participant, ordered by last message, with limit
     const q = query(
       conversationsRef,
       where('participantIds', 'array-contains', userId),
-      orderBy('lastMessageTimestamp', 'desc')
+      orderBy('lastMessageTimestamp', 'desc'),
+      limit(pageSize)
     );
 
     // Set up real-time listener
@@ -903,8 +957,12 @@ export async function checkConversationExists(conversationId: string): Promise<b
  * };
  * ```
  */
-export async function refreshConversations(userId: string): Promise<Conversation[]> {
-  return getUserConversations(userId);
+export async function refreshConversations(
+  userId: string,
+  pageSize: number = 30,
+  lastVisible?: QueryDocumentSnapshot<DocumentData> | null
+): Promise<GetConversationsResult> {
+  return getUserConversations(userId, pageSize, lastVisible);
 }
 
 /**
@@ -1012,6 +1070,79 @@ export async function updateGroupSettings(
     }
 
     throw new Error('Failed to update group settings. Please try again.');
+  }
+}
+
+/**
+ * Updates auto-response settings for a conversation
+ *
+ * @param conversationId - The ID of the conversation to update
+ * @param autoResponseEnabled - Whether FAQ auto-response should be enabled
+ * @param userId - The ID of the user making the change
+ * @returns Promise that resolves when the update is complete
+ * @throws {Error} If conversation not found, user lacks permission, or update fails
+ *
+ * @remarks
+ * Permission requirements:
+ * - For group conversations: Only the group creator can toggle
+ * - For direct conversations: Any participant can toggle
+ *
+ * The autoResponseEnabled setting controls whether FAQ auto-responses are sent
+ * in this conversation. When disabled, FAQ detection still runs but no auto-response
+ * is sent (Story 5.4 - Task 13).
+ *
+ * @example
+ * ```typescript
+ * // Disable auto-responses for a conversation
+ * await updateConversationAutoResponse('conv123', false, 'user456');
+ * ```
+ */
+export async function updateConversationAutoResponse(
+  conversationId: string,
+  autoResponseEnabled: boolean,
+  userId: string
+): Promise<void> {
+  try {
+    const db = getFirebaseDb();
+
+    // First, check if conversation exists and get conversation data
+    const conversation = await getConversation(conversationId);
+    if (!conversation) {
+      throw new Error('Conversation not found.');
+    }
+
+    // Check permissions
+    if (conversation.type === 'group') {
+      // For group conversations, only the creator can toggle
+      if (conversation.creatorId !== userId) {
+        throw new Error('Only the group creator can change auto-response settings.');
+      }
+    } else {
+      // For direct conversations, verify user is a participant
+      if (!conversation.participantIds.includes(userId)) {
+        throw new Error('You must be a participant to change conversation settings.');
+      }
+    }
+
+    // Update the conversation document
+    const conversationRef = doc(db, 'conversations', conversationId);
+    await updateDoc(conversationRef, {
+      autoResponseEnabled,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('Error updating auto-response settings:', error);
+
+    if (error instanceof Error) {
+      throw error;
+    }
+
+    const firestoreError = error as FirestoreError;
+    if (firestoreError.code === 'permission-denied') {
+      throw new Error('Permission denied. You cannot update auto-response settings.');
+    }
+
+    throw new Error('Failed to update auto-response settings. Please try again.');
   }
 }
 

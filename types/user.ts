@@ -137,6 +137,37 @@ export interface PresencePreferences {
 }
 
 /**
+ * Voice matching settings for AI-generated response suggestions
+ *
+ * @remarks
+ * Controls behavior of voice-matched response generation (Story 5.5).
+ * Allows creators to customize suggestion frequency, count, and retraining schedule.
+ *
+ * @example
+ * ```typescript
+ * const voiceSettings: VoiceMatchingSettings = {
+ *   enabled: true,
+ *   autoShowSuggestions: true,
+ *   suggestionCount: 2,
+ *   retrainingSchedule: 'weekly'
+ * };
+ * ```
+ */
+export interface VoiceMatchingSettings {
+  /** Whether voice matching is enabled for this user (default: true) */
+  enabled: boolean;
+
+  /** Whether to automatically show suggestions when conversation loads (default: true) */
+  autoShowSuggestions: boolean;
+
+  /** Number of suggestions to generate per message (1-3, default: 2) */
+  suggestionCount: number;
+
+  /** How often to retrain the voice profile (default: 'weekly') */
+  retrainingSchedule: 'weekly' | 'biweekly' | 'monthly';
+}
+
+/**
  * User settings and preferences
  * @remarks
  * Additional settings will be added in future epics
@@ -153,6 +184,79 @@ export interface UserSettings {
 
   /** Presence and online status preferences */
   presence?: PresencePreferences;
+
+  /**
+   * Voice matching settings for AI response suggestions (Story 5.5)
+   * @remarks
+   * Controls voice-matched response generation behavior.
+   * If not set, defaults to enabled with standard settings.
+   */
+  voiceMatching?: VoiceMatchingSettings;
+
+  /**
+   * Opportunity notification settings (Story 5.6)
+   * @remarks
+   * Controls when and how the user receives notifications for business opportunities.
+   * Allows granular control by opportunity type and score threshold.
+   * If not set, defaults to enabled with score threshold of 70.
+   */
+  opportunityNotifications?: {
+    /** Master toggle for opportunity notifications (default: true) */
+    enabled: boolean;
+
+    /**
+     * Minimum opportunity score to trigger notification (0-100, default: 70)
+     * @remarks
+     * Only opportunities with score >= this threshold will trigger notifications.
+     * Allows users to filter out lower-value opportunities.
+     */
+    minimumScore: number;
+
+    /**
+     * Per-opportunity-type notification toggles
+     * @remarks
+     * Allows users to receive notifications only for specific opportunity types.
+     * All types default to true when not specified.
+     */
+    notifyByType: {
+      /** Notify for sponsorship opportunities (default: true) */
+      sponsorship: boolean;
+
+      /** Notify for collaboration opportunities (default: true) */
+      collaboration: boolean;
+
+      /** Notify for partnership opportunities (default: true) */
+      partnership: boolean;
+
+      /** Notify for sale opportunities (default: false) */
+      sale: boolean;
+    };
+
+    /**
+     * Quiet hours settings for opportunity notifications
+     * @remarks
+     * Prevents opportunity notifications during specified hours.
+     * Useful for creators who want uninterrupted sleep or focus time.
+     */
+    quietHours?: {
+      /** Whether quiet hours are enabled (default: false) */
+      enabled: boolean;
+
+      /**
+       * Start time in 24-hour format (e.g., "22:00")
+       * @remarks
+       * Notifications will be suppressed starting at this time
+       */
+      start: string;
+
+      /**
+       * End time in 24-hour format (e.g., "08:00")
+       * @remarks
+       * Notifications will resume after this time
+       */
+      end: string;
+    };
+  };
 }
 
 /**

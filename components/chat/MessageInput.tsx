@@ -18,7 +18,13 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { onSnapshot, query, collection, orderBy, limit } from 'firebase/firestore';
+import { getFirebaseDb } from '@/services/firebase';
 import { typingService } from '@/services/typingService';
+import { ResponseSuggestions } from './ResponseSuggestions';
+import { voiceMatchingService } from '@/services/voiceMatchingService';
+import { useAuth } from '@/hooks/useAuth';
+import type { Message } from '@/types/models';
 
 /** Maximum allowed message length in characters */
 const MAX_MESSAGE_LENGTH = 1000;
@@ -72,8 +78,13 @@ export const MessageInput: FC<MessageInputProps> = ({
   userId,
   disabled = false,
 }) => {
+  const { userProfile } = useAuth();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+
+  // Voice matching state
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [lastIncomingMessageId, setLastIncomingMessageId] = useState<string | null>(null);
 
   // Track typing state
   const isTypingRef = useRef(false);
@@ -85,6 +96,11 @@ export const MessageInput: FC<MessageInputProps> = ({
    */
   const handleTextChange = (newText: string) => {
     setText(newText);
+
+    // If user starts typing manually, hide AI suggestions (AC: IV1)
+    if (newText.length > 0 && showSuggestions) {
+      setShowSuggestions(false);
+    }
 
     // If text is empty, stop typing
     if (!newText.trim()) {
@@ -163,6 +179,105 @@ export const MessageInput: FC<MessageInputProps> = ({
   };
 
   /**
+   * Callback handlers for ResponseSuggestions component
+   */
+  const handleAcceptSuggestion = (suggestionText: string) => {
+    // Populate input field with accepted suggestion
+    setText(suggestionText);
+    setShowSuggestions(false);
+
+    // Track acceptance feedback for retraining (fire-and-forget with error handling)
+    voiceMatchingService.trackFeedback({
+      suggestion: suggestionText,
+      action: 'accepted',
+    }).catch((error) => {
+      console.error('[MessageInput] Failed to track suggestion feedback:', error);
+    });
+  };
+
+  const handleRejectSuggestion = (suggestionText: string) => {
+    // Track rejection feedback for retraining (fire-and-forget with error handling)
+    voiceMatchingService.trackFeedback({
+      suggestion: suggestionText,
+      action: 'rejected',
+    }).catch((error) => {
+      console.error('[MessageInput] Failed to track suggestion feedback:', error);
+    });
+  };
+
+  const handleEditSuggestion = (suggestionText: string) => {
+    // Populate input field for manual editing
+    setText(suggestionText);
+    setShowSuggestions(false);
+
+    // Track edit feedback for retraining (fire-and-forget with error handling)
+    voiceMatchingService.trackFeedback({
+      suggestion: suggestionText,
+      action: 'edited',
+    }).catch((error) => {
+      console.error('[MessageInput] Failed to track suggestion feedback:', error);
+    });
+  };
+
+  const handleSuggestionsComplete = () => {
+    // Hide suggestions when all processed
+    setShowSuggestions(false);
+  };
+
+  /**
+   * Subscribe to new incoming messages for AI suggestion generation
+   * Listens to the last message in the conversation and triggers suggestion loading
+   * when a new incoming message is detected (not from current user)
+   */
+  useEffect(() => {
+    // Skip if no conversation ID or voice matching disabled
+    if (!conversationId || !userProfile?.settings?.voiceMatching?.enabled) {
+      return;
+    }
+
+    // Subscribe to the last message in this conversation
+    const db = getFirebaseDb();
+    const messagesQuery = query(
+      collection(db, 'conversations', conversationId, 'messages'),
+      orderBy('timestamp', 'desc'),
+      limit(1)
+    );
+
+    const unsubscribe = onSnapshot(
+      messagesQuery,
+      (snapshot) => {
+        if (snapshot.empty) {
+          return;
+        }
+
+        const lastMessage = {
+          id: snapshot.docs[0].id,
+          ...snapshot.docs[0].data(),
+        } as Message;
+
+        // Only show suggestions for incoming messages (not sent by current user)
+        // Don't show if user is already typing (AC: IV1 - non-blocking UI)
+        if (
+          lastMessage.senderId !== userId &&
+          lastMessage.id !== lastIncomingMessageId &&
+          userProfile.settings?.voiceMatching?.autoShowSuggestions &&
+          !text.trim() // Don't show suggestions if user is already typing
+        ) {
+          setLastIncomingMessageId(lastMessage.id);
+          setShowSuggestions(true);
+        }
+      },
+      (error) => {
+        console.error('Error listening for messages:', error);
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [conversationId, userId, userProfile, lastIncomingMessageId, text]);
+
+  /**
    * Cleanup typing state on unmount or navigation
    */
   useEffect(() => {
@@ -182,41 +297,60 @@ export const MessageInput: FC<MessageInputProps> = ({
   const isSendDisabled = !text.trim() || sending || disabled;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.input}
-          value={text}
-          onChangeText={handleTextChange}
-          placeholder="Type a message..."
-          placeholderTextColor="#8E8E93"
-          multiline
-          maxLength={MAX_MESSAGE_LENGTH}
-          editable={!sending && !disabled}
-          testID="message-input"
-        />
+    <View>
+      {/* AI Response Suggestions - displayed above input when available */}
+      {showSuggestions && lastIncomingMessageId && (
+        <View testID="response-suggestions-container">
+          <ResponseSuggestions
+            conversationId={conversationId}
+            incomingMessageId={lastIncomingMessageId}
+            onAccept={handleAcceptSuggestion}
+            onReject={handleRejectSuggestion}
+            onEdit={handleEditSuggestion}
+            suggestionCount={userProfile?.settings?.voiceMatching?.suggestionCount || 2}
+            visible={showSuggestions}
+            onComplete={handleSuggestionsComplete}
+          />
+        </View>
+      )}
 
-        {/* Character counter */}
-        <Text
-          style={[styles.charCount, text.length >= MAX_MESSAGE_LENGTH && styles.charCountLimit]}
+      {/* Message Input Container */}
+      <View style={styles.container}>
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            value={text}
+            onChangeText={handleTextChange}
+            placeholder="Type a message..."
+            placeholderTextColor="#8E8E93"
+            multiline
+            maxLength={MAX_MESSAGE_LENGTH}
+            editable={!sending && !disabled}
+            testID="message-input"
+          />
+
+          {/* Character counter */}
+          <Text
+            style={[styles.charCount, text.length >= MAX_MESSAGE_LENGTH && styles.charCountLimit]}
+          >
+            {text.length}/{MAX_MESSAGE_LENGTH}
+          </Text>
+        </View>
+
+        {/* Send button */}
+        <TouchableOpacity
+          style={[styles.sendButton, isSendDisabled && styles.sendButtonDisabled]}
+          onPress={handleSend}
+          disabled={isSendDisabled}
+          testID="send-button"
         >
-          {text.length}/{MAX_MESSAGE_LENGTH}
-        </Text>
+          {sending ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Ionicons name="send" size={20} color={isSendDisabled ? '#8E8E93' : '#FFFFFF'} />
+          )}
+        </TouchableOpacity>
       </View>
-
-      {/* Send button */}
-      <TouchableOpacity
-        style={[styles.sendButton, isSendDisabled && styles.sendButtonDisabled]}
-        onPress={handleSend}
-        disabled={isSendDisabled}
-        testID="send-button"
-      >
-        {sending ? (
-          <ActivityIndicator size="small" color="#FFFFFF" />
-        ) : (
-          <Ionicons name="send" size={20} color={isSendDisabled ? '#8E8E93' : '#FFFFFF'} />
-        )}
-      </TouchableOpacity>
     </View>
   );
 };

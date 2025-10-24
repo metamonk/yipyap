@@ -85,6 +85,115 @@ export interface Conversation {
 
   /** Timestamp when the conversation was last updated */
   updatedAt: Timestamp;
+
+  /**
+   * Category statistics for AI-categorized messages (Story 5.2)
+   * @remarks
+   * NEW field added in Story 5.2 for message categorization feature.
+   * Enables efficient category filtering in conversation list without querying all messages.
+   * Updated automatically when messages are categorized.
+   */
+  categoryStats?: {
+    /** Category of the most recent message in this conversation */
+    lastCategory?: 'fan_engagement' | 'business_opportunity' | 'spam' | 'urgent' | 'general';
+
+    /** Count of messages by category (e.g., { urgent: 3, fan_engagement: 12 }) */
+    categoryCounts?: Record<string, number>;
+
+    /** Quick flag indicating if conversation has any urgent messages */
+    hasUrgent?: boolean;
+  };
+
+  /**
+   * Sentiment statistics for sentiment-analyzed messages (Story 5.3)
+   * @remarks
+   * NEW field added in Story 5.3 for sentiment analysis and crisis detection.
+   * Tracks sentiment history and crisis events for pattern analysis.
+   * Updated automatically when messages are analyzed for sentiment.
+   */
+  sentimentStats?: {
+    /**
+     * Sentiment classification of the most recent message
+     * @remarks
+     * One of: 'positive', 'negative', 'neutral', 'mixed'
+     */
+    lastSentiment?: 'positive' | 'negative' | 'neutral' | 'mixed';
+
+    /**
+     * Sentiment score of the most recent message (-1 to 1)
+     * @remarks
+     * -1 = very negative, 0 = neutral, +1 = very positive
+     */
+    lastSentimentScore?: number;
+
+    /**
+     * Count of negative messages in this conversation
+     * @remarks
+     * Tracks cumulative count of messages with negative sentiment (score < -0.3)
+     * Used for pattern analysis and conversation prioritization
+     */
+    negativeCount?: number;
+
+    /**
+     * Flag indicating if conversation has active crisis situation
+     * @remarks
+     * Set to true when a message with sentimentScore < -0.7 is detected
+     * Triggers high-priority notifications and UI highlighting
+     */
+    hasCrisis?: boolean;
+
+    /**
+     * Timestamp of the most recent crisis detection
+     * @remarks
+     * Used to track when crisis situations occur and for analytics
+     * Only set when hasCrisis is true
+     */
+    lastCrisisAt?: Timestamp;
+  };
+
+  /**
+   * Whether FAQ auto-response is enabled for this conversation (Story 5.4)
+   * @remarks
+   * NEW field added in Story 5.4 for FAQ auto-response feature.
+   * When true (default), matching FAQs trigger automatic responses.
+   * When false, FAQ detection runs but no auto-response is sent.
+   * Creators can toggle this per conversation for manual control.
+   * Default: true
+   */
+  autoResponseEnabled?: boolean;
+
+  /**
+   * Advanced auto-response settings (Story 5.4)
+   * @remarks
+   * Optional configuration for fine-tuning FAQ auto-response behavior.
+   * If not set, default behavior applies (unlimited, no approval required).
+   */
+  autoResponseSettings?: {
+    /**
+     * Whether auto-response is enabled
+     * @remarks
+     * Mirrors autoResponseEnabled for backwards compatibility
+     */
+    enabled: boolean;
+
+    /**
+     * Maximum auto-responses per day (optional)
+     * @remarks
+     * Limits number of auto-responses sent in 24-hour period
+     * Prevents spam if FAQ matching is too aggressive
+     * Default: unlimited (no limit)
+     */
+    maxPerDay?: number;
+
+    /**
+     * Require manual approval before sending (optional)
+     * @remarks
+     * When true, show preview instead of sending automatically
+     * Useful for sensitive conversations or quality control
+     * Default: false (send automatically)
+     */
+    requireApproval?: boolean;
+  };
 }
 
 /**
@@ -137,16 +246,228 @@ export interface Message {
   /** Server timestamp when the message was created (indexed for ordering) */
   timestamp: Timestamp;
 
-  /** Metadata for future AI features (Phase 2) */
+  /** Metadata for AI features (Phase 2) */
   metadata: {
-    /** AI-assigned category (e.g., "question", "task", "social") - Phase 2 */
-    category?: string;
+    /**
+     * AI-assigned message category (Story 5.2)
+     * @remarks
+     * Automatically assigned by Edge Function categorization:
+     * - fan_engagement: General fan messages, compliments, casual conversation
+     * - business_opportunity: Sponsorship inquiries, collaboration requests
+     * - spam: Promotional content, suspicious links, irrelevant messages
+     * - urgent: Negative sentiment, crisis situations, time-sensitive requests
+     * - general: Default category for low-confidence results
+     */
+    category?: 'fan_engagement' | 'business_opportunity' | 'spam' | 'urgent' | 'general';
 
-    /** Sentiment analysis result ("positive", "negative", "neutral") - Phase 2 */
-    sentiment?: string;
+    /**
+     * Confidence score for the assigned category (0-1 range)
+     * @remarks
+     * Scores below 0.7 result in category defaulting to 'general'
+     */
+    categoryConfidence?: number;
+
+    /**
+     * Sentiment classification result (Story 5.3)
+     * @remarks
+     * Automatically determined by sentiment analysis:
+     * - positive: Positive emotional tone (score > 0.3)
+     * - negative: Negative emotional tone (score < -0.3)
+     * - neutral: Neutral emotional tone (score between -0.3 and 0.3)
+     * - mixed: Conflicting emotional tones detected
+     */
+    sentiment?: 'positive' | 'negative' | 'neutral' | 'mixed';
+
+    /**
+     * Sentiment score on -1 to 1 scale (Story 5.3)
+     * @remarks
+     * Numerical sentiment rating:
+     * - 1.0 to 0.5: Very positive to moderately positive
+     * - 0.5 to -0.5: Neutral range
+     * - -0.5 to -1.0: Moderately negative to very negative
+     * - Scores < -0.5 automatically trigger "urgent" category
+     * - Scores < -0.7 trigger crisis detection
+     */
+    sentimentScore?: number;
+
+    /**
+     * Array of emotional tones detected in the message (Story 5.3)
+     * @remarks
+     * Examples: ['excited', 'grateful', 'frustrated', 'curious', 'angry', 'hopeful']
+     * Multiple tones can be present simultaneously (e.g., mixed sentiment)
+     */
+    emotionalTone?: string[];
 
     /** Whether AI processing has been completed */
     aiProcessed?: boolean;
+
+    /**
+     * Timestamp when AI processing was completed (Story 5.3)
+     * @remarks
+     * Used to track processing latency and debug AI operations
+     */
+    aiProcessedAt?: Timestamp;
+
+    /**
+     * AI model version used for processing (Story 5.3)
+     * @remarks
+     * Example: 'gpt-4o-mini'
+     * Helps track which model version was used for analysis
+     */
+    aiVersion?: string;
+
+    /**
+     * Whether this message matches an FAQ template (Story 5.4)
+     * @remarks
+     * Set to true when message semantically matches a creator's FAQ template
+     * with confidence > 0.85. Triggers automatic response workflow.
+     */
+    isFAQ?: boolean;
+
+    /**
+     * Matched FAQ template ID (Story 5.4)
+     * @remarks
+     * Reference to the FAQ template document in faq_templates collection
+     * Only set when isFAQ is true
+     */
+    faqTemplateId?: string;
+
+    /**
+     * FAQ match confidence score 0-1 (Story 5.4)
+     * @remarks
+     * Cosine similarity score from Pinecone vector search
+     * - 0.85+: High confidence - auto-response triggered
+     * - 0.70-0.84: Medium confidence - suggested to creator
+     * - <0.70: Low confidence - no FAQ match
+     */
+    faqMatchConfidence?: number;
+
+    /**
+     * Whether an automatic response was sent for this message (Story 5.4)
+     * @remarks
+     * Set to true when an auto-response message is created and sent.
+     * Used to display "Auto-replied" badge in UI
+     */
+    autoResponseSent?: boolean;
+
+    /**
+     * Auto-response message ID (Story 5.4)
+     * @remarks
+     * Reference to the message document that contains the auto-response
+     * Links the original message to its automatic reply
+     */
+    autoResponseId?: string;
+
+    /**
+     * Suggested FAQ for creator approval (Story 5.4)
+     * @remarks
+     * Set when FAQ match has medium confidence (0.70-0.84)
+     * Creator can manually approve and send the suggested response
+     */
+    suggestedFAQ?: {
+      /** FAQ template ID */
+      templateId: string;
+
+      /** FAQ question text */
+      question: string;
+
+      /** FAQ answer text */
+      answer: string;
+
+      /** Match confidence score */
+      confidence: number;
+    };
+
+    /**
+     * AI-generated response suggestion (Story 5.5)
+     * @remarks
+     * Voice-matched response suggestion generated by GPT-4 Turbo.
+     * Based on the creator's voice profile and conversation context.
+     * Presented to creator for acceptance, editing, or rejection.
+     */
+    suggestedResponse?: string;
+
+    /**
+     * Whether the suggested response was approved (Story 5.5)
+     * @remarks
+     * Set to true when creator marks the suggestion as good quality.
+     * Used for tracking voice matching accuracy and retraining.
+     */
+    suggestedResponseApproved?: boolean;
+
+    /**
+     * Whether the creator used the suggestion (Story 5.5)
+     * @remarks
+     * Set to true when creator accepts and sends the suggested response.
+     * Helps measure voice matching effectiveness and user satisfaction.
+     */
+    suggestionUsed?: boolean;
+
+    /**
+     * Whether the creator edited the suggestion before sending (Story 5.5)
+     * @remarks
+     * Set to true when creator modifies the suggestion before sending.
+     * Indicates good direction but not perfect match.
+     * Used to refine voice profile in retraining.
+     */
+    suggestionEdited?: boolean;
+
+    /**
+     * Whether the creator rejected the suggestion (Story 5.5)
+     * @remarks
+     * Set to true when creator dismisses the suggestion without using it.
+     * Helps identify when voice matching is off-target.
+     * Used to improve suggestion quality in retraining.
+     */
+    suggestionRejected?: boolean;
+
+    /**
+     * User satisfaction rating for the suggestion (Story 5.5)
+     * @remarks
+     * Optional 1-5 star rating provided by creator.
+     * Used to calculate averageSatisfactionRating in voice profile metrics.
+     * Helps measure voice matching quality and guide retraining priorities.
+     */
+    suggestionRating?: number;
+
+    /**
+     * Business opportunity score (0-100) (Story 5.6)
+     * @remarks
+     * Automatically calculated when category is 'business_opportunity'.
+     * Scoring algorithm considers:
+     * - Brand/sponsorship mentions (+40 points)
+     * - Budget/compensation mentions (+30 points)
+     * - Partnership/collaboration keywords (+20 points)
+     * - Professionalism and seriousness (+10 points)
+     * High scores (>= 70) trigger priority notifications and dashboard display.
+     */
+    opportunityScore?: number;
+
+    /**
+     * Type of business opportunity detected (Story 5.6)
+     * @remarks
+     * Categorizes the business opportunity for filtering and analytics.
+     * Only set when opportunityScore is present.
+     */
+    opportunityType?: 'sponsorship' | 'collaboration' | 'partnership' | 'sale';
+
+    /**
+     * Detected business keywords and signals (Story 5.6)
+     * @remarks
+     * Array of keywords that contributed to the opportunity score.
+     * Examples: ['sponsorship deal', 'brand collaboration', 'compensation']
+     * Used for debugging and displaying opportunity details to creator.
+     */
+    opportunityIndicators?: string[];
+
+    /**
+     * AI-generated opportunity analysis summary (Story 5.6)
+     * @remarks
+     * Brief 1-sentence summary of the opportunity from GPT-4 Turbo.
+     * Displayed in opportunity cards and notifications.
+     * Example: "Brand sponsorship inquiry with budget discussion"
+     */
+    opportunityAnalysis?: string;
   };
 }
 

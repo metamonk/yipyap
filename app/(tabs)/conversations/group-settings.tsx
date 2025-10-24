@@ -18,6 +18,7 @@ import {
   ScrollView,
   Alert,
   Image,
+  Switch,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,6 +28,7 @@ import { useGroupAdmin } from '@/hooks/useGroupAdmin';
 import {
   getConversation,
   updateGroupSettings,
+  updateConversationAutoResponse,
   leaveGroup,
   addParticipants,
   uploadGroupPhoto,
@@ -63,6 +65,8 @@ export default function GroupSettingsScreen() {
   const [groupPhotoURL, setGroupPhotoURL] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [showAddParticipantsModal, setShowAddParticipantsModal] = useState(false);
+  const [autoResponseEnabled, setAutoResponseEnabled] = useState(true);
+  const [isTogglingAutoResponse, setIsTogglingAutoResponse] = useState(false);
 
   const isAdmin = useGroupAdmin(conversation);
   const isCreator = user && conversation && conversation.creatorId === user.uid;
@@ -90,6 +94,7 @@ export default function GroupSettingsScreen() {
       setConversation(conv);
       setGroupName(conv.groupName || '');
       setGroupPhotoURL(conv.groupPhotoURL || null);
+      setAutoResponseEnabled(conv.autoResponseEnabled !== false); // Default to true if undefined
 
       // Load creator profile if available
       if (conv.creatorId) {
@@ -292,6 +297,66 @@ export default function GroupSettingsScreen() {
     }
   };
 
+  /**
+   * Handle toggling FAQ auto-response setting
+   */
+  const handleToggleAutoResponse = async (enabled: boolean) => {
+    if (!user) {
+      Alert.alert('Error', 'You must be logged in to change settings');
+      return;
+    }
+
+    if (!isCreator) {
+      Alert.alert('Permission Denied', 'Only the group creator can change auto-response settings');
+      return;
+    }
+
+    // Show confirmation dialog when disabling auto-response (AC: 13.5)
+    if (!enabled) {
+      Alert.alert(
+        'Disable Auto-Response',
+        'FAQ auto-responses will no longer be sent in this group. You can re-enable this anytime.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Disable',
+            style: 'destructive',
+            onPress: () => performToggle(enabled),
+          },
+        ]
+      );
+    } else {
+      // No confirmation needed when enabling
+      await performToggle(enabled);
+    }
+  };
+
+  /**
+   * Perform the actual toggle operation
+   */
+  const performToggle = async (enabled: boolean) => {
+    if (!user) return;
+
+    try {
+      setIsTogglingAutoResponse(true);
+      await updateConversationAutoResponse(conversationId, enabled, user.uid);
+      setAutoResponseEnabled(enabled);
+      Alert.alert(
+        'Success',
+        enabled
+          ? 'FAQ auto-responses are now enabled for this group'
+          : 'FAQ auto-responses have been disabled for this group'
+      );
+    } catch (error) {
+      console.error('Error toggling auto-response:', error);
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to update settings');
+      // Revert the switch to previous state
+      setAutoResponseEnabled(!enabled);
+    } finally {
+      setIsTogglingAutoResponse(false);
+    }
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
@@ -397,6 +462,32 @@ export default function GroupSettingsScreen() {
             editable={isAdmin}
           />
           {!isAdmin && <Text style={styles.helperText}>Only admins can edit group name</Text>}
+        </View>
+
+        {/* FAQ Auto-Response Settings (Story 5.4 - Task 13) */}
+        <View style={styles.section}>
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <View style={styles.settingHeader}>
+                <Ionicons name="chatbubbles" size={20} color="#007AFF" style={styles.settingIcon} />
+                <Text style={styles.sectionTitle}>FAQ Auto-Response</Text>
+              </View>
+              <Text style={styles.settingDescription}>
+                Automatically respond to frequently asked questions with saved templates
+              </Text>
+            </View>
+            <Switch
+              value={autoResponseEnabled}
+              onValueChange={handleToggleAutoResponse}
+              disabled={!isCreator || isTogglingAutoResponse}
+              trackColor={{ false: '#E5E5EA', true: '#34C759' }}
+              thumbColor={autoResponseEnabled ? '#FFF' : '#F4F3F4'}
+              ios_backgroundColor="#E5E5EA"
+            />
+          </View>
+          {!isCreator && (
+            <Text style={styles.helperText}>Only the group creator can change this setting</Text>
+          )}
         </View>
 
         {/* Members */}
@@ -652,5 +743,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#FFF',
     fontWeight: '600',
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  settingInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  settingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  settingIcon: {
+    marginRight: 8,
+  },
+  settingDescription: {
+    fontSize: 14,
+    color: '#8E8E93',
+    lineHeight: 18,
   },
 });

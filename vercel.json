@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/detect-faq.ts": {
+      "maxDuration": 10
+    }
+  }
+}

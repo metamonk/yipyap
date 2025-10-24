@@ -156,10 +156,10 @@ service cloud.firestore {
 
       // Update: Enhanced to check creator permissions for group management fields
       allow update: if isParticipant() && (
-        // Regular participants can update per-user fields only
+        // Regular participants can update per-user fields + AI-generated stats (Story 5.2, 5.3)
         (!isGroupManagementUpdate() &&
          request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['archivedBy', 'deletedBy', 'mutedBy', 'unreadCount', 'lastMessage', 'lastMessageTimestamp', 'updatedAt'])) ||
+           .hasOnly(['archivedBy', 'deletedBy', 'mutedBy', 'unreadCount', 'lastMessage', 'lastMessageTimestamp', 'updatedAt', 'categoryStats', 'sentimentStats'])) ||
         // Group creator can update group management fields
         (isGroupCreator() && isGroupManagementUpdate() &&
          // Validate participant array changes if modified
@@ -214,6 +214,265 @@ service cloud.firestore {
         // Delete: Not allowed (messages are immutable)
         allow delete: if false;
       }
+    }
+
+    // FAQ Templates - creators can manage their own templates
+    match /faq_templates/{templateId} {
+      // Read: Only the creator can read their own FAQ templates
+      allow read: if request.auth != null &&
+                    request.auth.uid == resource.data.creatorId;
+
+      // Create: User can create FAQ template with required fields
+      allow create: if request.auth != null &&
+                      request.resource.data.creatorId == request.auth.uid &&
+                      // Validate required fields exist
+                      request.resource.data.keys().hasAll(['creatorId', 'question', 'answer', 'keywords', 'category', 'isActive', 'useCount', 'createdAt', 'updatedAt']) &&
+                      // Validate field types and constraints
+                      request.resource.data.question is string &&
+                      request.resource.data.question.size() > 0 &&
+                      request.resource.data.question.size() <= 500 &&
+                      request.resource.data.answer is string &&
+                      request.resource.data.answer.size() > 0 &&
+                      request.resource.data.answer.size() <= 2000 &&
+                      request.resource.data.keywords is list &&
+                      request.resource.data.category is string &&
+                      request.resource.data.category.size() > 0 &&
+                      request.resource.data.isActive is bool &&
+                      request.resource.data.useCount is number &&
+                      request.resource.data.useCount == 0 &&  // Must start at 0
+                      request.resource.data.createdAt is timestamp &&
+                      request.resource.data.updatedAt is timestamp &&
+                      // Validate optional fields if present
+                      (!request.resource.data.keys().hasAny(['embedding']) || request.resource.data.embedding is list) &&
+                      (!request.resource.data.keys().hasAny(['lastUsedAt']) || request.resource.data.lastUsedAt is timestamp);
+
+      // Update: Creator can update their own FAQ template, but creatorId is immutable
+      allow update: if request.auth != null &&
+                      request.auth.uid == resource.data.creatorId &&
+                      // Ensure creatorId cannot be changed
+                      request.resource.data.creatorId == resource.data.creatorId &&
+                      // Validate field types if being updated
+                      (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['question']) ||
+                       (request.resource.data.question is string &&
+                        request.resource.data.question.size() > 0 &&
+                        request.resource.data.question.size() <= 500)) &&
+                      (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['answer']) ||
+                       (request.resource.data.answer is string &&
+                        request.resource.data.answer.size() > 0 &&
+                        request.resource.data.answer.size() <= 2000)) &&
+                      (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['keywords']) ||
+                       request.resource.data.keywords is list) &&
+                      (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['category']) ||
+                       (request.resource.data.category is string &&
+                        request.resource.data.category.size() > 0)) &&
+                      (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['isActive']) ||
+                       request.resource.data.isActive is bool) &&
+                      (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['useCount']) ||
+                       request.resource.data.useCount is number) &&
+                      (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['embedding']) ||
+                       request.resource.data.embedding is list) &&
+                      (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastUsedAt']) ||
+                       request.resource.data.lastUsedAt is timestamp) &&
+                      (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['updatedAt']) ||
+                       request.resource.data.updatedAt is timestamp);
+
+      // Delete: Only the creator can delete their own FAQ templates
+      allow delete: if request.auth != null &&
+                      request.auth.uid == resource.data.creatorId;
+    }
+
+    // Voice Profiles - creators can manage only their own voice profile
+    match /voice_profiles/{profileId} {
+      // Read: Only the profile owner can read their voice profile
+      // Check profileId instead of resource.data to allow reading non-existent profiles
+      allow read: if request.auth != null &&
+                    profileId == request.auth.uid;
+
+      // Create: User can create their own voice profile with required fields
+      allow create: if request.auth != null &&
+                      request.resource.data.userId == request.auth.uid &&
+                      profileId == request.auth.uid &&  // Document ID must match user ID
+                      // Validate required fields exist
+                      request.resource.data.keys().hasAll(['userId', 'characteristics', 'trainingSampleCount', 'lastTrainedAt', 'modelVersion', 'metrics', 'createdAt', 'updatedAt']) &&
+                      // Validate characteristics object structure
+                      request.resource.data.characteristics is map &&
+                      request.resource.data.characteristics.keys().hasAll(['tone', 'vocabulary', 'sentenceStructure', 'punctuationStyle', 'emojiUsage']) &&
+                      request.resource.data.characteristics.tone is string &&
+                      request.resource.data.characteristics.vocabulary is list &&
+                      request.resource.data.characteristics.sentenceStructure is string &&
+                      request.resource.data.characteristics.punctuationStyle is string &&
+                      request.resource.data.characteristics.emojiUsage in ['none', 'occasional', 'frequent'] &&
+                      // Validate metrics object structure
+                      request.resource.data.metrics is map &&
+                      request.resource.data.metrics.keys().hasAll(['totalSuggestionsGenerated', 'acceptedSuggestions', 'editedSuggestions', 'rejectedSuggestions', 'averageSatisfactionRating']) &&
+                      request.resource.data.metrics.totalSuggestionsGenerated is number &&
+                      request.resource.data.metrics.acceptedSuggestions is number &&
+                      request.resource.data.metrics.editedSuggestions is number &&
+                      request.resource.data.metrics.rejectedSuggestions is number &&
+                      request.resource.data.metrics.averageSatisfactionRating is number &&
+                      // Validate other fields
+                      request.resource.data.trainingSampleCount is number &&
+                      request.resource.data.trainingSampleCount >= 0 &&
+                      request.resource.data.lastTrainedAt is timestamp &&
+                      request.resource.data.modelVersion is string &&
+                      request.resource.data.createdAt is timestamp &&
+                      request.resource.data.updatedAt is timestamp;
+
+      // Update: Owner can update their own voice profile, but userId is immutable
+      allow update: if request.auth != null &&
+                      request.auth.uid == resource.data.userId &&
+                      // Ensure userId cannot be changed
+                      request.resource.data.userId == resource.data.userId &&
+                      // Validate characteristics if being updated
+                      (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['characteristics']) ||
+                       (request.resource.data.characteristics is map &&
+                        (!request.resource.data.characteristics.keys().hasAny(['tone']) || request.resource.data.characteristics.tone is string) &&
+                        (!request.resource.data.characteristics.keys().hasAny(['vocabulary']) || request.resource.data.characteristics.vocabulary is list) &&
+                        (!request.resource.data.characteristics.keys().hasAny(['sentenceStructure']) || request.resource.data.characteristics.sentenceStructure is string) &&
+                        (!request.resource.data.characteristics.keys().hasAny(['punctuationStyle']) || request.resource.data.characteristics.punctuationStyle is string) &&
+                        (!request.resource.data.characteristics.keys().hasAny(['emojiUsage']) || request.resource.data.characteristics.emojiUsage in ['none', 'occasional', 'frequent']))) &&
+                      // Validate metrics if being updated
+                      (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['metrics']) ||
+                       (request.resource.data.metrics is map &&
+                        (!request.resource.data.metrics.keys().hasAny(['totalSuggestionsGenerated']) || request.resource.data.metrics.totalSuggestionsGenerated is number) &&
+                        (!request.resource.data.metrics.keys().hasAny(['acceptedSuggestions']) || request.resource.data.metrics.acceptedSuggestions is number) &&
+                        (!request.resource.data.metrics.keys().hasAny(['editedSuggestions']) || request.resource.data.metrics.editedSuggestions is number) &&
+                        (!request.resource.data.metrics.keys().hasAny(['rejectedSuggestions']) || request.resource.data.metrics.rejectedSuggestions is number) &&
+                        (!request.resource.data.metrics.keys().hasAny(['averageSatisfactionRating']) || request.resource.data.metrics.averageSatisfactionRating is number))) &&
+                      // Validate other fields if being updated
+                      (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['trainingSampleCount']) ||
+                       (request.resource.data.trainingSampleCount is number && request.resource.data.trainingSampleCount >= 0)) &&
+                      (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastTrainedAt']) ||
+                       request.resource.data.lastTrainedAt is timestamp) &&
+                      (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['modelVersion']) ||
+                       request.resource.data.modelVersion is string) &&
+                      (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['updatedAt']) ||
+                       request.resource.data.updatedAt is timestamp);
+
+      // Delete: Only the owner can delete their own voice profile
+      allow delete: if request.auth != null &&
+                      request.auth.uid == resource.data.userId;
+    }
+
+    // AI Training Data - users can manage only their own training data
+    match /ai_training_data/{trainingId} {
+      // Read: Only the data owner can read their training data
+      allow read: if request.auth != null &&
+                    request.auth.uid == resource.data.userId;
+
+      // Create: User can create their own training data with required fields
+      allow create: if request.auth != null &&
+                      request.resource.data.userId == request.auth.uid &&
+                      // Validate required fields exist
+                      request.resource.data.keys().hasAll(['userId', 'type', 'modelVersion', 'processed', 'createdAt']) &&
+                      // Validate type field
+                      request.resource.data.type in ['voice_sample', 'response_feedback', 'categorization_feedback'] &&
+                      // Validate modelVersion is a string
+                      request.resource.data.modelVersion is string &&
+                      // Validate processed is a boolean
+                      request.resource.data.processed is bool &&
+                      // Validate createdAt is a timestamp
+                      request.resource.data.createdAt is timestamp &&
+                      // Validate optional processedAt if present
+                      (!request.resource.data.keys().hasAny(['processedAt']) || request.resource.data.processedAt is timestamp) &&
+                      // Validate voiceSample if present
+                      (!request.resource.data.keys().hasAny(['voiceSample']) ||
+                       (request.resource.data.voiceSample is map &&
+                        request.resource.data.voiceSample.keys().hasAll(['originalMessage', 'userResponse', 'context', 'approved']) &&
+                        request.resource.data.voiceSample.originalMessage is string &&
+                        request.resource.data.voiceSample.userResponse is string &&
+                        request.resource.data.voiceSample.context is string &&
+                        request.resource.data.voiceSample.approved is bool)) &&
+                      // Validate feedback if present
+                      (!request.resource.data.keys().hasAny(['feedback']) ||
+                       (request.resource.data.feedback is map &&
+                        request.resource.data.feedback.keys().hasAll(['originalSuggestion', 'action', 'rating']) &&
+                        request.resource.data.feedback.originalSuggestion is string &&
+                        request.resource.data.feedback.action in ['accepted', 'rejected', 'edited'] &&
+                        request.resource.data.feedback.rating is number &&
+                        request.resource.data.feedback.rating >= 0 &&
+                        request.resource.data.feedback.rating <= 5 &&
+                        (!request.resource.data.feedback.keys().hasAny(['userEdit']) || request.resource.data.feedback.userEdit is string) &&
+                        (!request.resource.data.feedback.keys().hasAny(['comments']) || request.resource.data.feedback.comments is string)));
+
+      // Update: Owner can update their own training data (mainly for marking as processed)
+      allow update: if request.auth != null &&
+                      request.auth.uid == resource.data.userId &&
+                      // Ensure userId cannot be changed
+                      request.resource.data.userId == resource.data.userId &&
+                      // Validate type cannot be changed
+                      (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['type']) ||
+                       request.resource.data.type == resource.data.type) &&
+                      // Validate processed if being updated
+                      (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['processed']) ||
+                       request.resource.data.processed is bool) &&
+                      // Validate processedAt if being updated
+                      (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['processedAt']) ||
+                       request.resource.data.processedAt is timestamp);
+
+      // Delete: Only the owner can delete their own training data
+      allow delete: if request.auth != null &&
+                      request.auth.uid == resource.data.userId;
+    }
+
+    // Daily Agent Configuration - users can read/write their own config
+    match /users/{userId}/ai_workflow_config/{docId} {
+      // Read and Write: Users can only access their own configuration
+      allow read, write: if request.auth != null &&
+                            request.auth.uid == userId;
+    }
+
+    // Daily Agent Executions - users can read, only Cloud Functions can write
+    match /users/{userId}/daily_executions/{executionId} {
+      // Read: Users can only read their own execution history
+      allow read: if request.auth != null &&
+                    request.auth.uid == userId;
+
+      // Write: Only Cloud Functions can write (no client writes allowed)
+      allow write: if false;
+    }
+
+    // Daily Digests - users can read, only Cloud Functions can write
+    match /users/{userId}/daily_digests/{digestId} {
+      // Read: Users can only read their own daily digests
+      allow read: if request.auth != null &&
+                    request.auth.uid == userId;
+
+      // Write: Only Cloud Functions can write (no client writes allowed)
+      allow write: if false;
+    }
+
+    // Agent Execution Logs - users can read, only Cloud Functions can write
+    match /users/{userId}/agent_logs/{logId} {
+      // Read: Users can only read their own agent logs
+      allow read: if request.auth != null &&
+                    request.auth.uid == userId;
+
+      // Write: Only Cloud Functions can write (no client writes allowed)
+      allow write: if false;
+    }
+
+    // AI Performance Metrics - users can read and write their own metrics
+    match /users/{userId}/ai_performance_metrics/{metricId} {
+      // Read and Write: Users can access their own performance metrics
+      allow read, write: if request.auth != null &&
+                            request.auth.uid == userId;
+    }
+
+    // AI Cost Metrics - users can read and write their own cost metrics
+    match /users/{userId}/ai_cost_metrics/{metricId} {
+      // Read and Write: Users can access their own cost metrics
+      allow read, write: if request.auth != null &&
+                            request.auth.uid == userId;
+    }
+
+    // AI Rate Limits - users can read and write their own rate limit data
+    match /rate_limits/{limitId} {
+      // Read and Write: Users can access rate limits for their own operations
+      // limitId format: userId_operation_YYYY-MM-DD
+      // Extract userId from the limitId to verify ownership
+      allow read, write: if request.auth != null &&
+                            limitId.matches('^' + request.auth.uid + '_.*');
     }
 
     // Default deny all other access

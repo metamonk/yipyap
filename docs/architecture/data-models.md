@@ -37,6 +37,8 @@ interface User {
     notificationsEnabled: boolean;
     notifications?: NotificationPreferences;
     presence?: PresencePreferences;
+    voiceMatching?: VoiceMatchingPreferences; // Phase 2: Story 5.5
+    opportunityNotifications?: OpportunityNotificationPreferences; // Phase 2: Story 5.6
   };
   createdAt: firebase.firestore.Timestamp;
   updatedAt: firebase.firestore.Timestamp;
@@ -70,6 +72,29 @@ interface PresencePreferences {
   awayTimeoutMinutes: number;
   awayDetectionEnabled: boolean;
   invisibleMode: boolean;
+}
+
+interface VoiceMatchingPreferences {
+  enabled: boolean; // Default: true
+  autoShowSuggestions: boolean; // Default: true
+  suggestionCount: number; // 1-3, default: 2
+  retrainingSchedule: 'weekly' | 'biweekly' | 'monthly'; // Default: weekly
+}
+
+interface OpportunityNotificationPreferences {
+  enabled: boolean; // Default: true
+  minimumScore: number; // 0-100, default: 70 (high-value only)
+  notifyByType: {
+    sponsorship: boolean; // Default: true
+    collaboration: boolean; // Default: true
+    partnership: boolean; // Default: true
+    sale: boolean; // Default: false
+  };
+  quietHours?: {
+    enabled: boolean;
+    start: string; // "22:00" format
+    end: string; // "08:00" format
+  };
 }
 ```
 
@@ -307,9 +332,11 @@ interface AIMessageMetadata extends Message {
     sentimentScore: number; // -1 to 1 scale
     emotionalTone: string[]; // ['excited', 'frustrated', 'curious']
 
-    // Business Intelligence
+    // Business Intelligence (Story 5.6)
     opportunityScore: number; // 0-100 business value score
     opportunityType?: 'sponsorship' | 'collaboration' | 'partnership' | 'sale';
+    opportunityIndicators?: string[]; // Detected keywords/signals (e.g., ['sponsorship', 'budget'])
+    opportunityAnalysis?: string; // Brief AI analysis of the opportunity
 
     // AI Processing Status
     aiProcessed: boolean;
@@ -326,6 +353,12 @@ interface AIMessageMetadata extends Message {
     isFAQ: boolean;
     faqTemplateId?: string;
     faqMatchConfidence?: number;
+
+    // Voice Matching (Story 5.5)
+    suggestionUsed?: boolean; // User accepted suggestion
+    suggestionEdited?: boolean; // User edited before sending
+    suggestionRejected?: boolean; // User rejected suggestion
+    suggestionRating?: number; // 1-5 stars (optional feedback)
   };
 }
 ```
@@ -421,7 +454,7 @@ interface AIWorkflowConfig {
 
   // Model Preferences
   modelPreferences: {
-    preferredProvider: 'openai' | 'anthropic' | 'auto';
+    preferredProvider: 'openai' | 'auto';
     costOptimization: 'performance' | 'balanced' | 'economy';
   };
 
@@ -467,6 +500,50 @@ interface AIAnalytics {
 }
 ```
 
+### Voice Profile (Story 5.5)
+
+**Purpose:** Stores creator voice characteristics for AI-matched response generation
+
+**Firestore Collection:** `voice_profiles` (root-level collection)
+
+**Key Attributes:**
+
+```typescript
+interface VoiceProfile {
+  id: string;
+  userId: string;
+
+  // Voice Characteristics
+  characteristics: {
+    tone: string; // "friendly", "professional", "casual", etc.
+    vocabulary: string[]; // Common words/phrases
+    sentenceStructure: string; // "short", "medium", "complex"
+    punctuationStyle: string; // "minimal", "expressive"
+    emojiUsage: "none" | "occasional" | "frequent";
+  };
+
+  // Training Metadata
+  trainingSampleCount: number;
+  lastTrainedAt: firebase.firestore.Timestamp;
+  modelVersion: string; // GPT-4 Turbo version
+
+  // Performance Metrics
+  metrics: {
+    totalSuggestionsGenerated: number;
+    acceptedSuggestions: number;
+    editedSuggestions: number;
+    rejectedSuggestions: number;
+    averageSatisfactionRating: number; // 1-5
+  };
+
+  createdAt: firebase.firestore.Timestamp;
+  updatedAt: firebase.firestore.Timestamp;
+}
+```
+
+**Firestore Indexes Required:**
+- Single field index: `userId` (ASC)
+
 ### Relationships (Phase 2)
 
 - AIMessageMetadata: One-to-One extension of Message
@@ -474,5 +551,6 @@ interface AIAnalytics {
 - AITrainingData: Many-to-One with User
 - AIWorkflowConfig: One-to-One with User
 - AIAnalytics: Many-to-One with User
+- VoiceProfile: One-to-One with User (Story 5.5)
 
 ---
