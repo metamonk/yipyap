@@ -6,12 +6,11 @@
  * Provides one-tap approve/reject interface for AI-generated responses
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
@@ -23,7 +22,6 @@ import { NavigationHeader } from '../_components/NavigationHeader';
 import { getFirebaseAuth } from '@/services/firebase';
 import {
   getDailyDigest,
-  subscribeToDigest,
 } from '@/services/dailyDigestService';
 import { bulkOperationsService } from '@/services/bulkOperationsService';
 import type { DailyDigest, DigestMessage } from '@/types/ai';
@@ -48,14 +46,10 @@ export default function DailyDigestScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedTab, setSelectedTab] = useState<'pending' | 'handled'>('pending');
 
-  useEffect(() => {
-    loadDigest();
-  }, []);
-
   /**
    * Loads the most recent daily digest
    */
-  const loadDigest = async () => {
+  const loadDigest = useCallback(async () => {
     if (!currentUser) {
       Alert.alert('Error', 'You must be logged in to view daily digest.');
       router.push('/(tabs)/profile');
@@ -72,7 +66,11 @@ export default function DailyDigestScreen() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  };
+  }, [currentUser, router]);
+
+  useEffect(() => {
+    loadDigest();
+  }, [loadDigest]);
 
   /**
    * Handles pull-to-refresh
@@ -141,8 +139,8 @@ export default function DailyDigestScreen() {
             setIsProcessing(true);
             try {
               // Mark all as rejected (implementation in bulk operations service)
-              const messageIds = digest.pendingMessages.map((msg) => msg.messageId);
               // TODO: Implement batchRejectSuggestions in bulkOperationsService
+              // const messageIds = digest.pendingMessages.map((msg) => msg.messageId);
               Alert.alert('Success', 'All suggestions have been rejected.');
               // Reload digest
               await loadDigest();
@@ -161,7 +159,7 @@ export default function DailyDigestScreen() {
   /**
    * Handles individual message approval
    */
-  const handleApproveMessage = async (message: DigestMessage) => {
+  const handleApproveMessage = async (_message: DigestMessage) => {
     if (!currentUser) {
       return;
     }
@@ -187,7 +185,7 @@ export default function DailyDigestScreen() {
   /**
    * Handles individual message rejection
    */
-  const handleRejectMessage = async (message: DigestMessage) => {
+  const handleRejectMessage = async (_message: DigestMessage) => {
     if (!currentUser) {
       return;
     }
@@ -341,7 +339,7 @@ export default function DailyDigestScreen() {
           <Text style={styles.emptyIcon}>📭</Text>
           <Text style={styles.emptyTitle}>No Digest Available</Text>
           <Text style={styles.emptyText}>
-            The daily agent hasn't processed any messages yet.
+            The daily agent hasn&apos;t processed any messages yet.
           </Text>
           <Text style={styles.emptyHint}>
             Check back tomorrow morning or enable the daily agent in settings.

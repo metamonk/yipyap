@@ -6,7 +6,7 @@
  * Provides expandable detail view with step-by-step progress and error details
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -21,10 +21,10 @@ import { useRouter } from 'expo-router';
 import { getFirebaseAuth } from '@/services/firebase';
 import {
   getExecutionHistory,
-  getExecutionById,
+  // getExecutionById,
   getExecutionLogs,
   calculatePerformanceMetrics,
-  subscribeToExecutionHistory,
+  // subscribeToExecutionHistory,
 } from '@/services/agentExecutionLogService';
 import type { DailyAgentExecution, AgentExecutionLog, WorkflowStep } from '@/types/ai';
 
@@ -49,14 +49,10 @@ export default function AgentExecutionLogsScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
 
-  useEffect(() => {
-    loadExecutions();
-  }, []);
-
   /**
    * Loads execution history for the current user
    */
-  const loadExecutions = async () => {
+  const loadExecutions = useCallback(async () => {
     if (!currentUser) {
       Alert.alert('Error', 'You must be logged in to view execution logs.');
       router.push('/(tabs)/profile');
@@ -73,7 +69,11 @@ export default function AgentExecutionLogsScreen() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  };
+  }, [currentUser, router]);
+
+  useEffect(() => {
+    loadExecutions();
+  }, [loadExecutions]);
 
   /**
    * Handles pull-to-refresh
@@ -108,7 +108,7 @@ export default function AgentExecutionLogsScreen() {
   /**
    * Handles retry of a failed execution
    */
-  const handleRetry = async (executionId: string) => {
+  const handleRetry = async (_executionId: string) => {
     if (!currentUser) return;
 
     Alert.alert(
@@ -281,7 +281,7 @@ export default function AgentExecutionLogsScreen() {
           <Text style={styles.emptyIcon}>📊</Text>
           <Text style={styles.emptyTitle}>No Executions Yet</Text>
           <Text style={styles.emptyText}>
-            The daily agent hasn't run yet. Enable it in settings to start automated workflows.
+            The daily agent hasn&apos;t run yet. Enable it in settings to start automated workflows.
           </Text>
           <TouchableOpacity
             style={styles.settingsButton}

@@ -114,11 +114,12 @@ export default function DailyAgentSettingsScreen() {
         const timeStr = agentConfig.workflowSettings.dailyWorkflowTime;
         setSelectedTime(timeStr);
         setPickerDate(timeStringToDate(timeStr));
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Error loading daily agent config:', error);
 
         // Check if it's a permissions error
-        if (error?.message?.includes('permission') || error?.code === 'permission-denied') {
+        const err = error as { message?: string; code?: string };
+        if (err?.message?.includes('permission') || err?.code === 'permission-denied') {
           Alert.alert(
             'Authentication Error',
             'Please sign out and sign back in to refresh your permissions.',
@@ -233,7 +234,7 @@ export default function DailyAgentSettingsScreen() {
    * @param event - Picker event
    * @param date - Selected date/time
    */
-  const handleTimeChange = async (event: any, date?: Date) => {
+  const handleTimeChange = async (event: { type: string }, date?: Date) => {
     // On Android, the picker dismisses automatically
     if (Platform.OS === 'android') {
       setTimePickerVisible(false);

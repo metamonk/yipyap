@@ -88,6 +88,7 @@ export const FAQLibraryManager: FC<FAQLibraryManagerProps> = ({
   useEffect(() => {
     if (!currentUser) {
       Alert.alert('Error', 'You must be logged in to view FAQ templates.');
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsLoading(false);
       return;
     }
@@ -385,7 +386,7 @@ export const FAQLibraryManager: FC<FAQLibraryManagerProps> = ({
             <FAQTemplateCard
               template={item}
               onPress={onEditFAQ}
-              onUpdate={(updated) => {
+              onUpdate={(_updated) => {
                 // Update handled by Firestore subscription
               }}
             />

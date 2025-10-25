@@ -16,7 +16,7 @@
  * ```
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -35,7 +35,7 @@ import { getFirebaseAuth } from '@/services/firebase';
 import {
   getDailyCosts,
   getMonthlyCosts,
-  getTotalCost,
+  // getTotalCost, // TODO: Use for total cost display
   type DailyCost,
   type MonthlyCost,
 } from '@/services/aiCostMonitoringService';
@@ -53,18 +53,12 @@ export default function AICostDashboardScreen() {
   const [monthlyCosts, setMonthlyCosts] = useState<MonthlyCost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [userBudget, setUserBudget] = useState(500); // Default $5.00/day budget
+  const [userBudget] = useState(500); // Default $5.00/day budget // TODO: Implement budget management
 
   const auth = getFirebaseAuth();
   const userId = auth.currentUser?.uid || '';
 
-  useEffect(() => {
-    if (userId) {
-      fetchCostData();
-    }
-  }, [userId, period]);
-
-  const fetchCostData = async () => {
+  const fetchCostData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -82,7 +76,13 @@ export default function AICostDashboardScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId, period]);
+
+  useEffect(() => {
+    if (userId) {
+      fetchCostData();
+    }
+  }, [userId, fetchCostData]);
 
   const handleRefresh = () => {
     fetchCostData();
@@ -95,8 +95,11 @@ export default function AICostDashboardScreen() {
 
       if (Platform.OS === 'web') {
         // Web export
+        // eslint-disable-next-line no-undef
         const blob = new Blob([csvContent], { type: 'text/csv' });
+        // eslint-disable-next-line no-undef
         const url = window.URL.createObjectURL(blob);
+        // eslint-disable-next-line no-undef
         const link = document.createElement('a');
         link.href = url;
         link.download = `ai-costs-${period}-${new Date().toISOString().split('T')[0]}.csv`;
@@ -302,6 +305,7 @@ export default function AICostDashboardScreen() {
                   return (
                     <View key={op.key} style={styles.operationRow}>
                       <View style={styles.operationLeft}>
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                         <Ionicons name={op.icon as any} size={20} color="#6B7280" />
                         <Text style={styles.operationLabel}>{op.label}</Text>
                       </View>
