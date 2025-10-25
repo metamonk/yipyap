@@ -8,7 +8,7 @@
     "@ai-sdk/openai": "^2.0.53",
     "@upstash/redis": "^1.35.6",
     "ai": "^5.0.78",
-    "firebase-admin": "^14.1.0"
+    "firebase-admin": "^13.5.0"
   },
   "devDependencies": {
     "@pinecone-database/pinecone": "^6.1.2"
