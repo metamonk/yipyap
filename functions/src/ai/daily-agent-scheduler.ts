@@ -300,11 +300,13 @@ export const triggerDailyAgentManual = https.onCall(
     try {
       console.log(`Manual trigger requested for user ${userId}`);
 
-      const result = await orchestrateWorkflow(userId);
+      const result = await orchestrateWorkflow(userId, { bypassOnlineCheck: true });
 
       return {
         success: result.success,
         executionId: result.executionId,
+        results: result.results,
+        metrics: result.metrics,
         message: 'Workflow triggered successfully',
       };
     } catch (error) {

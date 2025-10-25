@@ -20,7 +20,6 @@
 
 import * as functions from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
-import fetch from 'node-fetch';
 
 // Initialize Firebase Admin if not already initialized
 if (!admin.apps.length) {
@@ -255,41 +254,73 @@ async function fetchUnprocessedMessages(
       now.nanoseconds
     );
 
-    // Fetch all conversations where user is the creator
+    console.log(`[DEBUG] Fetching conversations for user ${userId}`);
+    console.log(`[DEBUG] Current time: ${now.toDate().toISOString()}`);
+    console.log(`[DEBUG] One hour ago: ${oneHourAgo.toDate().toISOString()}`);
+    console.log(`[DEBUG] Twelve hours ago: ${twelveHoursAgo.toDate().toISOString()}`);
+
+    // Fetch all conversations where user is a participant
+    // This includes both direct messages and group conversations
     const conversationsSnap = await db
       .collection('conversations')
-      .where('creatorId', '==', userId)
+      .where('participantIds', 'array-contains', userId)
       .get();
 
+    console.log(`[DEBUG] Found ${conversationsSnap.size} total conversations`);
+
     const messages: admin.firestore.QueryDocumentSnapshot[] = [];
+    let conversationsProcessed = 0;
+    let conversationsSkipped = 0;
 
     for (const convDoc of conversationsSnap.docs) {
       const convData = convDoc.data();
+      const lastMsgTime = convData.lastMessageTimestamp?.toDate?.() || 'N/A';
+
+      console.log(`[DEBUG] Conversation ${convDoc.id}:`);
+      console.log(`[DEBUG]   lastMessageTimestamp: ${lastMsgTime}`);
 
       // Skip conversations with recent activity (< 1 hour)
       if (
         convData.lastMessageTimestamp &&
         convData.lastMessageTimestamp.seconds > oneHourAgo.seconds
       ) {
+        console.log(`[DEBUG]   SKIPPED: Recent activity (< 1 hour)`);
+        conversationsSkipped++;
         continue;
       }
 
+      conversationsProcessed++;
+      console.log(`[DEBUG]   Processing messages...`);
+
       // Fetch messages from this conversation
+      // Note: We can't use both >= and != filters in Firestore, so we filter senderId in code
       const messagesSnap = await db
         .collection('conversations')
         .doc(convDoc.id)
         .collection('messages')
         .where('timestamp', '>=', twelveHoursAgo)
-        .where('senderId', '!=', userId) // Only messages from others
-        .orderBy('senderId') // Required for != query
         .orderBy('timestamp', 'desc')
         .get();
+
+      console.log(`[DEBUG]   Found ${messagesSnap.size} messages in subcollection`);
+
+      let messagesAdded = 0;
+      let messagesSkippedProcessed = 0;
+      let messagesSkippedCrisis = 0;
+      let messagesSkippedOwnMessages = 0;
 
       for (const msgDoc of messagesSnap.docs) {
         const msgData = msgDoc.data();
 
+        // Skip messages from the user themselves
+        if (msgData.senderId === userId) {
+          messagesSkippedOwnMessages++;
+          continue;
+        }
+
         // Skip if already processed (unless pending review)
         if (msgData.metadata?.aiProcessed && !msgData.metadata?.pendingReview) {
+          messagesSkippedProcessed++;
           continue;
         }
 
@@ -299,12 +330,24 @@ async function fetchUnprocessedMessages(
           msgData.metadata.sentimentScore !== undefined &&
           msgData.metadata.sentimentScore < ctx.config.escalationThreshold
         ) {
+          messagesSkippedCrisis++;
           continue;
         }
 
         messages.push(msgDoc);
+        messagesAdded++;
       }
+
+      console.log(`[DEBUG]   Added ${messagesAdded} messages to processing queue`);
+      console.log(`[DEBUG]   Skipped ${messagesSkippedOwnMessages} own messages`);
+      console.log(`[DEBUG]   Skipped ${messagesSkippedProcessed} already processed`);
+      console.log(`[DEBUG]   Skipped ${messagesSkippedCrisis} crisis messages`);
     }
+
+    console.log(`[DEBUG] Summary:`);
+    console.log(`[DEBUG]   Conversations processed: ${conversationsProcessed}`);
+    console.log(`[DEBUG]   Conversations skipped (recent activity): ${conversationsSkipped}`);
+    console.log(`[DEBUG]   Total messages to process: ${messages.length}`);
 
     ctx.results.messagesFetched = messages.length;
 
@@ -322,7 +365,9 @@ async function fetchUnprocessedMessages(
   } catch (error) {
     const stepDuration = Date.now() - stepStart;
     trackStepPerformance(ctx, 'fetch', stepDuration);
-    
+
+    console.error(`[DEBUG] Error in fetchUnprocessedMessages:`, error);
+
     await logWorkflowStep(
       ctx,
       'fetch',
@@ -375,19 +420,29 @@ async function categorizeMessages(
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
+                // Service-to-service authentication (Cloud Functions to Edge Function)
+                // Using OpenAI API key as a shared secret for MVP
+                'Authorization': `Bearer ${process.env.OPENAI_API_KEY || 'service-token'}`,
               },
               body: JSON.stringify({
                 messageText: msgData.text,
                 messageId: msgDoc.id,
                 conversationId: msgData.conversationId,
+                senderId: msgData.senderId,
               }),
             });
 
+            console.log(`[DEBUG] Categorization request to ${edgeFunctionUrl}`);
+            console.log(`[DEBUG] Response status: ${response.status} ${response.statusText}`);
+
             if (!response.ok) {
-              throw new Error(`Edge Function returned ${response.status}`);
+              const errorText = await response.text();
+              console.error(`[DEBUG] Edge Function error response: ${errorText}`);
+              throw new Error(`Edge Function returned ${response.status}: ${errorText}`);
             }
 
             const result = await response.json();
+            console.log(`[DEBUG] Categorization result:`, result);
 
             // Update message metadata with category
             await msgDoc.ref.update({
@@ -399,7 +454,8 @@ async function categorizeMessages(
             categorized++;
             categoryCost += result.cost || 0.05; // Estimate $0.05 per categorization
           } catch (error) {
-            console.error(`Error categorizing message ${msgDoc.id}:`, error);
+            console.error(`[DEBUG] Error categorizing message ${msgDoc.id}:`, error);
+            console.error(`[DEBUG] Error details:`, (error as Error).message);
             // Continue with other messages
           }
         })
@@ -454,9 +510,13 @@ async function detectAndRespondFAQs(
   try {
     await logWorkflowStep(ctx, 'faq_detect', 'running', 'Detecting FAQs...');
 
+    console.log(`[DEBUG] FAQ Detection - Starting with ${messages.length} messages`);
+
     const edgeFunctionUrl = process.env.VERCEL_URL
       ? `https://${process.env.VERCEL_URL}/api/detect-faq`
       : 'http://localhost:3000/api/detect-faq';
+
+    console.log(`[DEBUG] FAQ Detection - Edge function URL: ${edgeFunctionUrl}`);
 
     let faqsDetected = 0;
     let autoResponsesSent = 0;
@@ -491,22 +551,33 @@ async function detectAndRespondFAQs(
           const msgData = msgDoc.data();
 
           try {
+            console.log(`[DEBUG] FAQ Detection - Checking message: "${msgData.text?.substring(0, 50)}..."`);
+
             const response = await fetch(edgeFunctionUrl, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
+                // Service-to-service authentication (Cloud Functions to Edge Function)
+                // Using OpenAI API key as a shared secret for MVP
+                'Authorization': `Bearer ${process.env.OPENAI_API_KEY || 'service-token'}`,
               },
               body: JSON.stringify({
+                messageId: msgDoc.id,
                 messageText: msgData.text,
-                userId: ctx.userId,
+                creatorId: ctx.userId,
               }),
             });
 
+            console.log(`[DEBUG] FAQ Detection - Response status: ${response.status} ${response.statusText}`);
+
             if (!response.ok) {
+              const errorText = await response.text();
+              console.error(`[DEBUG] FAQ Detection - Error response: ${errorText}`);
               return; // Skip this message
             }
 
             const result = await response.json();
+            console.log(`[DEBUG] FAQ Detection - Result: isFAQ=${result.isFAQ}, confidence=${result.confidence}`);
             faqCost += result.cost || 0.03; // Estimate $0.03 per FAQ detection
 
             if (result.isFAQ && result.confidence >= 0.8) {
@@ -1027,7 +1098,10 @@ async function hasManualMessagesAfter(
  * - IV2: Checks for manual override messages
  * - IV3: Skips if creator is online/active
  */
-export async function orchestrateWorkflow(userId: string): Promise<{
+export async function orchestrateWorkflow(
+  userId: string,
+  options?: { bypassOnlineCheck?: boolean }
+): Promise<{
   success: boolean;
   executionId: string;
   results: any;
@@ -1059,10 +1133,10 @@ export async function orchestrateWorkflow(userId: string): Promise<{
   // - If user has status = 'online' → skip workflow
   // - If user was active within last 30 minutes (default) → skip workflow
   // This prevents disrupting real-time conversations with automated responses
-  const isActive = await isUserOnlineOrActive(
-    userId,
-    config.workflowSettings.activeThresholdMinutes || 30
-  );
+  // BYPASS: For manual testing via Test Daily Agent screen
+  const isActive =
+    !options?.bypassOnlineCheck &&
+    (await isUserOnlineOrActive(userId, config.workflowSettings.activeThresholdMinutes || 30));
 
   if (isActive) {
     // User is online/active, skip workflow execution and log to daily_executions

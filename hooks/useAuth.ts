@@ -96,7 +96,9 @@ export function useAuth(): UseAuthReturn {
         const auth = getFirebaseAuth();
         return auth;
       } catch (authError) {
-        console.error('Failed to get Firebase Auth:', authError);
+        if (__DEV__) {
+          console.error('Failed to get Firebase Auth:', authError);
+        }
         // Defer state updates to avoid synchronous setState in effect
         Promise.resolve().then(() => {
           setError({
@@ -142,7 +144,9 @@ export function useAuth(): UseAuthReturn {
 
             setUserProfile(profile);
           } catch (error) {
-            console.error('Error fetching user profile:', error);
+            if (__DEV__) {
+              console.error('Error fetching user profile:', error);
+            }
             // Don't set error state here, as this is not a critical failure
             // User might just need to create their profile
             setUserProfile(null);
@@ -154,7 +158,9 @@ export function useAuth(): UseAuthReturn {
         setIsLoading(false);
       },
       (authError) => {
-        console.error('Auth state change error:', authError);
+        if (__DEV__) {
+          console.error('Auth state change error:', authError);
+        }
 
         setError({
           code: 'auth/state-change-error',
@@ -187,7 +193,9 @@ export function useAuth(): UseAuthReturn {
         await authSignInWithEmailPassword(email, password);
         // User state will be updated by onAuthStateChanged listener
       } catch (err) {
-        console.error('Sign-in error:', err);
+        if (__DEV__) {
+          console.error('Sign-in error:', err);
+        }
         setError(err as AuthError);
         setIsLoading(false);
       }
@@ -207,7 +215,9 @@ export function useAuth(): UseAuthReturn {
         await authSignUpWithEmailPassword(email, password, displayName);
         // User state will be updated by onAuthStateChanged listener
       } catch (err) {
-        console.error('Sign-up error:', err);
+        if (__DEV__) {
+          console.error('Sign-up error:', err);
+        }
         setError(err as AuthError);
         setIsLoading(false);
       }
@@ -226,7 +236,9 @@ export function useAuth(): UseAuthReturn {
       await authSendPasswordResetEmail(email);
       setIsLoading(false);
     } catch (err) {
-      console.error('Password reset error:', err);
+      if (__DEV__) {
+        console.error('Password reset error:', err);
+      }
       setError(err as AuthError);
       setIsLoading(false);
     }
@@ -251,7 +263,9 @@ export function useAuth(): UseAuthReturn {
       await authSignOut();
       // User state will be updated by onAuthStateChanged listener
     } catch (err) {
-      console.error('Sign-out error:', err);
+      if (__DEV__) {
+        console.error('Sign-out error:', err);
+      }
       setError(err as AuthError);
       setIsLoading(false);
     }
@@ -286,7 +300,9 @@ export function useAuth(): UseAuthReturn {
       const profile = await getUserProfile(user.uid);
       setUserProfile(profile);
     } catch (error) {
-      console.error('Error refreshing profile:', error);
+      if (__DEV__) {
+        console.error('Error refreshing profile:', error);
+      }
       setUserProfile(null);
     }
   }, [user]);

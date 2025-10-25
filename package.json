@@ -21,6 +21,7 @@
     "emulator": "firebase emulators:start --only firestore,storage",
     "trigger-daily-agent": "tsx scripts/triggerDailyAgent.ts",
     "trigger-daily": "tsx scripts/triggerDailyAgentSimple.ts",
+    "seed:daily-agent": "tsx scripts/seedDailyAgentTestData.ts",
     "prepare": "husky"
   },
   "dependencies": {

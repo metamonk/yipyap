@@ -23,14 +23,17 @@ jest.mock('@/app/_components/NavigationHeader', () => {
   };
 });
 
-// Mock Picker
-jest.mock('@react-native-picker/picker', () => {
+// Mock SettingsPicker - behaves like Picker for testing
+jest.mock('@/components/voice/SettingsPicker', () => {
   const React = require('react');
-  const Picker = ({ children, ...props }: any) => React.createElement('View', props, children);
-  (Picker as any).Item = ({ label, value }: any) => React.createElement('View', { 'data-label': label, 'data-value': value });
+  const { View } = require('react-native');
+
+  const SettingsPicker = React.forwardRef((props: any, ref: any) => {
+    return React.createElement(View, { ...props, ref });
+  });
 
   return {
-    Picker,
+    SettingsPicker
   };
 });
 
@@ -130,6 +133,8 @@ describe('VoiceSettingsScreen', () => {
     });
 
     it('updates enabled setting when toggled', async () => {
+      mockUpdateUserSettings.mockResolvedValue(undefined);
+
       const { getByTestId } = render(<VoiceSettingsScreen />);
 
       const toggle = getByTestId('toggle-enabled');
@@ -158,6 +163,8 @@ describe('VoiceSettingsScreen', () => {
 
   describe('Auto-Show Suggestions Toggle', () => {
     it('updates auto-show setting when toggled', async () => {
+      mockUpdateUserSettings.mockResolvedValue(undefined);
+
       const { getByTestId } = render(<VoiceSettingsScreen />);
 
       const toggle = getByTestId('toggle-auto-show');
@@ -173,6 +180,8 @@ describe('VoiceSettingsScreen', () => {
 
   describe('Suggestion Count Picker', () => {
     it('updates suggestion count when changed', async () => {
+      mockUpdateUserSettings.mockResolvedValue(undefined);
+
       const { getByTestId } = render(<VoiceSettingsScreen />);
 
       const picker = getByTestId('picker-suggestion-count');
@@ -188,6 +197,8 @@ describe('VoiceSettingsScreen', () => {
 
   describe('Retraining Schedule Picker', () => {
     it('updates retraining schedule when changed', async () => {
+      mockUpdateUserSettings.mockResolvedValue(undefined);
+
       const { getByTestId } = render(<VoiceSettingsScreen />);
 
       const picker = getByTestId('picker-retraining-schedule');

@@ -411,11 +411,14 @@ class PresenceService {
           errorMessage.includes('Permission denied');
 
         if (isPermissionDenied) {
-          // Log as warning instead of error - this is expected during logout
-          console.warn('Presence subscription denied (likely due to logout):', userId);
+          // Log as info instead of warning - this is completely expected during logout/auth state changes
+          // Using console.info to avoid triggering React Native's error/warning overlays
+          if (__DEV__) {
+            console.info('[PresenceService] Subscription denied (user logged out or not authenticated)');
+          }
         } else {
           // Log unexpected errors as errors
-          console.error('Failed to subscribe to presence:', error);
+          console.error('[PresenceService] Unexpected error subscribing to presence:', error);
         }
         callback(null);
       }

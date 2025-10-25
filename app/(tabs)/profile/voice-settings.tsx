@@ -15,7 +15,6 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationHeader } from '../../_components/NavigationHeader';
@@ -23,6 +22,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { updateUserSettings } from '@/services/userService';
 import { voiceMatchingService } from '@/services/voiceMatchingService';
 import { VoiceTrainingStatus } from '@/components/voice/VoiceTrainingStatus';
+import { SettingsPicker } from '@/components/voice/SettingsPicker';
 import type { VoiceMatchingSettings } from '@/types/user';
 
 /**
@@ -43,12 +43,57 @@ export default function VoiceSettingsScreen() {
 
   const [isTraining, setIsTraining] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [voiceProfile, setVoiceProfile] = useState<any>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
 
   // Load settings from user profile when available
   useEffect(() => {
     if (userProfile?.settings?.voiceMatching) {
       setSettings(userProfile.settings.voiceMatching);
     }
+  }, [userProfile]);
+
+  // Subscribe to voice profile to check training eligibility
+  useEffect(() => {
+    if (!userProfile) return;
+
+    const loadVoiceProfile = async () => {
+      try {
+        setLoadingProfile(true);
+        const { getFirebaseDb } = await import('@/services/firebase');
+        const { doc, onSnapshot } = await import('firebase/firestore');
+        const db = getFirebaseDb();
+
+        // Subscribe to voice profile updates
+        const profileRef = doc(db, 'voice_profiles', userProfile.uid);
+        const unsubscribe = onSnapshot(
+          profileRef,
+          (snapshot) => {
+            if (snapshot.exists()) {
+              setVoiceProfile(snapshot.data());
+            } else {
+              setVoiceProfile(null);
+            }
+            setLoadingProfile(false);
+          },
+          (error) => {
+            console.error('Error loading voice profile:', error);
+            setVoiceProfile(null);
+            setLoadingProfile(false);
+          }
+        );
+
+        return unsubscribe;
+      } catch (error) {
+        console.error('Error setting up voice profile listener:', error);
+        setLoadingProfile(false);
+      }
+    };
+
+    const unsubscribePromise = loadVoiceProfile();
+    return () => {
+      unsubscribePromise?.then((unsubscribe) => unsubscribe?.());
+    };
   }, [userProfile]);
 
   /**
@@ -142,10 +187,31 @@ export default function VoiceSettingsScreen() {
       await voiceMatchingService.trainVoiceProfile(userProfile.uid);
       Alert.alert('Success', 'Voice profile trained successfully!', [{ text: 'OK' }]);
     } catch (error: any) {
-      console.error('Failed to train voice profile:', error);
-      Alert.alert('Error', error.message || 'Failed to train voice profile. Please try again.', [
-        { text: 'OK' },
-      ]);
+      // Enhanced error handling for stale profile scenario
+      const errorMessage = error.message || '';
+
+      if (errorMessage.includes('Insufficient training data') || errorMessage.includes('Need at least')) {
+        // Stale profile detected - backend found fewer messages than profile claims
+        // This is expected behavior, log as info not error
+        console.info('[VoiceSettings] Training failed - insufficient messages:', errorMessage);
+
+        Alert.alert(
+          'Profile Out of Sync',
+          'Your voice profile shows previous training data, but no recent messages were found in your account. ' +
+          'This can happen if:\n\n' +
+          '• Messages were deleted\n' +
+          '• You\'re using a different environment\n' +
+          '• Database was reset\n\n' +
+          'Please send at least 10 messages to retrain your profile.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        // Unexpected error - log as error
+        console.error('[VoiceSettings] Failed to train voice profile:', error);
+        Alert.alert('Error', errorMessage || 'Failed to train voice profile. Please try again.', [
+          { text: 'OK' },
+        ]);
+      }
     } finally {
       setIsTraining(false);
     }
@@ -210,17 +276,17 @@ export default function VoiceSettingsScreen() {
           <Text style={styles.settingLabel}>Number of Suggestions</Text>
           <Text style={styles.settingHint}>How many response options to generate</Text>
           <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={settings.suggestionCount}
+            <SettingsPicker
+              value={settings.suggestionCount}
+              items={[
+                { label: '1 suggestion', value: 1 },
+                { label: '2 suggestions', value: 2 },
+                { label: '3 suggestions', value: 3 },
+              ]}
               onValueChange={handleSuggestionCountChange}
-              enabled={!isSaving && settings.enabled}
-              style={styles.picker}
+              disabled={isSaving || !settings.enabled}
               testID="picker-suggestion-count"
-            >
-              <Picker.Item label="1 suggestion" value={1} />
-              <Picker.Item label="2 suggestions" value={2} />
-              <Picker.Item label="3 suggestions" value={3} />
-            </Picker>
+            />
           </View>
         </View>
 
@@ -229,25 +295,60 @@ export default function VoiceSettingsScreen() {
           <Text style={styles.settingLabel}>Retraining Schedule</Text>
           <Text style={styles.settingHint}>How often to update your voice profile</Text>
           <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={settings.retrainingSchedule}
+            <SettingsPicker
+              value={settings.retrainingSchedule}
+              items={[
+                { label: 'Weekly', value: 'weekly' },
+                { label: 'Bi-weekly', value: 'biweekly' },
+                { label: 'Monthly', value: 'monthly' },
+              ]}
               onValueChange={handleRetrainingScheduleChange}
-              enabled={!isSaving && settings.enabled}
-              style={styles.picker}
+              disabled={isSaving || !settings.enabled}
               testID="picker-retraining-schedule"
-            >
-              <Picker.Item label="Weekly" value="weekly" />
-              <Picker.Item label="Bi-weekly" value="biweekly" />
-              <Picker.Item label="Monthly" value="monthly" />
-            </Picker>
+            />
           </View>
         </View>
 
+        {/* Training Eligibility Status */}
+        {!loadingProfile && voiceProfile && voiceProfile.trainingSampleCount < 10 && (
+          <View style={styles.messageCountContainer}>
+            <Ionicons name="information-circle" size={20} color="#FF9500" />
+            <Text style={styles.messageCountText}>
+              {voiceProfile.trainingSampleCount} / 10 messages - Send{' '}
+              {10 - voiceProfile.trainingSampleCount} more to enable training
+            </Text>
+          </View>
+        )}
+
+        {/* Stale Profile Warning */}
+        {!loadingProfile && voiceProfile && voiceProfile.trainingSampleCount >= 10 && (
+          <View style={styles.staleProfileWarning}>
+            <Ionicons name="alert-circle" size={20} color="#856404" />
+            <Text style={styles.staleProfileText}>
+              Note: Profile shows {voiceProfile.trainingSampleCount} samples from previous training.
+              If training fails, your messages may have been deleted or you're using a different
+              environment.
+            </Text>
+          </View>
+        )}
+
         {/* Train Now Button */}
         <TouchableOpacity
-          style={[styles.trainButton, (isTraining || !settings.enabled) && styles.trainButtonDisabled]}
+          style={[
+            styles.trainButton,
+            (isTraining ||
+              !settings.enabled ||
+              loadingProfile ||
+              (voiceProfile && voiceProfile.trainingSampleCount < 10)) &&
+              styles.trainButtonDisabled,
+          ]}
           onPress={handleTrainProfile}
-          disabled={isTraining || !settings.enabled}
+          disabled={
+            isTraining ||
+            !settings.enabled ||
+            loadingProfile ||
+            (voiceProfile && voiceProfile.trainingSampleCount < 10)
+          }
           testID="train-button"
         >
           {isTraining ? (
@@ -255,10 +356,19 @@ export default function VoiceSettingsScreen() {
               <ActivityIndicator size="small" color="#FFFFFF" />
               <Text style={styles.trainButtonText}>Training...</Text>
             </View>
+          ) : loadingProfile ? (
+            <View style={styles.trainButtonContent}>
+              <ActivityIndicator size="small" color="#FFFFFF" />
+              <Text style={styles.trainButtonText}>Loading...</Text>
+            </View>
           ) : (
             <View style={styles.trainButtonContent}>
               <Ionicons name="flash" size={20} color="#FFFFFF" />
-              <Text style={styles.trainButtonText}>Train Voice Profile Now</Text>
+              <Text style={styles.trainButtonText}>
+                {voiceProfile && voiceProfile.trainingSampleCount < 10
+                  ? 'Insufficient Messages'
+                  : 'Train Voice Profile Now'}
+              </Text>
             </View>
           )}
         </TouchableOpacity>
@@ -332,12 +442,6 @@ const styles = StyleSheet.create({
   },
   pickerContainer: {
     marginTop: 12,
-    backgroundColor: '#F2F2F7',
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  picker: {
-    height: 50,
   },
   trainButton: {
     backgroundColor: '#6C63FF',
@@ -366,5 +470,40 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  messageCountContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF3CD',
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#FFC107',
+    gap: 8,
+  },
+  messageCountText: {
+    fontSize: 14,
+    color: '#856404',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  staleProfileWarning: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#E7F3FF',
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#90CAF9',
+    gap: 8,
+  },
+  staleProfileText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#1565C0',
+    lineHeight: 18,
   },
 });

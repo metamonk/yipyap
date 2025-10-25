@@ -150,7 +150,7 @@ export default function ProfileScreen() {
             onPress={() => router.push('/profile/voice-settings')}
           >
             <View style={styles.settingsContent}>
-              <Ionicons name="mic-outline" size={24} color="#6C63FF" />
+              <Ionicons name="finger-print" size={24} color="#6C63FF" />
               <Text style={[styles.settingsText, styles.voiceSettingsText]}>Voice Settings</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
@@ -163,6 +163,17 @@ export default function ProfileScreen() {
             <View style={styles.settingsContent}>
               <Ionicons name="analytics-outline" size={24} color="#10B981" />
               <Text style={styles.settingsText}>AI Cost Monitoring</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingsButton, styles.settingsButtonMargin]}
+            onPress={() => router.push('/profile/test-daily-agent')}
+          >
+            <View style={styles.settingsContent}>
+              <Ionicons name="flask-outline" size={24} color="#FF9500" />
+              <Text style={[styles.settingsText, styles.testButtonText]}>Test Daily Agent</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
           </TouchableOpacity>
@@ -280,6 +291,9 @@ const styles = StyleSheet.create({
   },
   voiceSettingsText: {
     color: '#6C63FF',
+  },
+  testButtonText: {
+    color: '#FF9500',
   },
   settingsButtonMargin: {
     marginTop: 12,

@@ -14,12 +14,14 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
-  TextInput,
   TouchableOpacity,
   Platform,
+  Modal,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import Slider from '@react-native-community/slider';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { NavigationHeader } from '../../_components/NavigationHeader';
 import { getFirebaseAuth } from '@/services/firebase';
 import {
@@ -52,6 +54,33 @@ export default function DailyAgentSettingsScreen() {
   // Time picker state
   const [timePickerVisible, setTimePickerVisible] = useState(false);
   const [selectedTime, setSelectedTime] = useState('09:00');
+  const [pickerDate, setPickerDate] = useState(new Date());
+
+  /**
+   * Converts HH:mm time string to Date object for picker
+   * @param timeString - Time in HH:mm format
+   * @returns Date object with the specified time
+   */
+  const timeStringToDate = (timeString: string): Date => {
+    const [hours, minutes] = timeString.split(':').map(Number);
+    const date = new Date();
+    date.setHours(hours);
+    date.setMinutes(minutes);
+    date.setSeconds(0);
+    date.setMilliseconds(0);
+    return date;
+  };
+
+  /**
+   * Converts Date object to HH:mm time string
+   * @param date - Date object
+   * @returns Time in HH:mm format
+   */
+  const dateToTimeString = (date: Date): string => {
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
 
   // Wait for auth state to be ready
   useEffect(() => {
@@ -70,9 +99,9 @@ export default function DailyAgentSettingsScreen() {
         return;
       }
 
+      // Don't try to navigate back on logout - root layout handles redirect to login
+      // Just return early if no user (component will unmount when navigation happens)
       if (!currentUser) {
-        Alert.alert('Error', 'You must be logged in to view settings.');
-        router.back();
         return;
       }
 
@@ -82,7 +111,9 @@ export default function DailyAgentSettingsScreen() {
 
         const agentConfig = await getDailyAgentConfig(currentUser.uid);
         setConfig(agentConfig);
-        setSelectedTime(agentConfig.workflowSettings.dailyWorkflowTime);
+        const timeStr = agentConfig.workflowSettings.dailyWorkflowTime;
+        setSelectedTime(timeStr);
+        setPickerDate(timeStringToDate(timeStr));
       } catch (error: any) {
         console.error('Error loading daily agent config:', error);
 
@@ -198,19 +229,44 @@ export default function DailyAgentSettingsScreen() {
   };
 
   /**
-   * Handles time change from picker
-   * @param time - Selected time in HH:mm format
+   * Handles time change from native picker
+   * @param event - Picker event
+   * @param date - Selected date/time
    */
-  const handleTimeChange = async (time: string) => {
-    setSelectedTime(time);
+  const handleTimeChange = async (event: any, date?: Date) => {
+    // On Android, the picker dismisses automatically
+    if (Platform.OS === 'android') {
+      setTimePickerVisible(false);
+    }
+
+    // User cancelled
+    if (event.type === 'dismissed' || !date) {
+      if (Platform.OS === 'android') {
+        setTimePickerVisible(false);
+      }
+      return;
+    }
+
+    // Update the picker date
+    setPickerDate(date);
+
+    // Convert to time string and save
+    const timeString = dateToTimeString(date);
+    setSelectedTime(timeString);
+    await handleWorkflowSettingUpdate('dailyWorkflowTime', timeString);
+  };
+
+  /**
+   * Handles time picker confirmation (iOS only)
+   */
+  const handleTimeConfirm = () => {
     setTimePickerVisible(false);
-    await handleWorkflowSettingUpdate('dailyWorkflowTime', time);
   };
 
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <NavigationHeader title="Daily Agent Settings" onBack={() => router.back()} />
+        <NavigationHeader title="Daily Agent Settings" showBack={true} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#007AFF" />
           <Text style={styles.loadingText}>Loading settings...</Text>
@@ -222,7 +278,7 @@ export default function DailyAgentSettingsScreen() {
   if (!config) {
     return (
       <View style={styles.container}>
-        <NavigationHeader title="Daily Agent Settings" onBack={() => router.back()} />
+        <NavigationHeader title="Daily Agent Settings" showBack={true} />
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Failed to load settings</Text>
           <TouchableOpacity
@@ -241,7 +297,7 @@ export default function DailyAgentSettingsScreen() {
 
   return (
     <View style={styles.container}>
-      <NavigationHeader title="Daily Agent Settings" onBack={() => router.back()} />
+      <NavigationHeader title="Daily Agent Settings" showBack={true} />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Enable/Disable Section */}
         <View style={styles.section}>
@@ -272,11 +328,9 @@ export default function DailyAgentSettingsScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Schedule</Text>
 
-            <View style={styles.settingRow}>
-              <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>Daily Workflow Time</Text>
-                <Text style={styles.settingHint}>When to run daily processing</Text>
-              </View>
+            <View style={styles.settingSection}>
+              <Text style={styles.settingLabel}>Daily Workflow Time</Text>
+              <Text style={styles.settingHint}>When to run daily processing</Text>
               <TouchableOpacity
                 style={styles.timeButton}
                 onPress={() => setTimePickerVisible(true)}
@@ -286,6 +340,7 @@ export default function DailyAgentSettingsScreen() {
                 accessibilityHint="Opens time picker"
               >
                 <Text style={styles.timeButtonText}>{selectedTime}</Text>
+                <Ionicons name="chevron-down" size={20} color="#8E8E93" />
               </TouchableOpacity>
             </View>
 
@@ -453,49 +508,72 @@ export default function DailyAgentSettingsScreen() {
         )}
       </ScrollView>
 
-      {/* Simple Time Picker Modal */}
-      {timePickerVisible && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Set Daily Workflow Time</Text>
-            <TextInput
-              style={styles.timeInput}
-              value={selectedTime}
-              onChangeText={setSelectedTime}
-              placeholder="HH:mm (e.g., 09:00)"
-              keyboardType="numeric"
-              maxLength={5}
-              accessible={true}
-              accessibilityLabel="Time input field"
-              accessibilityHint="Enter time in 24-hour format"
-            />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
-                onPress={() => {
-                  setTimePickerVisible(false);
-                  setSelectedTime(config.workflowSettings.dailyWorkflowTime);
-                }}
-                accessible={true}
-                accessibilityRole="button"
-                accessibilityLabel="Cancel"
-              >
-                <Text style={styles.modalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonConfirm]}
-                onPress={() => handleTimeChange(selectedTime)}
-                accessible={true}
-                accessibilityRole="button"
-                accessibilityLabel="Confirm time"
-              >
-                <Text style={[styles.modalButtonText, styles.modalButtonTextConfirm]}>
-                  Confirm
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+      {/* Native Time Picker */}
+      {timePickerVisible && Platform.OS === 'ios' && (
+        <Modal
+          transparent={true}
+          animationType="slide"
+          visible={timePickerVisible}
+          onRequestClose={() => setTimePickerVisible(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setTimePickerVisible(false)}
+          >
+            <TouchableOpacity
+              style={styles.pickerModalContent}
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <View style={styles.pickerHeader}>
+                <Text style={styles.pickerTitle}>Set Daily Workflow Time</Text>
+              </View>
+              <View style={styles.pickerContainer}>
+                <DateTimePicker
+                  value={pickerDate}
+                  mode="time"
+                  display="spinner"
+                  onChange={handleTimeChange}
+                  textColor="#000000"
+                />
+              </View>
+              <View style={styles.pickerButtons}>
+                <TouchableOpacity
+                  style={[styles.pickerButton, styles.pickerButtonCancel]}
+                  onPress={() => {
+                    setTimePickerVisible(false);
+                    setPickerDate(timeStringToDate(config!.workflowSettings.dailyWorkflowTime));
+                  }}
+                  accessible={true}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel"
+                >
+                  <Text style={styles.pickerButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.pickerButton, styles.pickerButtonConfirm]}
+                  onPress={handleTimeConfirm}
+                  accessible={true}
+                  accessibilityRole="button"
+                  accessibilityLabel="Confirm time"
+                >
+                  <Text style={[styles.pickerButtonText, styles.pickerButtonTextConfirm]}>
+                    Confirm
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+      )}
+      {timePickerVisible && Platform.OS === 'android' && (
+        <DateTimePicker
+          value={pickerDate}
+          mode="time"
+          display="default"
+          onChange={handleTimeChange}
+        />
       )}
     </View>
   );
@@ -569,6 +647,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     minHeight: 44,
   },
+  settingSection: {
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
   settingInfo: {
     flex: 1,
     marginRight: 16,
@@ -592,19 +675,20 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
   timeButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    minWidth: 80,
-    minHeight: 44,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: '#F2F2F7',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    minHeight: 50,
+    marginTop: 12,
   },
   timeButtonText: {
-    color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
+    color: '#000000',
+    flex: 1,
   },
   savingIndicator: {
     flexDirection: 'row',
@@ -618,63 +702,58 @@ const styles = StyleSheet.create({
     color: '#666666',
   },
   modalOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
-  modalContent: {
+  pickerModalContent: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 24,
-    width: '80%',
-    maxWidth: 400,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20, // Account for iOS safe area
   },
-  modalTitle: {
+  pickerHeader: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5',
+  },
+  pickerTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#000000',
-    marginBottom: 16,
     textAlign: 'center',
   },
-  timeInput: {
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 16,
-    minHeight: 44,
+  pickerContainer: {
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 8,
   },
-  modalButtons: {
+  pickerButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    gap: 12,
   },
-  modalButton: {
+  pickerButton: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginHorizontal: 4,
-    minHeight: 44,
+    paddingVertical: 14,
+    borderRadius: 12,
+    minHeight: 48,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  modalButtonCancel: {
-    backgroundColor: '#E5E5E5',
+  pickerButtonCancel: {
+    backgroundColor: '#F2F2F7',
   },
-  modalButtonConfirm: {
+  pickerButtonConfirm: {
     backgroundColor: '#007AFF',
   },
-  modalButtonText: {
-    fontSize: 16,
+  pickerButtonText: {
+    fontSize: 17,
     fontWeight: '600',
     color: '#000000',
   },
-  modalButtonTextConfirm: {
+  pickerButtonTextConfirm: {
     color: '#FFFFFF',
   },
 });
