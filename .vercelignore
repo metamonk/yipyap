@@ -53,6 +53,9 @@ constants
 types
 assets
 styles
+ios
+android
+output_frames
 
 # Config files not needed for API
 babel.config.js

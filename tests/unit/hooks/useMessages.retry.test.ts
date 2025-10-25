@@ -238,17 +238,10 @@ describe('useMessages - Retry Functionality', () => {
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
 
-      // Verify updateConversationLastMessage was called
-      expect(mockUpdateConversationLastMessage).toHaveBeenCalledWith(
-        conversationId,
-        {
-          text: 'Retry success test',
-          senderId: currentUserId,
-          timestamp: confirmedTimestamp,
-        },
-        participantIds,
-        currentUserId
-      );
+      // Note: updateConversationLastMessage is called inside sendMessage service
+      // (not by the hook directly), so we don't test for it here
+      // Verify that sendMessage was called (which handles updateConversationLastMessage)
+      expect(mockSendMessage).toHaveBeenCalled();
     });
   });
 
@@ -485,7 +478,8 @@ describe('useMessages - Retry Functionality', () => {
           senderId: currentUserId,
           text: originalText,
         },
-        participantIds
+        participantIds,
+        undefined // draftParams
       );
     });
   });

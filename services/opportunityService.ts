@@ -209,9 +209,14 @@ class OpportunityService {
 
       // Execute all queries in parallel
       const messageArrays = await Promise.all(messageQueries);
-      const opportunities = messageArrays.flat();
+      const allOpportunities = messageArrays.flat();
 
-      console.log(`Found ${opportunities.length} opportunities across all conversations`);
+      console.log(`Found ${allOpportunities.length} opportunities across all conversations`);
+
+      // Filter out user's own messages - they shouldn't see their own messages as opportunities
+      const opportunities = allOpportunities.filter(msg => msg.senderId !== userId);
+      
+      console.log(`Filtered to ${opportunities.length} opportunities (excluded user's own messages)`);
 
       // Sort by score DESC, then timestamp DESC, and return top N
       const sortedOpportunities = opportunities

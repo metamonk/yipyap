@@ -83,13 +83,122 @@ export async function getDailyDigest(userId?: string): Promise<DailyDigest | nul
       return null;
     }
 
-    return querySnapshot.docs[0].data() as DailyDigest;
+    const digestData = querySnapshot.docs[0].data() as DailyDigest;
+
+    // If arrays are empty but counts are non-zero, populate them from message queries
+    // This handles the case where backend created digest with counts but not message arrays
+    if (
+      (digestData.pendingMessages.length === 0 && digestData.summary.totalNeedingReview > 0) ||
+      (digestData.handledMessages.length === 0 && digestData.summary.totalHandled > 0)
+    ) {
+      console.log('[DailyDigest] Populating message arrays from metadata queries...');
+
+      // Query for pending messages (marked with pendingReview: true)
+      if (digestData.pendingMessages.length === 0 && digestData.summary.totalNeedingReview > 0) {
+        const pendingMessages = await queryMessagesByMetadata(uid, 'pendingReview', true);
+        digestData.pendingMessages = pendingMessages;
+      }
+
+      // Query for handled messages (marked with autoResponseSent: true)
+      if (digestData.handledMessages.length === 0 && digestData.summary.totalHandled > 0) {
+        const handledMessages = await queryMessagesByMetadata(uid, 'autoResponseSent', true);
+        digestData.handledMessages = handledMessages;
+      }
+    }
+
+    return digestData;
   } catch (error) {
     console.error('Error fetching daily digest:', error);
     if (error instanceof FirestoreError) {
       throw new Error(`Failed to load daily digest: ${error.message}`);
     }
     throw error;
+  }
+}
+
+/**
+ * Queries messages across conversations by metadata field
+ * @internal Helper function for getDailyDigest
+ *
+ * @remarks
+ * Uses a simplified query without orderBy to avoid requiring composite indexes.
+ * Filters and sorts results in-memory instead.
+ */
+async function queryMessagesByMetadata(
+  userId: string,
+  metadataKey: string,
+  metadataValue: any
+): Promise<any[]> {
+  try {
+    const db = getFirebaseDb();
+
+    // Get user's conversations
+    const conversationsQuery = query(
+      collection(db, 'conversations'),
+      where('participantIds', 'array-contains', userId),
+      firestoreLimit(20) // Limit conversations to avoid timeouts
+    );
+    const conversationsSnap = await getDocs(conversationsQuery);
+
+    const messages: any[] = [];
+
+    // Query messages in each conversation
+    // Note: Using simple where() without orderBy to avoid requiring composite indexes
+    for (const convDoc of conversationsSnap.docs) {
+      try {
+        const messagesQuery = query(
+          collection(db, 'conversations', convDoc.id, 'messages'),
+          where(`metadata.${metadataKey}`, '==', metadataValue),
+          firestoreLimit(20) // Reasonable limit per conversation
+        );
+
+        const messagesSnap = await getDocs(messagesQuery);
+
+        messagesSnap.forEach((msgDoc) => {
+          const msgData = msgDoc.data();
+
+          // Only include messages with actual text
+          if (msgData.text && typeof msgData.text === 'string') {
+            // Determine actionTaken based on metadata
+            let actionTaken: 'auto_responded' | 'draft_created' | 'pending_review';
+            if (metadataKey === 'autoResponseSent' && msgData.metadata?.faqTemplateId) {
+              actionTaken = 'auto_responded';
+            } else if (msgData.metadata?.suggestedResponse) {
+              actionTaken = 'draft_created';
+            } else {
+              actionTaken = 'pending_review';
+            }
+
+            messages.push({
+              messageId: msgDoc.id,
+              conversationId: convDoc.id,
+              senderName: msgData.senderName || 'Unknown',
+              messagePreview: msgData.text.substring(0, 100),
+              category: msgData.metadata?.category || 'general',
+              actionTaken,
+              draftResponse: msgData.metadata?.suggestedResponse || undefined,
+              faqTemplateId: msgData.metadata?.faqTemplateId || undefined,
+              timestamp: msgData.timestamp,
+            });
+          }
+        });
+      } catch (convError) {
+        // Log error but continue with other conversations
+        console.warn(`Error querying messages in conversation ${convDoc.id}:`, convError);
+      }
+    }
+
+    // Sort messages by timestamp in-memory (newest first)
+    messages.sort((a, b) => {
+      if (!a.timestamp || !b.timestamp) return 0;
+      return b.timestamp.seconds - a.timestamp.seconds;
+    });
+
+    // Remove timestamp field from final results (used only for sorting)
+    return messages.map(({ timestamp, ...rest }) => rest);
+  } catch (error) {
+    console.error(`Error querying messages by metadata (${metadataKey}):`, error);
+    return [];
   }
 }
 

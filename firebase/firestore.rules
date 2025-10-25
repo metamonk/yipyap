@@ -42,7 +42,8 @@ service cloud.firestore {
                       request.resource.data.updatedAt is timestamp &&
                       // Optional fields validation (if present)
                       (!request.resource.data.keys().hasAny(['photoURL']) || request.resource.data.photoURL is string) &&
-                      (!request.resource.data.keys().hasAny(['fcmToken']) || request.resource.data.fcmToken is string);
+                      (!request.resource.data.keys().hasAny(['fcmToken']) || request.resource.data.fcmToken is string) &&
+                      (!request.resource.data.keys().hasAny(['fcmTokens']) || request.resource.data.fcmTokens is list);
 
       // Users can update their own profile - allow partial updates
       allow update: if request.auth != null &&
@@ -78,7 +79,8 @@ service cloud.firestore {
                       (!request.resource.data.keys().hasAny(['updatedAt']) || request.resource.data.updatedAt is timestamp) &&
                       // Validate optional fields if present
                       (!request.resource.data.keys().hasAny(['photoURL']) || request.resource.data.photoURL is string) &&
-                      (!request.resource.data.keys().hasAny(['fcmToken']) || request.resource.data.fcmToken is string);
+                      (!request.resource.data.keys().hasAny(['fcmToken']) || request.resource.data.fcmToken is string) &&
+                      (!request.resource.data.keys().hasAny(['fcmTokens']) || request.resource.data.fcmTokens is list);
     }
 
     // Username uniqueness collection

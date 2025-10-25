@@ -435,15 +435,14 @@ export function useMessages(
       // Scroll to show user's new message at bottom (index 0 in inverted list)
       scrollToBottom();
 
-      // If offline, show message to user and let Firestore handle queuing
-      if (connectionStatus === 'offline') {
-        // Don't attempt to send or update conversation - Firestore will queue automatically
-        // Message stays in optimistic state with 'sending' status
-        return;
-      }
-
+      // IMPORTANT: Always call sendMessage regardless of connection status
+      // Firestore's offline persistence (configured in firebase.ts with persistentLocalCache)
+      // automatically handles offline writes:
+      // - Online: Write succeeds immediately and syncs to server
+      // - Offline: Write succeeds to local cache, queues for auto-sync when connection restored
+      // The message will persist across app restarts because Firestore caches it locally
       try {
-        // Write to Firestore
+        // Write to Firestore (works both online and offline)
         await sendMessage(
           {
             conversationId,

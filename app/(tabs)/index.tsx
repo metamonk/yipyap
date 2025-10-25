@@ -175,10 +175,24 @@ export default function HomeScreen() {
       (newOpportunity) => {
         console.log('New high-value opportunity received:', newOpportunity.id);
 
+        // Filter out user's own messages - they shouldn't see their own messages as opportunities
+        if (newOpportunity.senderId === user.uid) {
+          console.log('Skipping opportunity from user themselves:', newOpportunity.id);
+          return;
+        }
+
         // Animate the update for smooth UX
         animateDashboardUpdate(() => {
-          // Add new opportunity to the top of the list
-          setOpportunities((prev) => [newOpportunity, ...prev]);
+          // Add new opportunity to the top of the list, but deduplicate first
+          setOpportunities((prev) => {
+            // Check if opportunity already exists (by ID)
+            const exists = prev.some(opp => opp.id === newOpportunity.id);
+            if (exists) {
+              console.log('Opportunity already exists in list, skipping duplicate:', newOpportunity.id);
+              return prev;
+            }
+            return [newOpportunity, ...prev];
+          });
         });
       }
     );
@@ -289,12 +303,12 @@ export default function HomeScreen() {
         <DashboardWidgetContainer
           userId={user.uid}
           onMessagePress={handleMessagePress}
-          dashboardSummary={dailySummary}
+          dashboardSummary={dailySummary || undefined}
           opportunities={opportunities}
           loading={loading}
           aiAvailable={aiAvailable}
           error={error}
-          onRefresh={loadDashboardData}
+          onRefresh={handleRefresh}
           refreshing={refreshing}
         />
       </Animated.View>

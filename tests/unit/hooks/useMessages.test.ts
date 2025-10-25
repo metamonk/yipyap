@@ -194,7 +194,8 @@ describe('useMessages', () => {
           senderId: currentUserId,
           text: 'New message',
         },
-        participantIds
+        participantIds,
+        undefined // draftParams
       );
     });
 

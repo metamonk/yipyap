@@ -226,6 +226,10 @@ export default async function handler(request: Request): Promise<Response> {
     const rateLimitResult = await limiter.checkLimit(rateLimitKey);
 
     if (!rateLimitResult.allowed) {
+      const retryAfterSeconds = Math.max(
+        0,
+        rateLimitResult.resetAt - Math.floor(Date.now() / 1000)
+      );
       return new Response(
         JSON.stringify({
           success: false,
@@ -235,7 +239,7 @@ export default async function handler(request: Request): Promise<Response> {
           status: 429,
           headers: {
             'Content-Type': 'application/json',
-            'Retry-After': String(rateLimitResult.retryAfter || 60),
+            'Retry-After': String(retryAfterSeconds || 60),
           },
         }
       );

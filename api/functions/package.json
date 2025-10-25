@@ -1,5 +1,0 @@
-{
-  "dependencies": {
-    "@pinecone-database/pinecone": "^6.1.2"
-  }
-}
