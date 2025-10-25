@@ -13,7 +13,7 @@ import { openai } from '@ai-sdk/openai';
 import { embed } from 'ai';
 import * as admin from 'firebase-admin';
 import { queryFAQMatches, PINECONE_CONFIG, type FAQMatch } from './utils/pineconeClient.js';
-import { checkRateLimit } from './utils/rateLimiter.js';
+import { createRateLimiter } from './utils/rateLimiter.js';
 
 // Initialize Firebase Admin if not already initialized
 // Required for fetching FAQ template answers from Firestore
@@ -197,7 +197,8 @@ export default async function handler(request: Request): Promise<Response> {
 
     // Check rate limit (100 requests per minute per creator)
     const rateLimitKey = `faq-detect:${creatorId}`;
-    const rateLimitResult = await checkRateLimit(rateLimitKey, 100, 60);
+    const limiter = createRateLimiter({ maxRequests: 100, windowSeconds: 60 });
+    const rateLimitResult = await limiter.checkLimit(rateLimitKey);
 
     if (!rateLimitResult.allowed) {
       return new Response(
