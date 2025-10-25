@@ -12,17 +12,15 @@
 import { openai } from '@ai-sdk/openai';
 import { embed } from 'ai';
 import * as admin from 'firebase-admin';
-import {
-  queryFAQMatches,
-  PINECONE_CONFIG,
-  type FAQMatch,
-} from './utils/pineconeClient';
+import { queryFAQMatches, PINECONE_CONFIG, type FAQMatch } from './utils/pineconeClient';
 import { checkRateLimit } from './utils/rateLimiter';
 
 // Initialize Firebase Admin if not already initialized
 // Required for fetching FAQ template answers from Firestore
 if (!admin.apps.length) {
-  admin.initializeApp();
+  admin.initializeApp({
+    projectId: process.env.FIREBASE_PROJECT_ID || 'yipyap-444',
+  });
 }
 
 const db = admin.firestore();
@@ -133,7 +131,7 @@ const CONFIDENCE_THRESHOLDS = {
   AUTO_RESPONSE: 0.85,
 
   /** Suggestion threshold (0.70-0.84) */
-  SUGGEST: 0.70,
+  SUGGEST: 0.7,
 } as const;
 
 /**
@@ -233,15 +231,17 @@ export default async function handler(request: Request): Promise<Response> {
       embeddingLatency = Date.now() - embeddingStartTime;
 
       // Performance logging for monitoring (Subtask 17.2: Target <200ms)
-      console.warn(JSON.stringify({
-        event: 'embedding_generated',
-        messageId,
-        creatorId,
-        latencyMs: embeddingLatency,
-        embeddingDimension: embedding.length,
-        targetMs: 200,
-        withinTarget: embeddingLatency < 200,
-      }));
+      console.warn(
+        JSON.stringify({
+          event: 'embedding_generated',
+          messageId,
+          creatorId,
+          latencyMs: embeddingLatency,
+          embeddingDimension: embedding.length,
+          targetMs: 200,
+          withinTarget: embeddingLatency < 200,
+        })
+      );
 
       // Validate embedding dimension
       if (embedding.length !== PINECONE_CONFIG.dimension) {
@@ -291,16 +291,18 @@ export default async function handler(request: Request): Promise<Response> {
       pineconeLatency = Date.now() - pineconeStartTime;
 
       // Performance logging for monitoring (Subtask 17.3: Target <50ms)
-      console.warn(JSON.stringify({
-        event: 'pinecone_query_completed',
-        messageId,
-        creatorId,
-        latencyMs: pineconeLatency,
-        matchCount: faqMatches.length,
-        topScore: faqMatches[0]?.score || 0,
-        targetMs: 50,
-        withinTarget: pineconeLatency < 50,
-      }));
+      console.warn(
+        JSON.stringify({
+          event: 'pinecone_query_completed',
+          messageId,
+          creatorId,
+          latencyMs: pineconeLatency,
+          matchCount: faqMatches.length,
+          topScore: faqMatches[0]?.score || 0,
+          targetMs: 50,
+          withinTarget: pineconeLatency < 50,
+        })
+      );
     } catch (error) {
       const totalLatency = Date.now() - startTime;
       console.error('Pinecone query failed:', error);
@@ -331,20 +333,22 @@ export default async function handler(request: Request): Promise<Response> {
     const overheadLatency = totalLatency - embeddingLatency - pineconeLatency;
 
     // Overall performance logging (Subtask 17.4: Target <500ms at 95th percentile)
-    console.warn(JSON.stringify({
-      event: 'faq_detection_completed',
-      messageId,
-      creatorId,
-      performance: {
-        totalMs: totalLatency,
-        embeddingMs: embeddingLatency,
-        pineconeMs: pineconeLatency,
-        overheadMs: overheadLatency,
-      },
-      targetMs: 500,
-      withinTarget: totalLatency < 500,
-      matchFound: faqMatches.length > 0,
-    }));
+    console.warn(
+      JSON.stringify({
+        event: 'faq_detection_completed',
+        messageId,
+        creatorId,
+        performance: {
+          totalMs: totalLatency,
+          embeddingMs: embeddingLatency,
+          pineconeMs: pineconeLatency,
+          overheadMs: overheadLatency,
+        },
+        targetMs: 500,
+        withinTarget: totalLatency < 500,
+        matchFound: faqMatches.length > 0,
+      })
+    );
 
     // Create performance metrics object for all responses
     const performanceMetrics: PerformanceMetrics = {
