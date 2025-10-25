@@ -134,14 +134,22 @@ interface DetectFAQResponse {
 }
 
 /**
- * Helper function to fetch FAQ template from Firestore
+ * Helper function to fetch FAQ template from Firestore with timeout
  * @param faqId - FAQ template ID
  * @returns FAQ template answer text, or null if not found
  */
 async function getFAQAnswer(faqId: string): Promise<string | null> {
   try {
     const firestore = getDb();
-    const faqDoc = await firestore.collection('faq_templates').doc(faqId).get();
+
+    // Add 2-second timeout to prevent Edge Function from hanging
+    const faqDoc = await Promise.race([
+      firestore.collection('faq_templates').doc(faqId).get(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Firestore query timeout (2s)')), 2000)
+      ),
+    ]);
+
     if (!faqDoc.exists) {
       console.warn(`FAQ template ${faqId} not found in Firestore`);
       return null;
@@ -226,10 +234,26 @@ export default async function handler(request: Request): Promise<Response> {
       );
     }
 
-    // Check rate limit (100 requests per minute per creator)
+    // Check rate limit (100 requests per minute per creator) with timeout
     const rateLimitKey = `faq-detect:${creatorId}`;
     const limiter = createRateLimiter({ maxRequests: 100, windowSeconds: 60 });
-    const rateLimitResult = await limiter.checkLimit(rateLimitKey);
+
+    // Add 1-second timeout to rate limiter to prevent hanging
+    const rateLimitResult = await Promise.race([
+      limiter.checkLimit(rateLimitKey),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Rate limiter timeout (1s)')), 1000)
+      ),
+    ]).catch((error) => {
+      console.error('Rate limiter error:', error);
+      // Fail open on rate limiter errors to avoid blocking legitimate requests
+      return {
+        allowed: true,
+        remaining: 100,
+        resetAt: Math.floor(Date.now() / 1000) + 60,
+        limit: 100,
+      };
+    });
 
     if (!rateLimitResult.allowed) {
       const retryAfterSeconds = Math.max(
@@ -258,10 +282,16 @@ export default async function handler(request: Request): Promise<Response> {
     try {
       const embeddingStartTime = Date.now();
 
-      const { embedding } = await embed({
-        model: openai.embedding('text-embedding-3-small'),
-        value: messageText,
-      });
+      // Add 3-second timeout to embedding generation
+      const { embedding } = await Promise.race([
+        embed({
+          model: openai.embedding('text-embedding-3-small'),
+          value: messageText,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('OpenAI embedding timeout (3s)')), 3000)
+        ),
+      ]);
 
       embeddingVector = embedding;
       embeddingLatency = Date.now() - embeddingStartTime;

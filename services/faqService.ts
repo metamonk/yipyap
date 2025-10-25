@@ -35,12 +35,23 @@ import { httpsCallable, HttpsCallableResult } from 'firebase/functions';
 import { getFirebaseDb, getFirebaseAuth, getFunctions } from './firebase';
 import { sendMessage } from './messageService';
 import { getConversation } from './conversationService';
-import type { FAQTemplate, CreateFAQTemplateInput, UpdateFAQTemplateInput, FAQAnalytics } from '@/types/faq';
+import type {
+  FAQTemplate,
+  CreateFAQTemplateInput,
+  UpdateFAQTemplateInput,
+  FAQAnalytics,
+} from '@/types/faq';
 import type { Message } from '@/types/models';
 import { trackOperationStart, trackOperationEnd } from './aiPerformanceService';
-import { generateCacheKey, getCachedResult, setCachedResult, isCachingEnabled } from './aiCacheService';
+import {
+  generateCacheKey,
+  getCachedResult,
+  setCachedResult,
+  isCachingEnabled,
+} from './aiCacheService';
 import { checkUserBudgetStatus } from './aiAvailabilityService';
 import { checkRateLimit, incrementOperationCount } from './aiRateLimitService';
+import { Config } from '@/constants/Config';
 
 /**
  * Result type for FAQ template creation
@@ -759,10 +770,7 @@ export async function getFAQAnalytics(userId: string): Promise<FAQAnalytics> {
 
   try {
     // Fetch all FAQ templates for the user
-    const templatesQuery = query(
-      collection(db, 'faq_templates'),
-      where('creatorId', '==', userId)
-    );
+    const templatesQuery = query(collection(db, 'faq_templates'), where('creatorId', '==', userId));
 
     const snapshot = await getDocs(templatesQuery);
 
@@ -867,7 +875,9 @@ export async function detectFAQForNewMessage(message: Message): Promise<void> {
     if (conversation.type === 'group') {
       // For group conversations, use the creatorId field
       if (!conversation.creatorId) {
-        console.warn(`Group conversation ${message.conversationId} missing creatorId, skipping FAQ detection`);
+        console.warn(
+          `Group conversation ${message.conversationId} missing creatorId, skipping FAQ detection`
+        );
         return;
       }
       creatorId = conversation.creatorId;
@@ -875,7 +885,9 @@ export async function detectFAQForNewMessage(message: Message): Promise<void> {
       // For direct conversations, creator is the OTHER participant (not the sender)
       const otherParticipantId = conversation.participantIds.find((id) => id !== message.senderId);
       if (!otherParticipantId) {
-        console.warn(`Could not determine creator for direct conversation ${message.conversationId}`);
+        console.warn(
+          `Could not determine creator for direct conversation ${message.conversationId}`
+        );
         return;
       }
       creatorId = otherParticipantId;
@@ -886,14 +898,18 @@ export async function detectFAQForNewMessage(message: Message): Promise<void> {
     // Check if user's AI features are disabled due to budget
     const budgetStatus = await checkUserBudgetStatus(creatorId);
     if (!budgetStatus.enabled) {
-      console.warn(`[faqService] AI features disabled for user ${creatorId}: ${budgetStatus.disabledReason}`);
+      console.warn(
+        `[faqService] AI features disabled for user ${creatorId}: ${budgetStatus.disabledReason}`
+      );
       return; // Silently skip FAQ detection if budget exceeded
     }
 
     // Check rate limit for FAQ detection operation
     const rateLimitCheck = await checkRateLimit(creatorId, 'faq_detection');
     if (!rateLimitCheck.allowed) {
-      console.warn(`[faqService] Rate limit exceeded for user ${creatorId}: ${rateLimitCheck.reason}`);
+      console.warn(
+        `[faqService] Rate limit exceeded for user ${creatorId}: ${rateLimitCheck.reason}`
+      );
       return; // Silently skip FAQ detection if rate limit exceeded
     }
 
@@ -901,7 +917,8 @@ export async function detectFAQForNewMessage(message: Message): Promise<void> {
     trackOperationStart(operationId, 'faq_detection');
 
     // Check cache first if caching is enabled
-    let result: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let result: any; // Type from Edge Function API response
     let cacheHit = false;
     let cacheKey: string | undefined;
 
@@ -922,7 +939,9 @@ export async function detectFAQForNewMessage(message: Message): Promise<void> {
     // If cache miss, call Edge Function
     if (!cacheHit) {
       // Call Edge Function for FAQ detection
-      const response = await fetch('/api/detect-faq', {
+      const apiUrl = Config.ai.vercelEdgeUrl || 'https://api.yipyap.wtf';
+      // eslint-disable-next-line no-undef
+      const response = await fetch(`${apiUrl}/api/detect-faq`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -983,7 +1002,9 @@ export async function detectFAQForNewMessage(message: Message): Promise<void> {
     const messageRef = doc(db, 'conversations', message.conversationId, 'messages', message.id);
 
     // Build update object based on detection result
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: Record<string, any> = {
+      // Dynamic fields for Firestore updateDoc
       'metadata.isFAQ': result.isFAQ || false,
       'metadata.faqMatchConfidence': result.matchConfidence || 0,
     };
