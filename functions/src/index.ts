@@ -14,11 +14,12 @@ export * from './ai/sentimentNotifications';
 // Export FAQ embedding functions (Story 5.4)
 export * from './ai/faqEmbeddings';
 
-// Export FAQ auto-response functions (Story 5.4)
-export * from './ai/faqAutoResponse';
-
 // Export FAQ detection trigger functions (Story 5.4)
+// This includes both detection AND auto-response logic in onCreate trigger
 export * from './ai/faqDetectionTrigger';
+
+// NOTE: faqAutoResponse.ts (onUpdate trigger) is deprecated
+// Auto-response logic is now integrated into faqDetectionTrigger.ts (onCreate)
 
 // Export voice matching functions (Story 5.5)
 export * from './ai/voiceTraining';
