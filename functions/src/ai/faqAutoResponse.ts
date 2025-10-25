@@ -19,6 +19,7 @@
 
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
+import type { Change, EventContext } from 'firebase-functions/v1';
 import type { QueryDocumentSnapshot } from 'firebase-functions/v1/firestore';
 
 // Initialize Firebase Admin if not already initialized
@@ -240,9 +241,29 @@ function sleep(ms: number): Promise<void> {
  */
 export const onFAQDetected = functions.firestore
   .document('conversations/{conversationId}/messages/{messageId}')
-  .onCreate(async (snapshot: QueryDocumentSnapshot, context) => {
-    const messageData = snapshot.data() as MessageData;
+  .onUpdate(async (change: Change<QueryDocumentSnapshot>, context: EventContext) => {
+    const beforeData = change.before.data() as MessageData;
+    const afterData = change.after.data() as MessageData;
     const { conversationId, messageId } = context.params;
+
+    // DEBUG: Log all onUpdate triggers
+    functions.logger.info('[onFAQDetected] Trigger fired', {
+      conversationId,
+      messageId,
+      beforeIsFAQ: beforeData.metadata?.isFAQ,
+      afterIsFAQ: afterData.metadata?.isFAQ,
+    });
+
+    // Only trigger if isFAQ was just set to true (metadata was updated)
+    const wasNotFAQ = !beforeData.metadata?.isFAQ;
+    const isNowFAQ = afterData.metadata?.isFAQ === true;
+
+    if (!wasNotFAQ || !isNowFAQ) {
+      // FAQ metadata wasn't just added, skip
+      return null;
+    }
+
+    const messageData = afterData;
 
     functions.logger.info('FAQ auto-response trigger started', {
       conversationId,
@@ -364,7 +385,7 @@ export const onFAQDetected = functions.firestore
       });
 
       // Update original message metadata with auto-response ID (AC: Subtask 6.6)
-      await snapshot.ref.update({
+      await change.after.ref.update({
         'metadata.autoResponseId': autoResponseRef.id,
       });
 

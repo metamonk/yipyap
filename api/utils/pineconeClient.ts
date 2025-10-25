@@ -151,7 +151,7 @@ export async function queryFAQMatches(
       filter.category = { $eq: category };
     }
 
-    // Query Pinecone with 500ms timeout for edge performance
+    // Query Pinecone with 1s timeout for edge performance (increased for reliability)
     const queryResponse = await Promise.race([
       index.query({
         vector: embedding,
@@ -160,7 +160,7 @@ export async function queryFAQMatches(
         filter: Object.keys(filter).length > 0 ? filter : undefined,
       }),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Pinecone query timeout (500ms)')), 500)
+        setTimeout(() => reject(new Error('Pinecone query timeout (1s)')), 1000)
       ),
     ]);
 
@@ -170,7 +170,7 @@ export async function queryFAQMatches(
       .map((match) => ({
         id: match.id,
         score: match.score!,
-        metadata: match.metadata as FAQVectorMetadata,
+        metadata: match.metadata as unknown as FAQVectorMetadata,
       }));
 
     return matches;
@@ -229,7 +229,7 @@ export async function upsertFAQEmbedding(
       {
         id,
         values: embedding,
-        metadata,
+        metadata: metadata as any,
       },
     ]);
   } catch (error) {
@@ -291,7 +291,7 @@ export async function updateFAQMetadata(
 
     await index.update({
       id,
-      metadata: updates,
+      metadata: updates as any,
     });
   } catch (error) {
     console.error('Pinecone metadata update failed:', error);

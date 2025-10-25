@@ -17,6 +17,9 @@ export * from './ai/faqEmbeddings';
 // Export FAQ auto-response functions (Story 5.4)
 export * from './ai/faqAutoResponse';
 
+// Export FAQ detection trigger functions (Story 5.4)
+export * from './ai/faqDetectionTrigger';
+
 // Export voice matching functions (Story 5.5)
 export * from './ai/voiceTraining';
 export * from './ai/voiceMatching';

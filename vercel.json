@@ -1,8 +1,1 @@
-{
-  "functions": {
-    "api/detect-faq.ts": {
-      "maxDuration": 10,
-      "memory": 1024
-    }
-  }
-}
+{}
