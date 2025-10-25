@@ -29,6 +29,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { presenceService } from '@/services/presenceService';
+import { getFirebaseAuth } from '@/services/firebase';
 import type { PresenceData } from '@/types/models';
 
 /**
@@ -86,18 +87,43 @@ export const PresenceIndicator: React.FC<PresenceIndicatorProps> = ({
   hideWhenOffline = false,
 }) => {
   const [presence, setPresence] = useState<PresenceData | null>(null);
+  const [isAuthValid, setIsAuthValid] = useState<boolean>(true);
   const pulseAnim = useState(new Animated.Value(1))[0];
 
-  // Subscribe to presence updates
+  // Monitor auth state to prevent permission errors during logout
   useEffect(() => {
+    const auth = getFirebaseAuth();
+
+    // Listen for auth state changes
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setIsAuthValid(user !== null);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  // Subscribe to presence updates (only when authenticated)
+  useEffect(() => {
+    // Don't subscribe if user is not authenticated
+    // This prevents permission_denied errors during logout
+    if (!isAuthValid) {
+      // Don't call setPresence here - let the subscription handle it
+      // The callback will be called with null when unsubscribed
+      return;
+    }
+
     const unsubscribe = presenceService.subscribeToPresence(userId, (presenceData) => {
       setPresence(presenceData);
     });
 
     return () => {
       unsubscribe();
+      // Clear presence when unsubscribing
+      setPresence(null);
     };
-  }, [userId]);
+  }, [userId, isAuthValid]);
 
   // Pulse animation for online status
   useEffect(() => {

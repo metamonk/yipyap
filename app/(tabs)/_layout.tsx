@@ -81,6 +81,14 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="daily-digest"
+        options={{
+          title: 'Daily',
+          tabBarIcon: ({ color, size }) => <Ionicons name="today" size={size} color={color} />,
+          headerShown: false,
+        }}
+      />
+      <Tabs.Screen
         name="conversations"
         options={{
           title: 'Messages',

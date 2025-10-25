@@ -19,12 +19,15 @@
     "test:integration:with-emulator": "firebase emulators:exec --only firestore,database,storage,auth 'NODE_OPTIONS=--experimental-vm-modules INTEGRATION_TEST=true npx jest --config jest.integration.config.js tests/integration/'",
     "test:rules": "firebase emulators:exec --only firestore,storage 'NODE_OPTIONS=--experimental-vm-modules jest --config jest.rules.config.js'",
     "emulator": "firebase emulators:start --only firestore,storage",
+    "trigger-daily-agent": "tsx scripts/triggerDailyAgent.ts",
+    "trigger-daily": "tsx scripts/triggerDailyAgentSimple.ts",
     "prepare": "husky"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
     "@pinecone-database/pinecone": "^6.1.2",
     "@react-native-async-storage/async-storage": "^1.24.0",
+    "@react-native-community/datetimepicker": "8.4.4",
     "@react-native-community/netinfo": "^11.4.1",
     "@react-native-community/slider": "5.0.1",
     "@react-native-picker/picker": "^2.11.4",

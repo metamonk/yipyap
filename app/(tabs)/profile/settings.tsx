@@ -47,7 +47,9 @@ export default function SettingsScreen() {
   });
 
   // Opportunity notification settings (Story 5.6 - Task 9)
-  const [opportunitySettings, setOpportunitySettings] = useState<NonNullable<User['settings']['opportunityNotifications']>>({
+  const [opportunitySettings, setOpportunitySettings] = useState<
+    NonNullable<User['settings']['opportunityNotifications']>
+  >({
     enabled: true,
     minimumScore: 70,
     notifyByType: {
@@ -68,9 +70,9 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     const loadPreferences = async () => {
+      // Don't try to navigate back on logout - root layout handles redirect to login
+      // Just return early if no user (component will unmount when navigation happens)
       if (!currentUser) {
-        Alert.alert('Error', 'You must be logged in to view settings.');
-        router.back();
         return;
       }
 
@@ -102,10 +104,7 @@ export default function SettingsScreen() {
    * @param field - The preference field to update
    * @param value - The new value
    */
-  const handleToggle = async (
-    field: keyof NotificationPreferences,
-    value: boolean | string
-  ) => {
+  const handleToggle = async (field: keyof NotificationPreferences, value: boolean | string) => {
     if (!currentUser) {
       Alert.alert('Error', 'You must be logged in to change settings.');
       return;
@@ -271,9 +270,7 @@ export default function SettingsScreen() {
             <View style={styles.settingRow}>
               <View style={styles.settingInfo}>
                 <Text style={styles.settingLabel}>Group Messages</Text>
-                <Text style={styles.settingDescription}>
-                  Notifications for group conversations
-                </Text>
+                <Text style={styles.settingDescription}>Notifications for group conversations</Text>
               </View>
               <Switch
                 value={preferences.groupMessages}
@@ -329,7 +326,8 @@ export default function SettingsScreen() {
                 <View style={styles.sliderInfo}>
                   <Text style={styles.settingLabel}>Minimum Score Threshold</Text>
                   <Text style={styles.settingDescription}>
-                    Only notify for opportunities scoring {opportunitySettings.minimumScore} or higher
+                    Only notify for opportunities scoring {opportunitySettings.minimumScore} or
+                    higher
                   </Text>
                 </View>
                 <Slider
@@ -338,7 +336,9 @@ export default function SettingsScreen() {
                   maximumValue={100}
                   step={5}
                   value={opportunitySettings.minimumScore}
-                  onValueChange={(value: number) => handleOpportunitySettingsUpdate({ minimumScore: value })}
+                  onValueChange={(value: number) =>
+                    handleOpportunitySettingsUpdate({ minimumScore: value })
+                  }
                   minimumTrackTintColor="#007AFF"
                   maximumTrackTintColor="#D1D1D6"
                   thumbTintColor="#007AFF"
@@ -407,7 +407,9 @@ export default function SettingsScreen() {
               <View style={styles.settingRow}>
                 <View style={styles.settingInfo}>
                   <Text style={styles.settingLabel}>Sales & Products</Text>
-                  <Text style={styles.settingDescription}>Product purchases and sales inquiries</Text>
+                  <Text style={styles.settingDescription}>
+                    Product purchases and sales inquiries
+                  </Text>
                 </View>
                 <Switch
                   value={opportunitySettings.notifyByType.sale}

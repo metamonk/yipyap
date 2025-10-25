@@ -161,13 +161,13 @@ class PresenceService {
       // 1. READ all device data first
       const devicesRef = ref(getFirebaseRealtimeDb(), `presence/${this.userId}/devices`);
       const snapshot = await get(devicesRef);
-      const devices = snapshot.val() as Record<string, DevicePresence> || {};
+      const devices = (snapshot.val() as Record<string, DevicePresence>) || {};
 
       // 2. AGGREGATE: if ANY device is online, user is online
       let aggregatedState: 'online' | 'offline' | 'away' = 'offline';
       let mostRecentActivity = 0;
 
-      Object.values(devices).forEach(device => {
+      Object.values(devices).forEach((device) => {
         if (device.state === 'online') {
           // If any device is online, user is online (or away if explicitly set)
           aggregatedState = this.currentState === 'away' ? 'away' : 'online';
@@ -315,7 +315,10 @@ class PresenceService {
           if (localIsConnected && localDevicePresenceRef) {
             try {
               // @ts-expect-error - accessing internal _repo property for safety check
-              if (localDevicePresenceRef._repo !== null && localDevicePresenceRef._repo !== undefined) {
+              if (
+                localDevicePresenceRef._repo !== null &&
+                localDevicePresenceRef._repo !== undefined
+              ) {
                 await onDisconnect(localDevicePresenceRef).cancel();
               }
             } catch (disconnectError) {
@@ -394,7 +397,26 @@ class PresenceService {
         callback(presence);
       },
       (error) => {
-        console.error('Failed to subscribe to presence:', error);
+        // Silently handle permission_denied errors during logout
+        // This occurs when user logs out and auth becomes null while subscriptions are still active
+        // Firebase RTDB errors can have different formats, check both 'code' and 'message'
+        const errorObj = error as { code?: string; message?: string };
+        const errorCode = errorObj.code || '';
+        const errorMessage = errorObj.message || '';
+
+        // Check if this is a permission denied error (can be in code or message)
+        const isPermissionDenied =
+          errorCode === 'PERMISSION_DENIED' ||
+          errorMessage.includes('permission_denied') ||
+          errorMessage.includes('Permission denied');
+
+        if (isPermissionDenied) {
+          // Log as warning instead of error - this is expected during logout
+          console.warn('Presence subscription denied (likely due to logout):', userId);
+        } else {
+          // Log unexpected errors as errors
+          console.error('Failed to subscribe to presence:', error);
+        }
         callback(null);
       }
     );
