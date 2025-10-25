@@ -42,16 +42,17 @@ import type {
   FAQAnalytics,
 } from '@/types/faq';
 import type { Message } from '@/types/models';
-import { trackOperationStart, trackOperationEnd } from './aiPerformanceService';
-import {
-  generateCacheKey,
-  getCachedResult,
-  setCachedResult,
-  isCachingEnabled,
-} from './aiCacheService';
-import { checkUserBudgetStatus } from './aiAvailabilityService';
-import { checkRateLimit, incrementOperationCount } from './aiRateLimitService';
-import { Config } from '@/constants/Config';
+// DEPRECATED: Imports for client-side FAQ detection (no longer used)
+// import { trackOperationStart, trackOperationEnd } from './aiPerformanceService';
+// import {
+//   generateCacheKey,
+//   getCachedResult,
+//   setCachedResult,
+//   isCachingEnabled,
+// } from './aiCacheService';
+// import { checkUserBudgetStatus } from './aiAvailabilityService';
+// import { checkRateLimit, incrementOperationCount } from './aiRateLimitService';
+// import { Config } from '@/constants/Config';
 
 /**
  * Result type for FAQ template creation
@@ -852,8 +853,17 @@ export async function getFAQAnalytics(userId: string): Promise<FAQAnalytics> {
  * );
  * ```
  */
-export async function detectFAQForNewMessage(message: Message): Promise<void> {
-  // Start performance tracking
+export async function detectFAQForNewMessage(_message: Message): Promise<void> {
+  // FAQ detection is now handled entirely server-side by Cloud Function onMessageCreatedDetectFAQ
+  // This function is kept for backwards compatibility but does nothing
+  // Client-side FAQ detection has been removed to prevent duplicate processing and 504 errors
+  return;
+
+  /* DEPRECATED CODE BELOW - Kept for reference only
+  // Client-side FAQ detection that called /api/detect-faq Edge Function
+  // This caused 504 errors and duplicate processing
+  // All FAQ detection is now handled by Cloud Function onMessageCreatedDetectFAQ
+
   const operationId = `faq_detection_${message.id}_${Date.now()}`;
 
   try {
@@ -1047,4 +1057,5 @@ export async function detectFAQForNewMessage(message: Message): Promise<void> {
       error: error instanceof Error ? error.message : 'Unknown error',
     });
   }
+  */
 }
