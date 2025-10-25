@@ -58,7 +58,7 @@ describe('Offline Messaging Integration', () => {
     let subscriptionCallback: ((messages: any[]) => void) | null = null;
 
     // Mock subscribeToMessages to capture the callback
-    mockedSubscribeToMessages.mockImplementation((convId, callback, pageSize) => {
+    mockedSubscribeToMessages.mockImplementation((convId, callback, _pageSize) => {
       subscriptionCallback = callback;
       // Immediately invoke with empty messages
       callback([]);
@@ -188,7 +188,7 @@ describe('Offline Messaging Integration', () => {
     let subscriptionCallback: ((messages: any[]) => void) | null = null;
 
     // Mock subscribeToMessages to capture the callback
-    mockedSubscribeToMessages.mockImplementation((convId, callback, pageSize) => {
+    mockedSubscribeToMessages.mockImplementation((convId, callback, _pageSize) => {
       subscriptionCallback = callback;
       callback([]);
       return jest.fn();

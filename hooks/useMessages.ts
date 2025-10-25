@@ -474,7 +474,7 @@ export function useMessages(
         // User can retry using the retry button
       }
     },
-    [conversationId, currentUserId, participantIds, connectionStatus, draftParams, scrollToBottom]
+    [conversationId, currentUserId, participantIds, draftParams, scrollToBottom]
   );
 
   /**

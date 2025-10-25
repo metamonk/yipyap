@@ -23,10 +23,24 @@ import {
   FirestoreError,
   onSnapshot,
   Unsubscribe,
-  Timestamp,
 } from 'firebase/firestore';
 import { getFirebaseDb, getFirebaseAuth } from './firebase';
 import type { DailyDigest } from '@/types/ai';
+
+/**
+ * Message data structure used for populating digest arrays
+ * @internal
+ */
+interface DigestMessageData {
+  messageId: string;
+  conversationId: string;
+  senderName: string;
+  messagePreview: string;
+  category: string;
+  actionTaken: 'auto_responded' | 'draft_created' | 'pending_review';
+  draftResponse?: string;
+  faqTemplateId?: string;
+}
 
 /**
  * Formats a digest summary from counts
@@ -127,8 +141,8 @@ export async function getDailyDigest(userId?: string): Promise<DailyDigest | nul
 async function queryMessagesByMetadata(
   userId: string,
   metadataKey: string,
-  metadataValue: any
-): Promise<any[]> {
+  metadataValue: boolean | string | number
+): Promise<DigestMessageData[]> {
   try {
     const db = getFirebaseDb();
 
@@ -140,7 +154,7 @@ async function queryMessagesByMetadata(
     );
     const conversationsSnap = await getDocs(conversationsQuery);
 
-    const messages: any[] = [];
+    const messages: Array<DigestMessageData & { timestamp: unknown }> = [];
 
     // Query messages in each conversation
     // Note: Using simple where() without orderBy to avoid requiring composite indexes
@@ -195,7 +209,7 @@ async function queryMessagesByMetadata(
     });
 
     // Remove timestamp field from final results (used only for sorting)
-    return messages.map(({ timestamp, ...rest }) => rest);
+    return messages.map(({ timestamp: _timestamp, ...rest }) => rest);
   } catch (error) {
     console.error(`Error querying messages by metadata (${metadataKey}):`, error);
     return [];
