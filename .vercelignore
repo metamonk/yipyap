@@ -34,6 +34,7 @@ coverage
 *.test.ts
 *.test.tsx
 __tests__
+tests
 
 # Documentation
 docs
@@ -42,3 +43,25 @@ docs
 
 # Scripts (not needed for API)
 scripts
+
+# Mobile app code (not needed for API)
+app
+components
+hooks
+services
+constants
+types
+assets
+styles
+
+# Config files not needed for API
+babel.config.js
+metro.config.js
+jest.config.js
+jest.integration.config.js
+jest.rules.config.js
+.eslintrc.js
+.prettierrc
+tsconfig.json
+app.json
+package-lock.json
