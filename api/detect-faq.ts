@@ -11,16 +11,17 @@
 
 import { openai } from '@ai-sdk/openai';
 import { embed } from 'ai';
-import * as admin from 'firebase-admin';
+import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { queryFAQMatches, PINECONE_CONFIG, type FAQMatch } from './utils/pineconeClient.js';
 import { createRateLimiter } from './utils/rateLimiter.js';
 
 // Initialize Firebase Admin if not already initialized
 // Required for fetching FAQ template answers from Firestore
-let db: admin.firestore.Firestore;
+let db: Firestore;
 
 try {
-  if (!admin.apps || admin.apps.length === 0) {
+  if (getApps().length === 0) {
     // Check if we have base64-encoded service account (recommended for Vercel)
     const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
 
@@ -30,20 +31,20 @@ try {
         Buffer.from(serviceAccountBase64, 'base64').toString('utf-8')
       );
 
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
+      initializeApp({
+        credential: cert(serviceAccount),
         projectId: serviceAccount.project_id,
       });
     } else {
       // Fallback: Try with just project ID (will work in Cloud Functions, fail in Vercel)
       console.warn('No FIREBASE_SERVICE_ACCOUNT_BASE64 found, using project ID only');
-      admin.initializeApp({
+      initializeApp({
         projectId: process.env.FIREBASE_PROJECT_ID || 'yipyap-444',
       });
     }
   }
 
-  db = admin.firestore();
+  db = getFirestore();
 } catch (error) {
   console.error('Firebase initialization error:', error);
   throw new Error('Failed to initialize Firebase Admin SDK');
