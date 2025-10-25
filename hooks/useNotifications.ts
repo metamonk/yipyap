@@ -13,7 +13,7 @@ import { getConversation } from '@/services/conversationService';
 import { useAuth } from '@/hooks/useAuth';
 import {
   hasRequestedNotificationPermission,
-  markNotificationPermissionRequested
+  markNotificationPermissionRequested,
 } from '@/utils/notificationPermissions';
 
 /**
@@ -88,6 +88,14 @@ export function useNotifications() {
       // When notification received in foreground
       (notification) => {
         console.warn('Notification received:', notification);
+
+        // Don't show in-app banner for messages sent by current user
+        const senderId = notification.request.content.data?.senderId as string | undefined;
+        if (senderId && senderId === user.uid) {
+          console.log('[useNotifications] Ignoring notification for own message');
+          return;
+        }
+
         setLastNotification(notification);
       },
       // When user taps on notification
@@ -104,11 +112,9 @@ export function useNotifications() {
             if (!conversation) {
               // Conversation no longer exists
               console.warn('[useNotifications] Conversation not found:', conversationId);
-              Alert.alert(
-                'Conversation Not Found',
-                'This conversation may have been deleted.',
-                [{ text: 'OK' }]
-              );
+              Alert.alert('Conversation Not Found', 'This conversation may have been deleted.', [
+                { text: 'OK' },
+              ]);
               router.push('/(tabs)/conversations');
               return;
             }
@@ -116,7 +122,10 @@ export function useNotifications() {
             // Check if current user is a participant
             if (!conversation.participantIds.includes(user.uid)) {
               // User is not authorized to access this conversation
-              console.warn('[useNotifications] Unauthorized access attempt to conversation:', conversationId);
+              console.warn(
+                '[useNotifications] Unauthorized access attempt to conversation:',
+                conversationId
+              );
               Alert.alert(
                 'Access Denied',
                 'You do not have permission to view this conversation.',
@@ -131,11 +140,7 @@ export function useNotifications() {
           }
         } catch (error) {
           console.error('[useNotifications] Error handling notification tap:', error);
-          Alert.alert(
-            'Error',
-            'Could not open conversation. Please try again.',
-            [{ text: 'OK' }]
-          );
+          Alert.alert('Error', 'Could not open conversation. Please try again.', [{ text: 'OK' }]);
           // Navigate to conversations list as fallback
           router.push('/(tabs)/conversations');
         }
