@@ -17,18 +17,37 @@ import { createRateLimiter } from './utils/rateLimiter.js';
 
 // Initialize Firebase Admin if not already initialized
 // Required for fetching FAQ template answers from Firestore
+let db: admin.firestore.Firestore;
+
 try {
   if (!admin.apps || admin.apps.length === 0) {
-    admin.initializeApp({
-      projectId: process.env.FIREBASE_PROJECT_ID || 'yipyap-444',
-    });
+    // Check if we have base64-encoded service account (recommended for Vercel)
+    const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
+
+    if (serviceAccountBase64) {
+      // Decode base64 service account JSON
+      const serviceAccount = JSON.parse(
+        Buffer.from(serviceAccountBase64, 'base64').toString('utf-8')
+      );
+
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        projectId: serviceAccount.project_id,
+      });
+    } else {
+      // Fallback: Try with just project ID (will work in Cloud Functions, fail in Vercel)
+      console.warn('No FIREBASE_SERVICE_ACCOUNT_BASE64 found, using project ID only');
+      admin.initializeApp({
+        projectId: process.env.FIREBASE_PROJECT_ID || 'yipyap-444',
+      });
+    }
   }
+
+  db = admin.firestore();
 } catch (error) {
   console.error('Firebase initialization error:', error);
-  // Continue - will fail later if Firestore is actually needed
+  throw new Error('Failed to initialize Firebase Admin SDK');
 }
-
-const db = admin.firestore();
 
 /**
  * Runtime configuration
