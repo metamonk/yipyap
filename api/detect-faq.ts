@@ -16,38 +16,43 @@ import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { queryFAQMatches, PINECONE_CONFIG, type FAQMatch } from './utils/pineconeClient.js';
 import { createRateLimiter } from './utils/rateLimiter.js';
 
-// Initialize Firebase Admin if not already initialized
-// Required for fetching FAQ template answers from Firestore
-let db: Firestore;
+// Lazy-initialize Firebase Admin SDK
+// This avoids blocking module load and allows for better error handling
+let db: Firestore | null = null;
 
-try {
-  if (getApps().length === 0) {
-    // Check if we have base64-encoded service account (recommended for Vercel)
-    const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
+function getDb(): Firestore {
+  if (db) return db;
 
-    if (serviceAccountBase64) {
-      // Decode base64 service account JSON
-      const serviceAccount = JSON.parse(
-        Buffer.from(serviceAccountBase64, 'base64').toString('utf-8')
-      );
+  try {
+    if (getApps().length === 0) {
+      // Check if we have base64-encoded service account (recommended for Vercel)
+      const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
 
-      initializeApp({
-        credential: cert(serviceAccount),
-        projectId: serviceAccount.project_id,
-      });
-    } else {
-      // Fallback: Try with just project ID (will work in Cloud Functions, fail in Vercel)
-      console.warn('No FIREBASE_SERVICE_ACCOUNT_BASE64 found, using project ID only');
-      initializeApp({
-        projectId: process.env.FIREBASE_PROJECT_ID || 'yipyap-444',
-      });
+      if (serviceAccountBase64) {
+        // Decode base64 service account JSON
+        const serviceAccount = JSON.parse(
+          Buffer.from(serviceAccountBase64, 'base64').toString('utf-8')
+        );
+
+        initializeApp({
+          credential: cert(serviceAccount),
+          projectId: serviceAccount.project_id,
+        });
+      } else {
+        // Fallback: Try with just project ID (will work in Cloud Functions, fail in Vercel)
+        console.warn('No FIREBASE_SERVICE_ACCOUNT_BASE64 found, using project ID only');
+        initializeApp({
+          projectId: process.env.FIREBASE_PROJECT_ID || 'yipyap-444',
+        });
+      }
     }
-  }
 
-  db = getFirestore();
-} catch (error) {
-  console.error('Firebase initialization error:', error);
-  throw new Error('Failed to initialize Firebase Admin SDK');
+    db = getFirestore();
+    return db;
+  } catch (error) {
+    console.error('Firebase initialization error:', error);
+    throw new Error('Failed to initialize Firebase Admin SDK');
+  }
 }
 
 /**
@@ -135,7 +140,8 @@ interface DetectFAQResponse {
  */
 async function getFAQAnswer(faqId: string): Promise<string | null> {
   try {
-    const faqDoc = await db.collection('faq_templates').doc(faqId).get();
+    const firestore = getDb();
+    const faqDoc = await firestore.collection('faq_templates').doc(faqId).get();
     if (!faqDoc.exists) {
       console.warn(`FAQ template ${faqId} not found in Firestore`);
       return null;
