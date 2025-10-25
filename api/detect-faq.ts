@@ -17,10 +17,15 @@ import { createRateLimiter } from './utils/rateLimiter.js';
 
 // Initialize Firebase Admin if not already initialized
 // Required for fetching FAQ template answers from Firestore
-if (!admin.apps.length) {
-  admin.initializeApp({
-    projectId: process.env.FIREBASE_PROJECT_ID || 'yipyap-444',
-  });
+try {
+  if (!admin.apps || admin.apps.length === 0) {
+    admin.initializeApp({
+      projectId: process.env.FIREBASE_PROJECT_ID || 'yipyap-444',
+    });
+  }
+} catch (error) {
+  console.error('Firebase initialization error:', error);
+  // Continue - will fail later if Firestore is actually needed
 }
 
 const db = admin.firestore();
