@@ -12,8 +12,8 @@
 import { openai } from '@ai-sdk/openai';
 import { embed } from 'ai';
 import * as admin from 'firebase-admin';
-import { queryFAQMatches, PINECONE_CONFIG, type FAQMatch } from './utils/pineconeClient';
-import { checkRateLimit } from './utils/rateLimiter';
+import { queryFAQMatches, PINECONE_CONFIG, type FAQMatch } from './utils/pineconeClient.js';
+import { checkRateLimit } from './utils/rateLimiter.js';
 
 // Initialize Firebase Admin if not already initialized
 // Required for fetching FAQ template answers from Firestore

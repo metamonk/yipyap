@@ -1,7 +1,12 @@
 /* eslint-disable no-undef */
 // Note: Request and Response are global types in Vercel Edge Runtime
-import { categorizeMessage, scoreOpportunity, type MessageCategory, type OpportunityType } from './utils/aiClient';
-import { createRateLimiter, type RateLimitResult } from './utils/rateLimiter';
+import {
+  categorizeMessage,
+  scoreOpportunity,
+  type MessageCategory,
+  type OpportunityType,
+} from './utils/aiClient.js';
+import { createRateLimiter, type RateLimitResult } from './utils/rateLimiter.js';
 
 /**
  * Edge Runtime configuration
@@ -128,11 +133,7 @@ function extractUserId(request: Request): string | null {
  * @param message - Error message
  * @returns Response object
  */
-function createErrorResponse(
-  status: number,
-  code: string,
-  message: string
-): Response {
+function createErrorResponse(status: number, code: string, message: string): Response {
   const body: ErrorResponse = {
     success: false,
     error: message,
@@ -166,9 +167,7 @@ function createRateLimitResponse(rateLimitResult: RateLimitResult): Response {
       'X-RateLimit-Limit': rateLimitResult.limit.toString(),
       'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
       'X-RateLimit-Reset': rateLimitResult.resetAt.toString(),
-      'Retry-After': Math.ceil(
-        (rateLimitResult.resetAt * 1000 - Date.now()) / 1000
-      ).toString(),
+      'Retry-After': Math.ceil((rateLimitResult.resetAt * 1000 - Date.now()) / 1000).toString(),
     },
   });
 }
@@ -222,11 +221,7 @@ export default async function handler(request: Request): Promise<Response> {
 
   // Only allow POST requests
   if (request.method !== 'POST') {
-    return createErrorResponse(
-      405,
-      'METHOD_NOT_ALLOWED',
-      'Only POST requests are allowed'
-    );
+    return createErrorResponse(405, 'METHOD_NOT_ALLOWED', 'Only POST requests are allowed');
   }
 
   try {
@@ -235,11 +230,7 @@ export default async function handler(request: Request): Promise<Response> {
     try {
       body = await request.json();
     } catch {
-      return createErrorResponse(
-        400,
-        'INVALID_JSON',
-        'Request body must be valid JSON'
-      );
+      return createErrorResponse(400, 'INVALID_JSON', 'Request body must be valid JSON');
     }
 
     // Validate request body
@@ -256,11 +247,7 @@ export default async function handler(request: Request): Promise<Response> {
     // Extract and validate user authentication
     const userId = extractUserId(request);
     if (!userId) {
-      return createErrorResponse(
-        401,
-        'UNAUTHORIZED',
-        'Missing or invalid Authorization header'
-      );
+      return createErrorResponse(401, 'UNAUTHORIZED', 'Missing or invalid Authorization header');
     }
 
     // Check rate limit
@@ -284,11 +271,7 @@ export default async function handler(request: Request): Promise<Response> {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       console.error('OPENAI_API_KEY not configured');
-      return createErrorResponse(
-        500,
-        'CONFIGURATION_ERROR',
-        'AI service not configured'
-      );
+      return createErrorResponse(500, 'CONFIGURATION_ERROR', 'AI service not configured');
     }
 
     // Log request for monitoring (using warn for info-level logging per linting rules)
@@ -393,10 +376,6 @@ export default async function handler(request: Request): Promise<Response> {
     }
 
     // Generic error response
-    return createErrorResponse(
-      500,
-      'INTERNAL_ERROR',
-      'An unexpected error occurred'
-    );
+    return createErrorResponse(500, 'INTERNAL_ERROR', 'An unexpected error occurred');
   }
 }
