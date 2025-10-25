@@ -17,7 +17,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.yip-yap.app",
       "infoPlist": {
-        "UIBackgroundModes": ["remote-notification", "remote-notification", "remote-notification"],
+        "UIBackgroundModes": ["remote-notification"],
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -30,31 +30,12 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.yip-yap.app",
       "googleServicesFile": "./google-services.json",
-      "permissions": [
-        "POST_NOTIFICATIONS",
-        "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE",
-        "WAKE_LOCK",
-        "POST_NOTIFICATIONS",
-        "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE",
-        "WAKE_LOCK"
-      ]
+      "permissions": ["POST_NOTIFICATIONS", "RECEIVE_BOOT_COMPLETED", "VIBRATE", "WAKE_LOCK"]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [
-      "expo-router",
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/notification-icon.png",
-          "color": "#ffffff",
-          "sounds": ["./assets/notification-sound.wav"]
-        }
-      ]
-    ],
+    "plugins": ["expo-router", "expo-notifications"],
     "extra": {
       "router": {},
       "eas": {
