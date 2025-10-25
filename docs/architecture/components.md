@@ -56,13 +56,22 @@
 **Key Interfaces:**
 
 - ChatView component
-- MessageList component (optimized FlatList)
+- MessageList component (inverted FlatList pattern - industry standard)
 - MessageInput component
 - Message status indicators
+- Read receipt viewability tracking
+- Optimistic UI with atomic deduplication
 
 **Dependencies:** Firestore SDK, User Service, Push Notification Service
 
-**Technology Stack:** React Native, Firestore real-time sync, Reanimated for animations
+**Technology Stack:** React Native inverted FlatList, Firestore real-time sync, Reanimated for animations
+
+**Architecture Notes:**
+
+- Uses inverted FlatList pattern (newest messages at index 0, rendered at bottom)
+- Eliminates manual scroll management through React Native's built-in positioning
+- Atomic deduplication in useMemo prevents race conditions during optimistic → confirmed transitions
+- See: `docs/architecture/flatlist-viewability-patterns.md` for implementation details
 
 ### User Profile Module
 

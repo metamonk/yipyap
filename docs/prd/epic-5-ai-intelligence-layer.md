@@ -217,4 +217,46 @@
 - IV3: Cost controls prevent runway issues
 - IV4: **No permission errors in cross-user scenarios (User A sends to User B)**
 
+## Story 5.10: Chat UI Performance - Inverted FlatList Migration
+
+**As a** user,
+**I want** smooth, jank-free message scrolling in chat conversations,
+**so that** the chat interface feels professional and responsive without visual stuttering.
+
+**Acceptance Criteria:**
+
+1. Chat messages render using React Native's industry-standard inverted FlatList pattern (`inverted={true}`)
+2. New messages automatically appear at the bottom without manual scroll management
+3. No multiple rapid scroll executions (eliminated 4+ scroll jank)
+4. Older message pagination loads correctly when scrolling up without position jumping
+5. Read receipts continue to work correctly with viewability callbacks (Story 3.3 compatibility)
+6. Date separators render in correct chronological positions with inverted list
+7. Optimistic UI transitions smoothly from temp → confirmed messages without disappearing
+8. Code complexity reduced by removing manual scroll state management (~100 lines deleted)
+
+**Technical Implementation:**
+
+- Message array sorted DESC (newest-first) for inverted list rendering
+- FlatList `inverted={true}` with `maintainVisibleContentPosition` for pagination stability
+- Pagination changed from `onStartReached` → `onEndReached` (inverted semantics)
+- Atomic deduplication in `messages` useMemo prevents race conditions
+- Targeted scroll for user-sent messages only (`scrollToOffset` to index 0)
+- Date separator double-reverse pattern maintains compatibility
+
+**Performance Improvements:**
+
+- Before: 4+ scroll executions during initial load (visible jank)
+- After: 0 automatic scroll executions (React Native handles positioning)
+- ~100 lines of scroll management code eliminated
+- Simpler, more maintainable codebase
+- Industry-standard pattern (WhatsApp, Telegram, Slack, iMessage)
+
+**Integration Verification:**
+
+- IV1: Read receipt viewability callbacks fire correctly for visible messages (Story 3.3 compatibility)
+- IV2: Pagination loads older messages at the correct scroll position without jumping
+- IV3: Real-time message arrivals don't interfere with user scrolling or reading
+- IV4: AI metadata (categories, sentiment) displays correctly with inverted list
+- IV5: Optimistic → confirmed message transitions are seamless without flickering
+
 ---

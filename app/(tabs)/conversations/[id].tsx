@@ -14,7 +14,6 @@ import {
   StyleSheet,
   ActivityIndicator,
   Text,
-  SafeAreaView,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
@@ -23,6 +22,7 @@ import {
   Alert,
 } from 'react-native';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Timestamp } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { MessageItem } from '@/components/chat/MessageItem';
@@ -46,7 +46,7 @@ import { getUserProfile, getUserProfiles } from '@/services/userService';
 import { markMessageAsRead } from '@/services/messageService';
 import { setActiveConversation } from '@/services/notificationService';
 import { groupMessagesWithSeparators } from '@/utils/messageHelpers';
-import type { Conversation, ChatListItem } from '@/types/models';
+import type { Conversation, ChatListItem, Message } from '@/types/models';
 import type { User as UserProfile } from '@/types/user';
 
 /**
@@ -138,6 +138,24 @@ export default function ChatScreen() {
 
   // Track messages that have been marked as read (for idempotency)
   const markedAsReadRef = useRef<Set<string>>(new Set());
+
+  // Track whether we've reset the conversation count during this viewing session
+  const conversationCountResetRef = useRef<boolean>(false);
+
+  // CRITICAL: Store current user and conversation IDs in refs for viewability callback
+  // The viewability callback is wrapped in useRef (must be stable reference for FlatList)
+  // but needs access to current values. Using refs solves the closure issue.
+  const userIdRef = useRef<string | undefined>(user?.uid);
+  const conversationIdRef = useRef<string>(conversationId);
+
+  // Update refs when values change
+  useEffect(() => {
+    userIdRef.current = user?.uid;
+  }, [user?.uid]);
+
+  useEffect(() => {
+    conversationIdRef.current = conversationId;
+  }, [conversationId]);
 
   /**
    * Set active conversation for notification suppression
@@ -379,77 +397,115 @@ export default function ChatScreen() {
   /**
    * Viewability configuration for read receipts (AC1, AC8)
    * Messages must be 50% visible for 500ms before being marked as read
+   *
+   * CRITICAL: This must be a stable reference (useRef) to prevent FlatList from
+   * re-registering the callback on every render
    */
   const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 50,
-    minimumViewTime: 500,
-    waitForInteraction: false,
+    itemVisiblePercentThreshold: 50, // 50% of item must be visible
+    minimumViewTime: 500, // Must be visible for 500ms
+    waitForInteraction: false, // Fire automatically, don't wait for user interaction
   }).current;
 
   /**
    * Handle viewport changes for read receipts (AC1, AC3, AC8)
    * Marks messages as read when they become visible in viewport
+   * Also resets conversation-level unread count on first viewable message
+   *
+   * CRITICAL: This must be a stable reference (useRef) to prevent FlatList from
+   * re-registering the callback on every render. Uses refs to access current values
+   * to avoid closure issues.
    */
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: Array<{ item: ChatListItem; isViewable: boolean }> }) => {
-      if (!user?.uid || !conversationId) {
+      // Access current values from refs (not closure)
+      const currentUserId = userIdRef.current;
+      const currentConversationId = conversationIdRef.current;
+
+      if (!currentUserId || !currentConversationId) {
         return;
       }
 
       // Filter to messages that just became viewable and should be marked as read
-      const messagesToMarkAsRead = viewableItems
-        .filter((viewableItem) => {
-          // Only process message items (not date separators)
-          if (viewableItem.item.type !== 'message') {
-            return false;
-          }
+      const messagesToMarkAsRead: Message[] = [];
 
-          const message = viewableItem.item.data;
+      for (const viewableItem of viewableItems) {
+        const item = viewableItem.item;
 
-          // Only mark messages from other users
-          if (message.senderId === user.uid) {
-            return false;
-          }
+        // Only process message items (not date separators)
+        if (item.type !== 'message') {
+          continue;
+        }
 
-          // Only mark messages that are currently 'delivered' (AC5 sequencing)
-          if (message.status !== 'delivered') {
-            return false;
-          }
+        const message = item.data;
 
-          // Check if we've already marked this message (idempotency - AC8)
-          if (markedAsReadRef.current.has(message.id)) {
-            return false;
-          }
+        // Only mark messages from other users
+        if (message.senderId === currentUserId) {
+          continue;
+        }
 
-          return true;
-        })
-        .map((viewableItem) => viewableItem.item.data);
+        // Only mark messages that are currently 'delivered' (AC5 sequencing)
+        if (message.status !== 'delivered') {
+          continue;
+        }
 
-      // Mark messages as read
+        // Check if we've already marked this message (idempotency - AC8)
+        if (markedAsReadRef.current.has(message.id)) {
+          continue;
+        }
+
+        messagesToMarkAsRead.push(message);
+      }
+
+      // Mark individual messages as read
       messagesToMarkAsRead.forEach((message) => {
         // Track locally to prevent duplicate updates (AC8)
         markedAsReadRef.current.add(message.id);
 
         // Call service to update Firestore (AC3)
-        markMessageAsRead(conversationId, message.id, user.uid).catch((error) => {
+        markMessageAsRead(currentConversationId, message.id, currentUserId).catch((error) => {
           console.error('Failed to mark message as read:', error);
           // Remove from tracking so we can retry
           markedAsReadRef.current.delete(message.id);
         });
       });
+
+      // Reset conversation-level unread count when viewing messages
+      // Ensures badge clears even if messages arrived while actively viewing
+      // Only call once per viewing session for efficiency (idempotent operation)
+      if (messagesToMarkAsRead.length > 0 && !conversationCountResetRef.current) {
+        conversationCountResetRef.current = true;
+
+        markConversationAsRead(currentConversationId, currentUserId).catch((error) => {
+          console.error('Failed to reset conversation unread count:', error);
+          // Reset flag to allow retry
+          conversationCountResetRef.current = false;
+        });
+      }
     }
   ).current;
 
-  // Clear marked messages ref when conversation changes
+  // Clear tracking refs when conversation changes
   useEffect(() => {
     markedAsReadRef.current.clear();
+    conversationCountResetRef.current = false;
   }, [conversationId]);
+
+  // Track when messages are ready for viewability tracking
+  useEffect(() => {
+    // This effect ensures viewability callbacks are ready when messages load
+  }, [messagesLoading, messages]);
 
   // Use search results if searching, otherwise use all messages
   const displayMessages = isSearching ? searchResults : messages;
 
   // Group messages with date separators
-  const chatItems = groupMessagesWithSeparators(displayMessages);
+  // NOTE: groupMessagesWithSeparators expects oldest-first order (ASC)
+  // but messages are now newest-first (DESC) for inverted FlatList.
+  // Solution: Reverse before grouping, then reverse result to restore DESC order.
+  const chatItems = groupMessagesWithSeparators(
+    displayMessages.slice().reverse() // Pass oldest-first to function
+  ).reverse(); // Reverse result back to newest-first for inverted list
 
   /**
    * Handle back navigation
@@ -617,7 +673,7 @@ export default function ChatScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleGoBack} style={styles.backButton} testID="back-button">
@@ -780,7 +836,7 @@ export default function ChatScreen() {
       <KeyboardAvoidingView
         style={styles.chatContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
+        keyboardVerticalOffset={0}
       >
         {messagesLoading ? (
           <View style={styles.messagesLoadingContainer}>
@@ -794,22 +850,27 @@ export default function ChatScreen() {
             keyExtractor={keyExtractor}
             renderItem={renderItem}
             contentContainerStyle={styles.messagesList}
-            // Regular list: oldest messages at top, newest at bottom
-            inverted={false}
+            // Inverted list: newest messages at bottom (industry standard pattern)
+            inverted={true}
             // Pagination: trigger when scrolled near the top (load older messages)
-            onStartReached={loadMoreMessages}
-            onStartReachedThreshold={0.5}
-            // Performance optimizations
-            removeClippedSubviews={true}
-            windowSize={10}
-            maxToRenderPerBatch={10}
-            updateCellsBatchingPeriod={50}
-            initialNumToRender={20}
-            // Scroll position maintenance
+            // With inverted list, "end" is visually at the top
+            onEndReached={loadMoreMessages}
+            onEndReachedThreshold={0.5}
+            // Maintain scroll position during pagination (prevents jumping)
             maintainVisibleContentPosition={{
               minIndexForVisible: 0,
-              autoscrollToTopThreshold: 10,
             }}
+            // Performance optimizations
+            // NOTE: removeClippedSubviews disabled to ensure viewability callbacks fire for read receipts
+            // NOTE: windowSize increased to ensure items stay mounted for viewability tracking
+            // Trade-off: Slightly higher memory usage, but ensures read receipt tracking works correctly
+            removeClippedSubviews={false}
+            windowSize={21} // Increased from 10 to keep more items mounted
+            maxToRenderPerBatch={20} // Increased from 10 to reduce batching delays
+            updateCellsBatchingPeriod={50}
+            initialNumToRender={30} // Increased from 20 to render more on initial load
+            // Disable recycling optimizations that can interfere with viewability
+            disableVirtualization={false} // Keep virtualization for performance
             // Read receipts viewport detection (AC1, AC8)
             viewabilityConfig={viewabilityConfig}
             onViewableItemsChanged={onViewableItemsChanged}

@@ -10,7 +10,13 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { FlatList, Alert } from 'react-native';
 import { Timestamp, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
-import { subscribeToMessages, sendMessage, getMessages, DraftConversationParams, markMessageAsDelivered } from '@/services/messageService';
+import {
+  subscribeToMessages,
+  sendMessage,
+  getMessages,
+  DraftConversationParams,
+  markMessageAsDelivered,
+} from '@/services/messageService';
 import { useNetworkStatus } from './useNetworkStatus';
 import type { Message } from '@/types/models';
 
@@ -25,7 +31,7 @@ type MessageWithFailedStatus = Message & {
  * Return type for the useMessages hook
  */
 export interface UseMessagesResult {
-  /** Array of messages sorted by timestamp (oldest to newest), including optimistic messages */
+  /** Array of messages sorted by timestamp (newest to oldest) for inverted FlatList, including optimistic messages */
   messages: MessageWithFailedStatus[];
 
   /** Whether initial messages are still loading */
@@ -39,9 +45,6 @@ export interface UseMessagesResult {
 
   /** Ref to attach to the FlatList for scroll control */
   flatListRef: React.RefObject<FlatList | null>;
-
-  /** Function to manually scroll to bottom of message list */
-  scrollToBottom: () => void;
 
   /** Whether more messages are available to load */
   hasMore: boolean;
@@ -77,8 +80,8 @@ function generateTempId(): string {
  * - Automatically subscribes to message updates on mount
  * - Implements optimistic UI updates for instant message display
  * - Cleans up subscription on unmount to prevent memory leaks
- * - Messages are sorted by timestamp ascending (oldest to newest)
- * - Auto-scrolls to bottom when new messages arrive
+ * - Messages are sorted by timestamp descending (newest to oldest) for inverted FlatList
+ * - Inverted FlatList automatically positions newest messages at bottom
  * - Handles errors with try-catch and user-friendly messages
  * - Deduplicates messages to prevent showing the same message twice
  * - Supports offline messaging: Messages sent while offline are queued automatically
@@ -132,35 +135,58 @@ export function useMessages(
 
   /**
    * Merge optimistic and confirmed messages for display
-   * Sorts by timestamp ascending (oldest to newest)
+   * Sorts by timestamp descending (newest to oldest) for inverted FlatList
+   *
+   * @remarks
+   * Deduplication happens here (not in real-time listener) to prevent race conditions.
+   * When a confirmed message arrives that matches an optimistic one, we show the confirmed
+   * version and filter out the optimistic duplicate. This ensures smooth transitions without
+   * messages briefly disappearing.
    */
   const messages = useMemo<MessageWithFailedStatus[]>(() => {
-    // Combine both arrays and cast confirmed messages to include 'failed' status type
-    const combined = [
-      ...confirmedMessages.map((msg) => msg as MessageWithFailedStatus),
-      ...optimisticMessages,
-    ];
+    const confirmed = confirmedMessages.map((msg) => msg as MessageWithFailedStatus);
 
-    // Sort by timestamp (handle null timestamps from serverTimestamp() pending resolution)
+    // Only include optimistic messages that don't have a confirmed match yet
+    // This deduplication prevents showing the same message twice during optimistic → confirmed transition
+    const unconfirmedOptimistic = optimisticMessages.filter((optimisticMsg) => {
+      return !confirmed.some((confirmedMsg) => {
+        // Match by content + timestamp variance (same logic as real-time listener)
+        const optimisticTime = optimisticMsg.timestamp?.toMillis?.() ?? 0;
+        const confirmedTime = confirmedMsg.timestamp?.toMillis?.() ?? 0;
+
+        return (
+          optimisticMsg.senderId === confirmedMsg.senderId &&
+          optimisticMsg.text === confirmedMsg.text &&
+          optimisticTime > 0 &&
+          confirmedTime > 0 &&
+          // 5-second window accounts for client-server time differences
+          Math.abs(optimisticTime - confirmedTime) < 5000
+        );
+      });
+    });
+
+    // Combine confirmed messages with unconfirmed optimistic messages
+    const combined = [...confirmed, ...unconfirmedOptimistic];
+
+    // Sort by timestamp DESC (newest first) for inverted FlatList rendering
+    // Handle null timestamps from serverTimestamp() pending resolution
     return combined.sort((a, b) => {
       const aTime = a.timestamp?.toMillis?.() ?? 0;
       const bTime = b.timestamp?.toMillis?.() ?? 0;
-      return aTime - bTime;
+      return bTime - aTime; // DESC: Newest first (index 0 = newest)
     });
   }, [confirmedMessages, optimisticMessages]);
 
   /**
-   * Scrolls the message list to the bottom
-   * Uses animated scroll for smooth UX
+   * Scrolls to bottom (index 0) for inverted FlatList
+   * Used only when user sends a message to show their new message
    */
   const scrollToBottom = useCallback(() => {
-    if (messages.length > 0) {
-      // Small delay to ensure FlatList has rendered
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+    if (flatListRef.current) {
+      // For inverted list, index 0 is at the bottom
+      flatListRef.current.scrollToOffset({ offset: 0, animated: true });
     }
-  }, [messages.length]);
+  }, []);
 
   /**
    * Load initial messages with pagination support
@@ -193,9 +219,6 @@ export function useMessages(
           setLastVisible(result.lastDoc);
           setHasMore(result.hasMore);
           setLoading(false);
-
-          // Scroll to bottom after initial load
-          scrollToBottom();
         }
       } catch (error) {
         console.error('Failed to load initial messages:', error);
@@ -210,9 +233,6 @@ export function useMessages(
     return () => {
       isMounted = false;
     };
-    // scrollToBottom is intentionally omitted from deps to prevent infinite loops
-    // It's only called inside the async function and doesn't need to trigger re-runs
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId, draftParams]);
 
   /**
@@ -225,6 +245,9 @@ export function useMessages(
       return;
     }
 
+    // Track first snapshot to avoid interfering with initial scroll
+    let isFirstSnapshot = true;
+
     // Debounce map for delivery status updates to prevent excessive calls
     const deliveryUpdateDebounce = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -232,6 +255,12 @@ export function useMessages(
     const unsubscribe = subscribeToMessages(
       conversationId,
       (updatedMessages) => {
+        // Skip processing the first snapshot - it's the same as initial load
+        // This prevents state churn and scroll interference
+        if (isFirstSnapshot) {
+          isFirstSnapshot = false;
+          return;
+        }
         /**
          * DEDUPLICATION STRATEGY for real-time updates
          *
@@ -256,63 +285,44 @@ export function useMessages(
          * - If variance > 5s, treated as different messages (rare but handles edge cases)
          */
         setConfirmedMessages((prevConfirmed) => {
-          // Use Set for O(1) lookup performance on existing message IDs
-          const existingIds = new Set(prevConfirmed.map((m) => m.id));
+          // Create Map for O(1) lookup and efficient updates of existing messages
+          const existingMessagesMap = new Map(prevConfirmed.map((m) => [m.id, m]));
 
-          // Filter out messages that are already loaded
-          const filteredMessages = updatedMessages.filter((confirmedMsg) => {
-            // STEP 0: Skip messages with null timestamps (serverTimestamp not yet resolved)
+          // Process each message from real-time update
+          const newMessages: Message[] = [];
+
+          for (const confirmedMsg of updatedMessages) {
+            // Skip messages with null timestamps (serverTimestamp not yet resolved)
             // These will be included in the next snapshot when the timestamp resolves
             if (!confirmedMsg.timestamp) {
-              return false;
+              continue;
             }
 
-            // STEP 1: Skip if already in confirmed messages (O(1) Set lookup)
-            if (existingIds.has(confirmedMsg.id)) {
-              return false;
+            // Update existing message or add new message
+            // Note: Deduplication with optimistic messages now happens in the messages useMemo,
+            // not here. This prevents race conditions where removing an optimistic message
+            // before the confirmed one is added causes the message to briefly disappear.
+            if (existingMessagesMap.has(confirmedMsg.id)) {
+              // Message already exists - UPDATE it to reflect status/readBy changes
+              existingMessagesMap.set(confirmedMsg.id, confirmedMsg);
+            } else {
+              // New message - add to list
+              newMessages.push(confirmedMsg);
             }
+          }
 
-            // STEP 2: Check if this message exists in optimistic state
-            // This prevents showing duplicate messages during the optimistic→confirmed transition
-            const existsInOptimistic = optimisticMessages.some((optimisticMsg) => {
-              // Match by Firestore ID (simplest case - IDs are identical)
-              if (confirmedMsg.id === optimisticMsg.id) return true;
+          // Merge updated existing messages with new messages
+          const merged = [...existingMessagesMap.values(), ...newMessages];
 
-              // Match by content + timestamp variance (for optimistic messages)
-              // This handles the case where:
-              // - User sends message → optimistic message created with temp ID
-              // - Firestore confirms → real-time listener receives message with real ID
-              // - Need to detect these are the SAME message despite different IDs
-              const optimisticTime = optimisticMsg.timestamp?.toMillis?.() ?? 0;
-              const confirmedTime = confirmedMsg.timestamp?.toMillis?.() ?? 0;
-
-              return (
-                optimisticMsg.senderId === confirmedMsg.senderId &&
-                optimisticMsg.text === confirmedMsg.text &&
-                optimisticTime > 0 &&
-                confirmedTime > 0 &&
-                // 5-second window accounts for client-server time differences
-                Math.abs(optimisticTime - confirmedTime) < 5000 // milliseconds
-              );
-            });
-
-            // Only include messages that don't exist in optimistic state
-            if (existsInOptimistic) {
-              return false;
-            }
-            return true;
-          });
-
-          // Merge new messages with existing messages
-          const merged = [...prevConfirmed, ...filteredMessages];
-
-          // Sort by timestamp ascending (oldest to newest)
+          // Sort by timestamp descending (newest to oldest) for inverted FlatList
           // Handle null timestamps from serverTimestamp() pending resolution
-          return merged.sort((a, b) => {
+          const sorted = merged.sort((a, b) => {
             const aTime = a.timestamp?.toMillis?.() ?? 0;
             const bTime = b.timestamp?.toMillis?.() ?? 0;
-            return aTime - bTime;
+            return bTime - aTime; // DESC: Newest first
           });
+
+          return sorted;
         });
 
         /**
@@ -360,8 +370,8 @@ export function useMessages(
           }
         });
 
-        // Auto-scroll to bottom when new messages arrive
-        scrollToBottom();
+        // With inverted FlatList, new messages at index 0 automatically appear at bottom
+        // No manual scroll needed - React Native handles positioning
       },
       50 // Listen to most recent 50 messages
     );
@@ -373,19 +383,18 @@ export function useMessages(
       deliveryUpdateDebounce.clear();
       unsubscribe();
     };
-    // scrollToBottom is intentionally omitted from deps to prevent infinite loops
-    // It's only called in the callback and doesn't need to trigger re-subscription
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId, loading, optimisticMessages, draftParams, currentUserId]);
 
   /**
-   * Scroll to bottom after initial load
+   * Scroll to bottom after initial load (only on first render)
+   * REMOVED: This was causing duplicate scroll calls and race conditions.
+   * Scroll is now handled directly in the initial load effect above.
    */
-  useEffect(() => {
-    if (!loading && messages.length > 0) {
-      scrollToBottom();
-    }
-  }, [loading, messages.length, scrollToBottom]);
+  // useEffect(() => {
+  //   if (!loading && messages.length > 0) {
+  //     scrollToBottom();
+  //   }
+  // }, [loading, messages.length, scrollToBottom]);
 
   /**
    * Sends a new message to the conversation with optimistic UI update
@@ -422,6 +431,8 @@ export function useMessages(
 
       // Immediately add to optimistic state for instant UI feedback
       setOptimisticMessages((prev) => [...prev, optimisticMessage]);
+
+      // Scroll to show user's new message at bottom (index 0 in inverted list)
       scrollToBottom();
 
       // If offline, show message to user and let Firestore handle queuing
@@ -464,7 +475,7 @@ export function useMessages(
         // User can retry using the retry button
       }
     },
-    [conversationId, currentUserId, participantIds, scrollToBottom, connectionStatus, draftParams]
+    [conversationId, currentUserId, participantIds, connectionStatus, draftParams, scrollToBottom]
   );
 
   /**
@@ -510,6 +521,7 @@ export function useMessages(
         // Note: updateConversationLastMessage is already called inside sendMessage service
         // so we don't need to call it again here to avoid double-counting unread messages
 
+        // Scroll to show retried message
         scrollToBottom();
       } catch (error) {
         // Update back to 'failed' status
@@ -525,7 +537,7 @@ export function useMessages(
         Alert.alert('Failed to send message', 'Please check your connection and try again.');
       }
     },
-    [conversationId, currentUserId, participantIds, optimisticMessages, scrollToBottom, draftParams]
+    [conversationId, currentUserId, participantIds, optimisticMessages, draftParams, scrollToBottom]
   );
 
   /**
@@ -553,13 +565,13 @@ export function useMessages(
         const existingIds = new Set(prev.map((m) => m.id));
         const newMessages = result.messages.filter((msg) => !existingIds.has(msg.id));
 
-        // Merge and sort by timestamp
+        // Merge and sort by timestamp descending (newest to oldest) for inverted FlatList
         // Handle null timestamps from serverTimestamp() pending resolution
         const merged = [...prev, ...newMessages];
         return merged.sort((a, b) => {
           const aTime = a.timestamp?.toMillis?.() ?? 0;
           const bTime = b.timestamp?.toMillis?.() ?? 0;
-          return aTime - bTime;
+          return bTime - aTime; // DESC: Newest first
         });
       });
 
@@ -580,7 +592,6 @@ export function useMessages(
     sendMessage: handleSendMessage,
     retryMessage: handleRetryMessage,
     flatListRef,
-    scrollToBottom,
     hasMore,
     isLoadingMore,
     loadMoreMessages,

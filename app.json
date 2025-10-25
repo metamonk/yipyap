@@ -17,7 +17,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.yip-yap.app",
       "infoPlist": {
-        "UIBackgroundModes": ["remote-notification"]
+        "UIBackgroundModes": ["remote-notification", "remote-notification", "remote-notification"],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -30,6 +31,10 @@
       "package": "com.yip-yap.app",
       "googleServicesFile": "./google-services.json",
       "permissions": [
+        "POST_NOTIFICATIONS",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "WAKE_LOCK",
         "POST_NOTIFICATIONS",
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
@@ -55,6 +60,12 @@
       "eas": {
         "projectId": "0d94de63-2f00-44f9-8d6e-34633462fb63"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/0d94de63-2f00-44f9-8d6e-34633462fb63"
     }
   }
 }
