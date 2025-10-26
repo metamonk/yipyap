@@ -2136,3 +2136,28 @@ export const dailyAgentWorkflow = functions.onCall(
     }
   }
 );
+
+// WORKAROUND for Firebase Gen2 caching bug - Copy of dailyAgentWorkflow
+// The old function was stuck serving cached code despite deployments
+// This new function name forces Firebase to use fresh code
+export const dailyAgentWorkflowV2 = functions.onCall(
+  {
+    timeoutSeconds: 540, // 9 minutes
+    memory: '1GiB',
+  },
+  async (request) => {
+    const userId = request.auth?.uid;
+
+    if (!userId) {
+      throw new functions.HttpsError('unauthenticated', 'User must be authenticated');
+    }
+
+    try {
+      const result = await orchestrateWorkflow(userId);
+      return result;
+    } catch (error) {
+      console.error('Daily agent workflow V2 error:', error);
+      throw new functions.HttpsError('internal', `Workflow failed: ${(error as Error).message}`);
+    }
+  }
+);

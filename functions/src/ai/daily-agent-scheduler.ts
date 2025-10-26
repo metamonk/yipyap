@@ -303,6 +303,51 @@ export const triggerDailyAgentManual = https.onCall(
       const result = await orchestrateWorkflow(userId, { bypassOnlineCheck: true });
 
       return {
+        success: true,
+        executionId: result.executionId,
+        results: result.results,
+        metrics: result.metrics,
+      };
+    } catch (error) {
+      console.error('Manual workflow trigger failed:', error);
+      throw new https.HttpsError('internal', `Workflow failed: ${(error as Error).message}`);
+    }
+  }
+);
+
+// WORKAROUND for Firebase Gen2 caching bug - V2 trigger function
+// The old trigger was stuck serving cached orchestrateWorkflow code
+export const triggerDailyAgentManualV2 = https.onCall(
+  {
+    timeoutSeconds: 540,
+    memory: '1GiB',
+  },
+  async (request: https.CallableRequest<{ userId?: string }>) => {
+    // Verify authentication
+    if (!request.auth) {
+      throw new https.HttpsError(
+        'unauthenticated',
+        'User must be authenticated to trigger workflow'
+      );
+    }
+
+    const userId = request.data.userId || request.auth.uid;
+
+    // Verify user is triggering their own workflow or is admin
+    if (userId !== request.auth.uid) {
+      // TODO: Check if user is admin
+      throw new https.HttpsError(
+        'permission-denied',
+        'Users can only trigger their own workflow'
+      );
+    }
+
+    try {
+      console.log(`[V2] Manual trigger requested for user ${userId}`);
+
+      const result = await orchestrateWorkflow(userId, { bypassOnlineCheck: true });
+
+      return {
         success: result.success,
         executionId: result.executionId,
         results: result.results,

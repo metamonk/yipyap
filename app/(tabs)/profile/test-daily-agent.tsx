@@ -123,9 +123,10 @@ export default function TestDailyAgentScreen() {
     setResult(null);
 
     try {
-      console.log('Triggering daily agent workflow...');
+      console.log('Triggering daily agent workflow V2 (Gen2 cache workaround)...');
 
-      const trigger = httpsCallable(functions, 'triggerDailyAgentManual');
+      // Using V2 function as workaround for Firebase Gen2 caching bug
+      const trigger = httpsCallable(functions, 'triggerDailyAgentManualV2');
       const response = await trigger({ userId: auth.currentUser!.uid });
 
       console.log('Workflow response:', response.data);
