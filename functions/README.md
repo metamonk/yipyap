@@ -88,6 +88,64 @@ firebase deploy --only functions
 firebase deploy --only functions:sendMessageNotification
 ```
 
+## ⚠️ CRITICAL: Known Deployment Issues
+
+### Firebase Gen2 Caching Bug
+
+**ALWAYS READ THIS BEFORE DEPLOYING FUNCTIONS**
+
+Firebase Cloud Functions Gen2 has a severe caching bug where functions serve stale code even after successful deployments.
+
+#### Symptoms:
+- Deployment succeeds but old code continues running
+- Version markers don't appear in logs
+- Changes take hours/days or never propagate
+- Can happen multiple times (V2 can also get cached!)
+
+#### Solution - Versioned Function Names:
+
+1. **Add version marker to your code:**
+   ```typescript
+   const VERSION = 'v15.0-YOUR-CHANGE-DESCRIPTION';
+   console.log(`[VERSION] ${VERSION}`);
+   ```
+
+2. **Deploy and verify:**
+   ```bash
+   firebase deploy --only functions:yourFunction
+   # Wait 60 seconds, then trigger function and check logs
+   ```
+
+3. **If caching detected** (version marker doesn't appear):
+   - Create NEW function with incremented version:
+     ```typescript
+     export const yourFunctionV3 = https.onCall(...)
+     ```
+   - Update client code to call new version
+   - Deploy as CREATE operation (first time)
+   - Fully restart client app
+
+#### Example from This Project:
+- `dailyAgentWorkflow` → stuck with cached code
+- `dailyAgentWorkflowV2` → **ALSO cached!**
+- `dailyAgentWorkflowV3` → working (current)
+
+**Full documentation:** See project memory `firebase_gen2_caching_workaround`
+
+### Common Firestore Data Access Bug
+
+When working with `QueryDocumentSnapshot` objects:
+
+```typescript
+// ❌ WRONG - Accesses snapshot properties (often undefined)
+messages.map(m => m.conversationId)
+
+// ✅ CORRECT - Accesses document data
+messages.map(m => m.data().conversationId)
+```
+
+Always use `.data()` to access document fields!
+
 ## Testing
 
 Test files are located in `/tests/unit/services/` and `/functions/tests/`.

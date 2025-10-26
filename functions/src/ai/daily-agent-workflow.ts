@@ -1255,13 +1255,21 @@ async function generateMeaningful10Digest(
     };
 
     // Batch fetch conversation contexts
-    const conversationIds = [...new Set(messages.map(m => m.conversationId))];
+    // IMPORTANT: Must use .data() to access document fields on QueryDocumentSnapshot objects
+    // Common bug: m.conversationId returns undefined (snapshot property, not data field)
+    // Correct: m.data().conversationId (accesses document data)
+    const conversationIds = [...new Set(messages.map(m => m.data().conversationId))];
     const conversationContexts = new Map();
+
+    console.log(`[SCORING] Found ${conversationIds.length} unique conversations for ${messages.length} messages`);
+    await logWorkflowStep(ctx, 'scoring_prep', 'info',
+      `Preparing to score ${messages.length} messages from ${conversationIds.length} conversations`);
 
     await Promise.all(
       conversationIds.map(async (convId) => {
         try {
           const convDoc = await db.collection('conversations').doc(convId).get();
+          console.log(`[SCORING] Conversation ${convId}: exists=${convDoc.exists}`);
           if (convDoc.exists) {
             const convData = convDoc.data();
             const now = admin.firestore.Timestamp.now();
@@ -1289,11 +1297,25 @@ async function generateMeaningful10Digest(
     const scoredMessages = [];
     const batch = db.batch();
 
+    console.log(`[SCORING] Starting to score ${messages.length} messages`);
+    console.log(`[SCORING] Context map has ${conversationContexts.size} entries`);
+    await logWorkflowStep(ctx, 'scoring_start', 'info',
+      `Scoring ${messages.length} messages with ${conversationContexts.size} conversation contexts`);
+
+    let skippedNoContext = 0;
     for (const message of messages) {
-      const context = conversationContexts.get(message.conversationId);
-      if (!context) continue;
+      // Extract message data once - messages are QueryDocumentSnapshot objects
+      // IMPORTANT: Always access fields via .data(), not directly on snapshot
+      const msgData = message.data();
+      const context = conversationContexts.get(msgData.conversationId);
+      if (!context) {
+        console.log(`[SCORING] SKIPPED message ${message.id}: No context for conversation ${msgData.conversationId}`);
+        skippedNoContext++;
+        continue;
+      }
 
       let score = 0;
+      let priority: 'high' | 'medium' | 'low' = 'low';
       const breakdown = {
         category: 0,
         sentiment: 0,
@@ -1301,47 +1323,66 @@ async function generateMeaningful10Digest(
         relationship: 0,
       };
 
-      // Calculate score (same logic as shadow mode)
-      if (message.metadata?.category === 'Business') {
-        breakdown.category += weights.business_opportunity;
-      }
-      if (message.metadata?.category === 'Urgent') {
-        breakdown.category += weights.urgent;
-      }
-      if (message.metadata?.sentiment !== undefined && message.metadata.sentiment < -0.7) {
-        breakdown.sentiment += weights.crisis_sentiment;
-      }
-      if (message.metadata?.opportunityScore !== undefined && message.metadata.opportunityScore > 80) {
-        breakdown.opportunity += weights.business_opportunity;
-      }
-      if (context.isVIP) {
-        breakdown.relationship += weights.vip_relationship;
-      }
-      if (context.messageCount > 10) {
-        breakdown.relationship += weights.message_count_bonus;
-      }
+      // Check if relationshipScore already exists (e.g., from test data or previous scoring)
+      const existingScore = msgData.metadata?.relationshipScore;
+      if (existingScore !== undefined && existingScore !== null) {
+        // Use existing relationship score (0-1 scale), convert to 0-100 scale
+        score = typeof existingScore === 'number' && existingScore <= 1
+          ? existingScore * 100
+          : existingScore;
 
-      const daysSinceInteraction =
-        (admin.firestore.Timestamp.now().toMillis() - context.lastInteraction.toMillis()) /
-        (1000 * 60 * 60 * 24);
+        // Determine priority from existing score
+        if (score >= 70) priority = 'high';
+        else if (score >= 30) priority = 'medium'; // Note: Using 30 threshold to match 0.3 from original scale
+        else priority = 'low';
 
-      if (daysSinceInteraction < 7) {
-        breakdown.relationship += weights.recent_interaction;
+        console.log(`[DEBUG] Using existing relationshipScore for message ${message.id}: ${existingScore} -> ${score} (${priority})`);
+      } else {
+        // Calculate score from scratch (same logic as shadow mode)
+        if (msgData.metadata?.category === 'Business') {
+          breakdown.category += weights.business_opportunity;
+        }
+        if (msgData.metadata?.category === 'Urgent') {
+          breakdown.category += weights.urgent;
+        }
+        if (msgData.metadata?.sentiment !== undefined && msgData.metadata.sentiment < -0.7) {
+          breakdown.sentiment += weights.crisis_sentiment;
+        }
+        if (msgData.metadata?.opportunityScore !== undefined && msgData.metadata.opportunityScore > 80) {
+          breakdown.opportunity += weights.business_opportunity;
+        }
+        if (context.isVIP) {
+          breakdown.relationship += weights.vip_relationship;
+        }
+        if (context.messageCount > 10) {
+          breakdown.relationship += weights.message_count_bonus;
+        }
+
+        const daysSinceInteraction =
+          (admin.firestore.Timestamp.now().toMillis() - context.lastInteraction.toMillis()) /
+          (1000 * 60 * 60 * 24);
+
+        if (daysSinceInteraction < 7) {
+          breakdown.relationship += weights.recent_interaction;
+        }
+
+        score = Math.min(
+          100,
+          breakdown.category + breakdown.sentiment + breakdown.opportunity + breakdown.relationship
+        );
+
+        // Determine priority from calculated score
+        if (score >= 70) priority = 'high';
+        else if (score >= 40) priority = 'medium';
+        else priority = 'low';
+
+        console.log(`[DEBUG] Calculated relationshipScore for message ${message.id}: ${score} (${priority})`);
       }
-
-      score = Math.min(
-        100,
-        breakdown.category + breakdown.sentiment + breakdown.opportunity + breakdown.relationship
-      );
-
-      let priority: 'high' | 'medium' | 'low' = 'low';
-      if (score >= 70) priority = 'high';
-      else if (score >= 40) priority = 'medium';
 
       // **WRITE SCORE TO MESSAGE METADATA**
       const messageRef = db
         .collection('conversations')
-        .doc(message.conversationId)
+        .doc(msgData.conversationId)
         .collection('messages')
         .doc(message.id);
 
@@ -1354,16 +1395,20 @@ async function generateMeaningful10Digest(
 
       scoredMessages.push({
         id: message.id,
-        conversationId: message.conversationId,
-        content: message.text || '',
-        timestamp: message.timestamp,
+        conversationId: msgData.conversationId,
+        content: msgData.text || '',
+        timestamp: msgData.timestamp,
         score,
         priority,
         breakdown,
         relationshipContext: context,
-        estimatedResponseTime: message.metadata?.category === 'Business' ? 30 : 10, // minutes
+        estimatedResponseTime: msgData.metadata?.category === 'Business' ? 30 : 10, // minutes
       });
     }
+
+    console.log(`[SCORING] Scoring complete: ${scoredMessages.length} scored, ${skippedNoContext} skipped (no context)`);
+    await logWorkflowStep(ctx, 'scoring_complete', 'info',
+      `Scored ${scoredMessages.length} messages, skipped ${skippedNoContext} (no conversation context)`);
 
     // Commit score updates
     await batch.commit();
@@ -1860,10 +1905,12 @@ export async function orchestrateWorkflow(
   const executionId = `exec_${Date.now()}_${userId}`;
   const startTime = admin.firestore.Timestamp.now();
 
-  // VERSION CHECK - Code deployed at 12:05pm EST with debug logging
-  console.log('[VERSION] orchestrateWorkflow v12.05 - Feature flag debug enabled');
+  // VERSION CHECK - RELATIONSHIP SCORE FIX DEPLOYED
+  const VERSION = 'v14.0-RELATIONSHIP-SCORE-FIX';
+  console.log(`[VERSION] orchestrateWorkflow ${VERSION} - Uses pre-set relationshipScore if exists`);
+  console.log('[CRITICAL] If you see this log, the new code IS running!');
   await logWorkflowStep({ userId, executionId, startTime, config: {}, results: {}, costs: {} } as any,
-    'version_check', 'info', '[VERSION] orchestrateWorkflow v12.05 - Feature flag debug enabled');
+    'version_check', 'info', `[VERSION] ${VERSION} - Relationship score fix active`);
 
   // Fetch user configuration
   const configDoc = await db
@@ -2157,6 +2204,32 @@ export const dailyAgentWorkflowV2 = functions.onCall(
       return result;
     } catch (error) {
       console.error('Daily agent workflow V2 error:', error);
+      throw new functions.HttpsError('internal', `Workflow failed: ${(error as Error).message}`);
+    }
+  }
+);
+
+// WORKAROUND V3 - Caching bug struck again on V2!
+// V2 deployment succeeded but continued serving old code
+// Creating V3 with relationship score fix
+export const dailyAgentWorkflowV3 = functions.onCall(
+  {
+    timeoutSeconds: 540, // 9 minutes
+    memory: '1GiB',
+  },
+  async (request) => {
+    const userId = request.auth?.uid;
+
+    if (!userId) {
+      throw new functions.HttpsError('unauthenticated', 'User must be authenticated');
+    }
+
+    try {
+      console.log('[V3] Daily agent workflow triggered for user:', userId);
+      const result = await orchestrateWorkflow(userId);
+      return result;
+    } catch (error) {
+      console.error('[V3] Daily agent workflow error:', error);
       throw new functions.HttpsError('internal', `Workflow failed: ${(error as Error).message}`);
     }
   }
