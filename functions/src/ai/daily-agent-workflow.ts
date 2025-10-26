@@ -29,6 +29,245 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 const messaging = admin.messaging();
 
+// =============================================
+// Story 6.4: Auto-Archive Helper Functions
+// =============================================
+
+/**
+ * Default boundary message template (Story 6.4)
+ */
+const DEFAULT_BOUNDARY_MESSAGE_TEMPLATE = `Hi! I get hundreds of messages daily and can't personally respond to everyone.
+
+For quick questions, check out my FAQ: {{faqUrl}}
+For deeper connection, join my community: {{communityUrl}}
+
+I read every message, but I focus on responding to those I can give thoughtful attention to. If this is time-sensitive, feel free to follow up and I'll prioritize it.
+
+Thank you for understanding! 💙
+
+[This message was sent automatically]`;
+
+/**
+ * Renders boundary message template (Server-side version for Cloud Functions)
+ */
+function renderBoundaryTemplateServerSide(
+  template: string,
+  vars: { creatorName?: string; faqUrl?: string; communityUrl?: string }
+): string {
+  let rendered = template;
+  rendered = rendered.replace(/\{\{creatorName\}\}/g, vars.creatorName || '[Creator]');
+  rendered = rendered.replace(/\{\{faqUrl\}\}/g, vars.faqUrl || '[FAQ not configured]');
+  rendered = rendered.replace(/\{\{communityUrl\}\}/g, vars.communityUrl || '[Community not configured]');
+  return rendered;
+}
+
+/**
+ * Checks if current time is within user's quiet hours (Server-side version)
+ */
+function isQuietHoursServerSide(quietHours: any): boolean {
+  if (!quietHours || !quietHours.enabled) {
+    return false;
+  }
+
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  const currentTime = currentHour * 60 + currentMinute;
+
+  const [startHour, startMinute] = quietHours.start.split(':').map(Number);
+  const [endHour, endMinute] = quietHours.end.split(':').map(Number);
+  const startTime = startHour * 60 + startMinute;
+  const endTime = endHour * 60 + endMinute;
+
+  if (startTime > endTime) {
+    return currentTime >= startTime || currentTime < endTime;
+  }
+
+  return currentTime >= startTime && currentTime < endTime;
+}
+
+/**
+ * Safety check: Determines if a message should NOT be auto-archived (Server-side version)
+ */
+function shouldNotArchiveServerSide(message: any): boolean {
+  const metadata = message.metadata || {};
+
+  // Business category
+  if (metadata.category === 'Business') {
+    return true;
+  }
+
+  // Urgent category
+  if (metadata.category === 'Urgent') {
+    return true;
+  }
+
+  // VIP relationship
+  if (metadata.conversationIsVIP || metadata.relationshipContext?.isVIP) {
+    return true;
+  }
+
+  // Crisis sentiment (sentimentScore < -0.7 indicates crisis)
+  if (metadata.sentimentScore !== undefined && metadata.sentimentScore < -0.7) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Auto-archive messages with kind boundary (Server-side version for Cloud Functions)
+ */
+async function autoArchiveMessagesServerSide(
+  userId: string,
+  lowPriorityMessages: any[]
+): Promise<{
+  archivedCount: number;
+  boundariesSent: number;
+  rateLimited: number;
+  safetyBlocked: number;
+}> {
+  const result = {
+    archivedCount: 0,
+    boundariesSent: 0,
+    rateLimited: 0,
+    safetyBlocked: 0,
+  };
+
+  // Fetch user settings
+  const userDoc = await db.collection('users').doc(userId).get();
+  if (!userDoc.exists) {
+    console.error(`User not found: ${userId}`);
+    return result;
+  }
+
+  const userData = userDoc.data();
+  const settings = userData?.settings || {};
+  const capacitySettings = settings.capacity;
+  const quietHours = settings.opportunityNotifications?.quietHours;
+
+  // Check if auto-archive is enabled
+  if (!capacitySettings?.autoArchiveEnabled) {
+    console.log(`[Auto-Archive] Auto-archive disabled for user: ${userId}`);
+    return result;
+  }
+
+  const boundaryTemplate = capacitySettings.boundaryMessage || DEFAULT_BOUNDARY_MESSAGE_TEMPLATE;
+
+  // Process each low-priority message
+  for (const message of lowPriorityMessages) {
+    // Safety checks
+    if (shouldNotArchiveServerSide(message)) {
+      result.safetyBlocked++;
+      continue;
+    }
+
+    try {
+      // Archive conversation
+      await db
+        .collection('conversations')
+        .doc(message.conversationId)
+        .update({
+          [`archivedBy.${userId}`]: true,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+      result.archivedCount++;
+
+      // Check rate limiting (max 1 boundary per fan per week)
+      const rateLimitKey = `${userId}_${message.senderId}`;
+      const rateLimitRef = db.collection('rate_limits').doc('boundary_messages').collection('limits').doc(rateLimitKey);
+      const rateLimitDoc = await rateLimitRef.get();
+
+      if (rateLimitDoc.exists) {
+        const lastSent = rateLimitDoc.data()?.lastBoundarySent;
+        const elapsed = Date.now() - lastSent.toMillis();
+        const sevenDays = 7 * 24 * 60 * 60 * 1000;
+
+        if (elapsed < sevenDays) {
+          result.rateLimited++;
+          // Still create undo record (without boundary message)
+          await createUndoRecordServerSide(userId, message.conversationId, message.id, false);
+          continue;
+        }
+      }
+
+      // Check quiet hours
+      if (isQuietHoursServerSide(quietHours)) {
+        console.log(`[Auto-Archive] Quiet hours - skipping boundary message for now`);
+        await createUndoRecordServerSide(userId, message.conversationId, message.id, false);
+        continue;
+      }
+
+      // Send boundary message
+      const rendered = renderBoundaryTemplateServerSide(boundaryTemplate, {
+        creatorName: userData?.displayName || 'Creator',
+        faqUrl: undefined, // TODO: Add FAQ URL to user settings (Story 6.5)
+        communityUrl: undefined, // TODO: Add community URL to user settings (Story 6.5)
+      });
+
+      await db
+        .collection('conversations')
+        .doc(message.conversationId)
+        .collection('messages')
+        .add({
+          conversationId: message.conversationId,
+          senderId: userId,
+          text: rendered,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          readBy: [userId],
+          status: 'delivered',
+          metadata: {
+            isAutoBoundary: true,
+            boundaryReason: 'low_priority',
+            originalMessageId: message.id,
+          },
+        });
+
+      result.boundariesSent++;
+
+      // Set rate limit key
+      await rateLimitRef.set({
+        fanId: message.senderId,
+        creatorId: userId,
+        lastBoundarySent: admin.firestore.FieldValue.serverTimestamp(),
+        expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      });
+
+      // Create undo record
+      await createUndoRecordServerSide(userId, message.conversationId, message.id, true);
+    } catch (error) {
+      console.error(`[Auto-Archive] Error archiving message ${message.id}:`, error);
+      // Continue processing other messages even if one fails
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Creates undo archive record (Server-side version)
+ */
+async function createUndoRecordServerSide(
+  userId: string,
+  conversationId: string,
+  messageId: string,
+  boundaryMessageSent: boolean
+): Promise<void> {
+  const now = admin.firestore.Timestamp.now();
+  const expiresAt = admin.firestore.Timestamp.fromMillis(now.toMillis() + 24 * 60 * 60 * 1000);
+
+  await db.collection('undo_archive').add({
+    userId,
+    conversationId,
+    messageId,
+    archivedAt: now,
+    expiresAt,
+    boundaryMessageSent,
+    canUndo: true,
+  });
+}
+
 /**
  * Workflow execution context
  *
@@ -759,6 +998,517 @@ async function draftVoiceMatchedResponses(
 }
 
 /**
+ * EPIC 6 - Week 0: Shadow Mode Relationship Scoring
+ *
+ * @param messages - All unprocessed messages
+ * @param ctx - Workflow execution context
+ *
+ * @remarks
+ * Shadow mode validation for Story 6.1 relationship scoring algorithm.
+ * Runs scoring in logging-only mode without affecting production digest.
+ *
+ * Success criteria:
+ * - No errors for 1 week
+ * - Performance < 3 seconds for 50 messages
+ * - 80%+ accuracy on manual spot-checks
+ *
+ * This will be replaced by full implementation in Week 1.
+ */
+async function shadowModeRelationshipScoring(
+  messages: any[],
+  ctx: WorkflowContext
+): Promise<void> {
+  const stepStart = Date.now();
+
+  try {
+    await logWorkflowStep(
+      ctx,
+      'shadow_mode_scoring',
+      'running',
+      '[SHADOW MODE] Starting relationship scoring validation'
+    );
+
+    // Default scoring weights (tunable via remote config in future)
+    const weights = {
+      business_opportunity: 50,
+      urgent: 40,
+      crisis_sentiment: 100,
+      vip_relationship: 30,
+      message_count_bonus: 30,
+      recent_interaction: 15,
+    };
+
+    // Batch fetch conversation contexts
+    const conversationIds = [...new Set(messages.map(m => m.conversationId))];
+    const conversationContexts = new Map();
+
+    // Fetch all conversations in parallel
+    await Promise.all(
+      conversationIds.map(async (convId) => {
+        try {
+          const convDoc = await db.collection('conversations').doc(convId).get();
+          if (convDoc.exists) {
+            const convData = convDoc.data();
+            const now = admin.firestore.Timestamp.now();
+            const createdAt = convData?.createdAt || now;
+            const lastMessageTimestamp = convData?.lastMessageTimestamp || createdAt;
+            const messageCount = convData?.messageCount || 0;
+
+            // Calculate conversation age in days
+            const conversationAge = (now.toMillis() - createdAt.toMillis()) / (1000 * 60 * 60 * 24);
+
+            // VIP criteria: > 10 messages AND conversation > 30 days old
+            const isVIP = messageCount > 10 && conversationAge > 30;
+
+            conversationContexts.set(convId, {
+              conversationAge,
+              lastInteraction: lastMessageTimestamp,
+              messageCount,
+              isVIP,
+            });
+          }
+        } catch (error) {
+          console.warn(`[SHADOW MODE] Error fetching conversation ${convId}:`, error);
+        }
+      })
+    );
+
+    // Score each message
+    const scores = [];
+    for (const message of messages) {
+      const context = conversationContexts.get(message.conversationId);
+      if (!context) continue;
+
+      let score = 0;
+      const breakdown = {
+        category: 0,
+        sentiment: 0,
+        opportunity: 0,
+        relationship: 0,
+      };
+
+      // 1. Category score (from Story 5.2)
+      if (message.metadata?.category === 'Business') {
+        breakdown.category += weights.business_opportunity;
+      }
+      if (message.metadata?.category === 'Urgent') {
+        breakdown.category += weights.urgent;
+      }
+
+      // 2. Sentiment score (from Story 5.3)
+      if (message.metadata?.sentiment !== undefined && message.metadata.sentiment < -0.7) {
+        breakdown.sentiment += weights.crisis_sentiment;
+      }
+
+      // 3. Opportunity score (from Story 5.6)
+      if (message.metadata?.opportunityScore !== undefined && message.metadata.opportunityScore > 80) {
+        breakdown.opportunity += weights.business_opportunity;
+      }
+
+      // 4. Relationship context (NEW - Story 6.1)
+      if (context.isVIP) {
+        breakdown.relationship += weights.vip_relationship;
+      }
+      if (context.messageCount > 10) {
+        breakdown.relationship += weights.message_count_bonus;
+      }
+
+      const daysSinceInteraction =
+        (admin.firestore.Timestamp.now().toMillis() - context.lastInteraction.toMillis()) /
+        (1000 * 60 * 60 * 24);
+
+      if (daysSinceInteraction < 7) {
+        breakdown.relationship += weights.recent_interaction;
+      }
+
+      // Calculate total score (capped at 100)
+      score = Math.min(
+        100,
+        breakdown.category + breakdown.sentiment + breakdown.opportunity + breakdown.relationship
+      );
+
+      // Assign priority tier
+      let priority: 'high' | 'medium' | 'low' = 'low';
+      if (score >= 70) priority = 'high';
+      else if (score >= 40) priority = 'medium';
+
+      scores.push({
+        messageId: message.id,
+        conversationId: message.conversationId,
+        score,
+        priority,
+        breakdown,
+      });
+    }
+
+    // Sort by score descending
+    scores.sort((a, b) => b.score - a.score);
+
+    // Simulate Meaningful 10 digest structure
+    const meaningful10 = {
+      highPriority: scores.filter(s => s.priority === 'high').slice(0, 3),
+      mediumPriority: scores.filter(s => s.priority === 'medium').slice(0, 7),
+      low: scores.filter(s => s.priority === 'low'),
+    };
+
+    const stepDuration = Date.now() - stepStart;
+
+    // Detailed logging for validation
+    console.info('[SHADOW MODE] Relationship scoring results', {
+      userId: ctx.userId,
+      executionId: ctx.executionId,
+      messageCount: messages.length,
+      conversationCount: conversationIds.length,
+      highPriorityCount: meaningful10.highPriority.length,
+      mediumPriorityCount: meaningful10.mediumPriority.length,
+      lowPriorityCount: meaningful10.low.length,
+      duration: stepDuration,
+      performanceTarget: stepDuration < 3000 ? 'PASS' : 'FAIL',
+      topScores: meaningful10.highPriority.map(m => ({
+        messageId: m.messageId,
+        score: m.score,
+        breakdown: m.breakdown,
+      })),
+    });
+
+    // Log score distribution
+    const scoreDistribution = {
+      high: scores.filter(s => s.priority === 'high').length,
+      medium: scores.filter(s => s.priority === 'medium').length,
+      low: scores.filter(s => s.priority === 'low').length,
+    };
+
+    console.info('[SHADOW MODE] Score distribution', {
+      userId: ctx.userId,
+      executionId: ctx.executionId,
+      distribution: scoreDistribution,
+    });
+
+    trackStepPerformance(ctx, 'shadow_mode_scoring', stepDuration);
+
+    await logWorkflowStep(
+      ctx,
+      'shadow_mode_scoring',
+      'completed',
+      `[SHADOW MODE] Scoring completed in ${stepDuration}ms: ${meaningful10.highPriority.length} high, ${meaningful10.mediumPriority.length} medium`
+    );
+  } catch (error) {
+    const stepDuration = Date.now() - stepStart;
+    trackStepPerformance(ctx, 'shadow_mode_scoring', stepDuration);
+
+    // Shadow mode errors should NOT break the workflow
+    console.error('[SHADOW MODE] Relationship scoring failed', {
+      userId: ctx.userId,
+      executionId: ctx.executionId,
+      error: (error as Error).message,
+      stack: (error as Error).stack,
+    });
+
+    await logWorkflowStep(
+      ctx,
+      'shadow_mode_scoring',
+      'failed',
+      `[SHADOW MODE] Error: ${(error as Error).message}`
+    );
+
+    // Don't throw - shadow mode should not break production
+  }
+}
+
+/**
+ * PRODUCTION: Generate Meaningful 10 digest with relationship scoring
+ *
+ * This function:
+ * 1. Calculates relationship scores for all messages
+ * 2. Writes scores to message metadata in Firestore
+ * 3. Generates priority-tiered digest (High/Medium/Auto-handled)
+ * 4. Saves Meaningful 10 digest to Firestore
+ *
+ * Replaces the old flat daily digest structure (Story 5.4) with
+ * the new tiered Meaningful 10 structure (Story 6.1).
+ */
+async function generateMeaningful10Digest(
+  messages: any[],
+  ctx: WorkflowContext
+): Promise<void> {
+  const stepStart = Date.now();
+
+  console.log(`[DEBUG] generateMeaningful10Digest called with ${messages.length} messages`);
+  console.log(`[DEBUG] Execution ID: ${ctx.executionId}, User ID: ${ctx.userId}`);
+
+  try {
+    await logWorkflowStep(
+      ctx,
+      'generate_meaningful10',
+      'running',
+      'Generating Meaningful 10 digest with relationship scoring'
+    );
+
+    // Default scoring weights (tunable via remote config)
+    const weights = {
+      business_opportunity: 50,
+      urgent: 40,
+      crisis_sentiment: 100,
+      vip_relationship: 30,
+      message_count_bonus: 30,
+      recent_interaction: 15,
+    };
+
+    // Batch fetch conversation contexts
+    const conversationIds = [...new Set(messages.map(m => m.conversationId))];
+    const conversationContexts = new Map();
+
+    await Promise.all(
+      conversationIds.map(async (convId) => {
+        try {
+          const convDoc = await db.collection('conversations').doc(convId).get();
+          if (convDoc.exists) {
+            const convData = convDoc.data();
+            const now = admin.firestore.Timestamp.now();
+            const createdAt = convData?.createdAt || now;
+            const lastMessageTimestamp = convData?.lastMessageTimestamp || createdAt;
+            const messageCount = convData?.messageCount || 0;
+
+            const conversationAge = (now.toMillis() - createdAt.toMillis()) / (1000 * 60 * 60 * 24);
+            const isVIP = messageCount > 10 && conversationAge > 30;
+
+            conversationContexts.set(convId, {
+              conversationAge,
+              lastInteraction: lastMessageTimestamp,
+              messageCount,
+              isVIP,
+            });
+          }
+        } catch (error) {
+          console.warn(`Error fetching conversation ${convId}:`, error);
+        }
+      })
+    );
+
+    // Score each message AND write to Firestore
+    const scoredMessages = [];
+    const batch = db.batch();
+
+    for (const message of messages) {
+      const context = conversationContexts.get(message.conversationId);
+      if (!context) continue;
+
+      let score = 0;
+      const breakdown = {
+        category: 0,
+        sentiment: 0,
+        opportunity: 0,
+        relationship: 0,
+      };
+
+      // Calculate score (same logic as shadow mode)
+      if (message.metadata?.category === 'Business') {
+        breakdown.category += weights.business_opportunity;
+      }
+      if (message.metadata?.category === 'Urgent') {
+        breakdown.category += weights.urgent;
+      }
+      if (message.metadata?.sentiment !== undefined && message.metadata.sentiment < -0.7) {
+        breakdown.sentiment += weights.crisis_sentiment;
+      }
+      if (message.metadata?.opportunityScore !== undefined && message.metadata.opportunityScore > 80) {
+        breakdown.opportunity += weights.business_opportunity;
+      }
+      if (context.isVIP) {
+        breakdown.relationship += weights.vip_relationship;
+      }
+      if (context.messageCount > 10) {
+        breakdown.relationship += weights.message_count_bonus;
+      }
+
+      const daysSinceInteraction =
+        (admin.firestore.Timestamp.now().toMillis() - context.lastInteraction.toMillis()) /
+        (1000 * 60 * 60 * 24);
+
+      if (daysSinceInteraction < 7) {
+        breakdown.relationship += weights.recent_interaction;
+      }
+
+      score = Math.min(
+        100,
+        breakdown.category + breakdown.sentiment + breakdown.opportunity + breakdown.relationship
+      );
+
+      let priority: 'high' | 'medium' | 'low' = 'low';
+      if (score >= 70) priority = 'high';
+      else if (score >= 40) priority = 'medium';
+
+      // **WRITE SCORE TO MESSAGE METADATA**
+      const messageRef = db
+        .collection('conversations')
+        .doc(message.conversationId)
+        .collection('messages')
+        .doc(message.id);
+
+      batch.update(messageRef, {
+        'metadata.relationshipScore': score,
+        'metadata.relationshipPriority': priority,
+        'metadata.relationshipBreakdown': breakdown,
+        'metadata.relationshipContext': context,
+      });
+
+      scoredMessages.push({
+        id: message.id,
+        conversationId: message.conversationId,
+        content: message.text || '',
+        timestamp: message.timestamp,
+        score,
+        priority,
+        breakdown,
+        relationshipContext: context,
+        estimatedResponseTime: message.metadata?.category === 'Business' ? 30 : 10, // minutes
+      });
+    }
+
+    // Commit score updates
+    await batch.commit();
+
+    // Sort by score
+    scoredMessages.sort((a, b) => b.score - a.score);
+
+    // =============================================
+    // Story 6.4: Auto-Archive Beyond Capacity
+    // =============================================
+
+    // Fetch user capacity settings
+    const userDoc = await db.collection('users').doc(ctx.userId).get();
+    const userData = userDoc.data();
+    const capacitySettings = userData?.settings?.capacity;
+    const dailyLimit = capacitySettings?.dailyLimit || 10; // Default: 10 (Meaningful 10)
+
+    // Split messages: meaningful vs. beyond capacity
+    const meaningful = scoredMessages.slice(0, dailyLimit);
+    const beyondCapacity = scoredMessages.slice(dailyLimit);
+
+    // Auto-archive low-priority messages beyond capacity (Story 6.4)
+    let autoArchiveResult = {
+      archivedCount: 0,
+      boundariesSent: 0,
+      rateLimited: 0,
+      safetyBlocked: 0,
+    };
+
+    if (beyondCapacity.length > 0) {
+      // Convert scored messages back to full message objects for auto-archive
+      const messagesToArchive = messages.filter((m) =>
+        beyondCapacity.some((scored) => scored.id === m.id && scored.conversationId === m.conversationId)
+      );
+
+      // Import auto-archive function (Story 6.4)
+      // Note: This will be imported from client-side service, but for Cloud Functions
+      // we'll implement a server-side version using admin SDK
+      try {
+        autoArchiveResult = await autoArchiveMessagesServerSide(ctx.userId, messagesToArchive);
+        console.info('Auto-archive completed', {
+          userId: ctx.userId,
+          executionId: ctx.executionId,
+          ...autoArchiveResult,
+        });
+      } catch (error) {
+        console.error('Auto-archive failed (non-fatal):', error);
+        // Continue workflow even if auto-archive fails
+      }
+    }
+
+    // Build Meaningful 10 digest structure with capacity-aware selection
+    const highPriority = meaningful.filter(m => m.priority === 'high').slice(0, 3);
+    const mediumPriority = meaningful.filter(m => m.priority === 'medium').slice(0, 7);
+
+    // Count auto-handled messages (FAQ auto-responses from Story 5.8 + Auto-archived from Story 6.4)
+    const autoHandledCount = messages.filter(m => m.metadata?.autoResponseSent === true).length;
+    const faqCount = messages.filter(m => m.metadata?.faqTemplateUsed).length;
+    const archivedCount = autoArchiveResult.archivedCount;
+
+    const meaningful10Digest = {
+      highPriority,
+      mediumPriority,
+      autoHandled: {
+        faqCount: faqCount,
+        archivedCount: archivedCount,
+        total: autoHandledCount,
+        boundaryMessageSent: autoArchiveResult.boundariesSent > 0,
+      },
+      capacityUsed: highPriority.length + mediumPriority.length + autoHandledCount,
+      estimatedTimeCommitment: [
+        ...highPriority,
+        ...mediumPriority,
+      ].reduce((sum, m) => sum + m.estimatedResponseTime, 0),
+    };
+
+    // **SAVE MEANINGFUL 10 DIGEST TO FIRESTORE**
+    // Generate date string in YYYY-MM-DD format for document ID
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+
+    console.log(`[DEBUG] About to save Meaningful 10 digest to Firestore`);
+    console.log(`[DEBUG] Path: /users/${ctx.userId}/meaningful10_digests/${dateStr}`);
+    console.log(`[DEBUG] Digest data:`, JSON.stringify(meaningful10Digest, null, 2));
+
+    const digestRef = db
+      .collection('users')
+      .doc(ctx.userId)
+      .collection('meaningful10_digests')
+      .doc(dateStr);
+
+    await digestRef.set({
+      ...meaningful10Digest,
+      date: admin.firestore.Timestamp.now(),
+      dateStr: dateStr,
+      generatedAt: admin.firestore.Timestamp.now(),
+      executionId: ctx.executionId,
+    });
+
+    console.log(`[DEBUG] Successfully saved Meaningful 10 digest to Firestore`);
+
+    const stepDuration = Date.now() - stepStart;
+
+    console.info('Meaningful 10 digest generated', {
+      userId: ctx.userId,
+      executionId: ctx.executionId,
+      highPriorityCount: highPriority.length,
+      mediumPriorityCount: mediumPriority.length,
+      autoHandledCount,
+      capacityUsed: meaningful10Digest.capacityUsed,
+      estimatedTimeCommitment: meaningful10Digest.estimatedTimeCommitment,
+      duration: stepDuration,
+    });
+
+    trackStepPerformance(ctx, 'generate_meaningful10', stepDuration);
+
+    await logWorkflowStep(
+      ctx,
+      'generate_meaningful10',
+      'completed',
+      `Meaningful 10 generated: ${highPriority.length} high, ${mediumPriority.length} medium, ${autoHandledCount} auto-handled`
+    );
+  } catch (error) {
+    const stepDuration = Date.now() - stepStart;
+    trackStepPerformance(ctx, 'generate_meaningful10', stepDuration);
+
+    console.error('Failed to generate Meaningful 10 digest', {
+      userId: ctx.userId,
+      executionId: ctx.executionId,
+      error: (error as Error).message,
+      stack: (error as Error).stack,
+    });
+
+    await logWorkflowStep(
+      ctx,
+      'generate_meaningful10',
+      'failed',
+      `Error: ${(error as Error).message}`
+    );
+
+    throw error; // This is production, not shadow mode - errors should fail the workflow
+  }
+}
+
+/**
  * Step 5: Generate daily digest and send notification
  *
  * @param ctx - Workflow execution context
@@ -1274,6 +2024,25 @@ export async function orchestrateWorkflow(
     // Check timeout after response drafting
     if (isWorkflowTimedOut(ctx)) {
       throw new Error('Workflow timeout: exceeded 5 minute limit after response drafting');
+    }
+
+    // EPIC 6 - PRODUCTION: Meaningful 10 Digest Generation
+    // Generates priority-tiered digest with relationship scoring
+    // Feature flag: meaningful10.enabled (default: true - FULL DEPLOYMENT)
+    // RISK: Unvalidated algorithm deployed to 100% users immediately
+    console.log('[DEBUG] Feature flag check - configData:', JSON.stringify(configData));
+    console.log('[DEBUG] configData?.meaningful10:', configData?.meaningful10);
+    console.log('[DEBUG] configData?.meaningful10?.enabled:', configData?.meaningful10?.enabled);
+    const meaningful10Enabled = configData?.meaningful10?.enabled !== false; // Default true
+    console.log('[DEBUG] meaningful10Enabled result:', meaningful10Enabled);
+
+    if (meaningful10Enabled) {
+      console.log('[DEBUG] Running PRODUCTION: generateMeaningful10Digest');
+      await generateMeaningful10Digest(messages, ctx);
+    } else {
+      console.log('[DEBUG] Running SHADOW MODE: shadowModeRelationshipScoring');
+      // Fallback: Keep shadow mode for emergency rollback
+      await shadowModeRelationshipScoring(messages, ctx);
     }
 
     // Step 5: Generate daily digest
