@@ -2036,11 +2036,18 @@ export async function orchestrateWorkflow(
     const meaningful10Enabled = configData?.meaningful10?.enabled !== false; // Default true
     console.log('[DEBUG] meaningful10Enabled result:', meaningful10Enabled);
 
+    // Add debug logging to agent_logs for immediate visibility
+    await logWorkflowStep(ctx, 'feature_flag_check', 'info',
+      `Feature flag check: meaningful10.enabled = ${configData?.meaningful10?.enabled}, ` +
+      `evaluated to: ${meaningful10Enabled} (should be TRUE for production)`);
+
     if (meaningful10Enabled) {
       console.log('[DEBUG] Running PRODUCTION: generateMeaningful10Digest');
+      await logWorkflowStep(ctx, 'meaningful10_mode', 'info', '[PRODUCTION MODE] Running generateMeaningful10Digest');
       await generateMeaningful10Digest(messages, ctx);
     } else {
       console.log('[DEBUG] Running SHADOW MODE: shadowModeRelationshipScoring');
+      await logWorkflowStep(ctx, 'meaningful10_mode', 'info', '[SHADOW MODE] Running shadowModeRelationshipScoring');
       // Fallback: Keep shadow mode for emergency rollback
       await shadowModeRelationshipScoring(messages, ctx);
     }
