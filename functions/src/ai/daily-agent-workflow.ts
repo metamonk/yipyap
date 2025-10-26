@@ -1860,6 +1860,11 @@ export async function orchestrateWorkflow(
   const executionId = `exec_${Date.now()}_${userId}`;
   const startTime = admin.firestore.Timestamp.now();
 
+  // VERSION CHECK - Code deployed at 12:05pm EST with debug logging
+  console.log('[VERSION] orchestrateWorkflow v12.05 - Feature flag debug enabled');
+  await logWorkflowStep({ userId, executionId, startTime, config: {}, results: {}, costs: {} } as any,
+    'version_check', 'info', '[VERSION] orchestrateWorkflow v12.05 - Feature flag debug enabled');
+
   // Fetch user configuration
   const configDoc = await db
     .collection('users')
