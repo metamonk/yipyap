@@ -1,9 +1,9 @@
 /**
- * Daily Digest Review Screen
+ * Daily Digest Review Screen - Meaningful 10
  * @remarks
- * Story 5.8 - Multi-Step Daily Agent
- * Displays daily digest with handled messages and pending reviews
- * Provides one-tap approve/reject interface for AI-generated responses
+ * Story 6.1 - Meaningful 10 Daily Digest
+ * Displays priority-tiered digest focusing on top 10 most important messages
+ * Shows relationship context and capacity-aware prioritization
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -15,16 +15,13 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
-  FlatList,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { NavigationHeader } from '../_components/NavigationHeader';
 import { getFirebaseAuth } from '@/services/firebase';
-import {
-  getDailyDigest,
-} from '@/services/dailyDigestService';
-import { bulkOperationsService } from '@/services/bulkOperationsService';
-import type { DailyDigest, DigestMessage } from '@/types/ai';
+import { getMeaningful10Digest } from '@/services/dailyDigestService';
+import type { Meaningful10Digest, Meaningful10DigestMessage } from '@/types/ai';
 
 /**
  * Daily Digest Screen Component
@@ -40,14 +37,12 @@ export default function DailyDigestScreen() {
   const auth = getFirebaseAuth();
   const currentUser = auth.currentUser;
 
-  const [digest, setDigest] = useState<DailyDigest | null>(null);
+  const [digest, setDigest] = useState<Meaningful10Digest | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [selectedTab, setSelectedTab] = useState<'pending' | 'handled'>('pending');
 
   /**
-   * Loads the most recent daily digest
+   * Loads the most recent Meaningful 10 digest
    */
   const loadDigest = useCallback(async () => {
     if (!currentUser) {
@@ -57,10 +52,10 @@ export default function DailyDigestScreen() {
     }
 
     try {
-      const latestDigest = await getDailyDigest(currentUser.uid);
+      const latestDigest = await getMeaningful10Digest(currentUser.uid);
       setDigest(latestDigest);
     } catch (error) {
-      console.error('Error loading daily digest:', error);
+      console.error('Error loading Meaningful 10 digest:', error);
       Alert.alert('Error', 'Failed to load daily digest. Please try again.');
     } finally {
       setIsLoading(false);
@@ -81,241 +76,71 @@ export default function DailyDigestScreen() {
   };
 
   /**
-   * Approves all pending suggestions
+   * Navigates to conversation for message response
    */
-  const handleApproveAll = async () => {
-    if (!currentUser || !digest) {
-      return;
-    }
-
-    Alert.alert(
-      'Approve All Responses',
-      `This will send ${digest.summary.totalNeedingReview} AI-generated responses. Continue?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Approve All',
-          style: 'default',
-          onPress: async () => {
-            setIsProcessing(true);
-            try {
-              const result = await bulkOperationsService.batchApproveSuggestions(currentUser.uid);
-              if (result.completed) {
-                Alert.alert('Success', `${result.successCount} responses have been sent.`);
-              } else {
-                Alert.alert('Partial Success', `${result.successCount} sent, ${result.failureCount} failed.`);
-              }
-              // Reload digest
-              await loadDigest();
-            } catch (error) {
-              console.error('Error approving all:', error);
-              Alert.alert('Error', 'Failed to send some responses. Please try again.');
-            } finally {
-              setIsProcessing(false);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  /**
-   * Rejects all pending suggestions
-   */
-  const handleRejectAll = async () => {
-    if (!currentUser || !digest) {
-      return;
-    }
-
-    Alert.alert(
-      'Reject All Responses',
-      `This will discard ${digest.summary.totalNeedingReview} AI-generated responses. Continue?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reject All',
-          style: 'destructive',
-          onPress: async () => {
-            setIsProcessing(true);
-            try {
-              // Mark all as rejected (implementation in bulk operations service)
-              // TODO: Implement batchRejectSuggestions in bulkOperationsService
-              // const messageIds = digest.pendingMessages.map((msg) => msg.messageId);
-              Alert.alert('Success', 'All suggestions have been rejected.');
-              // Reload digest
-              await loadDigest();
-            } catch (error) {
-              console.error('Error rejecting all:', error);
-              Alert.alert('Error', 'Failed to reject suggestions. Please try again.');
-            } finally {
-              setIsProcessing(false);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  /**
-   * Handles individual message approval
-   */
-  const handleApproveMessage = async (_message: DigestMessage) => {
-    if (!currentUser) {
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      const result = await bulkOperationsService.batchApproveSuggestions(currentUser.uid);
-      if (result.completed) {
-        Alert.alert('Success', 'Response has been sent.');
-      } else {
-        Alert.alert('Error', 'Failed to send response. Please try again.');
-      }
-      // Reload digest
-      await loadDigest();
-    } catch (error) {
-      console.error('Error approving message:', error);
-      Alert.alert('Error', 'Failed to send response. Please try again.');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  /**
-   * Handles individual message rejection
-   */
-  const handleRejectMessage = async (_message: DigestMessage) => {
-    if (!currentUser) {
-      return;
-    }
-
-    Alert.alert(
-      'Reject Response',
-      'Discard this AI-generated response?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reject',
-          style: 'destructive',
-          onPress: async () => {
-            setIsProcessing(true);
-            try {
-              // TODO: Implement single message rejection
-              Alert.alert('Success', 'Response has been rejected.');
-              // Reload digest
-              await loadDigest();
-            } catch (error) {
-              console.error('Error rejecting message:', error);
-              Alert.alert('Error', 'Failed to reject response. Please try again.');
-            } finally {
-              setIsProcessing(false);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  /**
-   * Handles message edit (navigate to conversation)
-   */
-  const handleEditMessage = (message: DigestMessage) => {
+  const handleMessageTap = (message: Meaningful10DigestMessage) => {
     router.push(`/(tabs)/conversations/${message.conversationId}`);
   };
 
   /**
-   * Renders individual digest message item
+   * Formats relationship context for display
    */
-  const renderMessageItem = ({ item }: { item: DigestMessage }) => (
-    <View
-      style={styles.messageCard}
-      accessible={true}
-      accessibilityRole="button"
-      accessibilityLabel={`Message from ${item.senderName}: ${item.messagePreview}`}
-    >
-      <View style={styles.messageHeader}>
-        <Text style={styles.senderName}>{item.senderName}</Text>
-        <View style={[styles.categoryBadge, getCategoryBadgeStyle(item.category)]}>
-          <Text style={styles.categoryText}>{item.category}</Text>
-        </View>
-      </View>
+  const formatRelationshipContext = (message: Meaningful10DigestMessage): string => {
+    const { relationshipContext } = message;
+    const parts: string[] = [];
 
-      <Text style={styles.messagePreview} numberOfLines={2}>
-        {item.messagePreview}
-      </Text>
+    if (relationshipContext.isVIP) {
+      parts.push('⭐ VIP');
+    }
 
-      {item.draftResponse && (
-        <View style={styles.responseContainer}>
-          <Text style={styles.responseLabel}>AI Draft:</Text>
-          <Text style={styles.responseText} numberOfLines={3}>
-            {item.draftResponse}
-          </Text>
-        </View>
-      )}
+    parts.push(`${relationshipContext.messageCount} messages`);
 
-      {item.faqTemplateId && (
-        <View style={styles.faqBadge}>
-          <Text style={styles.faqBadgeText}>FAQ Auto-Response</Text>
-        </View>
-      )}
+    if (relationshipContext.conversationAge > 30) {
+      parts.push(`${Math.round(relationshipContext.conversationAge / 30)} months`);
+    } else {
+      parts.push(`${relationshipContext.conversationAge} days`);
+    }
 
-      {selectedTab === 'pending' && (
-        <View style={styles.messageActions}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.actionButtonReject]}
-            onPress={() => handleRejectMessage(item)}
-            disabled={isProcessing}
-            accessible={true}
-            accessibilityRole="button"
-            accessibilityLabel="Reject response"
-          >
-            <Text style={styles.actionButtonText}>Reject</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.actionButtonEdit]}
-            onPress={() => handleEditMessage(item)}
-            disabled={isProcessing}
-            accessible={true}
-            accessibilityRole="button"
-            accessibilityLabel="Edit response"
-          >
-            <Text style={styles.actionButtonText}>Edit</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.actionButtonApprove]}
-            onPress={() => handleApproveMessage(item)}
-            disabled={isProcessing}
-            accessible={true}
-            accessibilityRole="button"
-            accessibilityLabel="Approve and send response"
-          >
-            <Text style={[styles.actionButtonText, styles.actionButtonTextApprove]}>
-              Approve
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
-  );
+    return parts.join(' • ');
+  };
 
   /**
-   * Returns category badge styling
+   * Renders individual message card with relationship context
    */
-  const getCategoryBadgeStyle = (category: string) => {
-    switch (category) {
-      case 'business_opportunity':
-        return { backgroundColor: '#34C759' };
-      case 'fan_engagement':
-        return { backgroundColor: '#007AFF' };
-      case 'urgent':
-        return { backgroundColor: '#FF3B30' };
-      case 'spam':
-        return { backgroundColor: '#8E8E93' };
-      default:
-        return { backgroundColor: '#5856D6' };
-    }
-  };
+  const renderMessageItem = (message: Meaningful10DigestMessage) => (
+    <TouchableOpacity
+      key={message.id}
+      style={styles.messageCard}
+      onPress={() => handleMessageTap(message)}
+      accessible={true}
+      accessibilityRole="button"
+      accessibilityLabel={`Message scored ${message.relationshipScore}: ${message.content}`}
+    >
+      {/* Relationship Score Badge */}
+      <View style={styles.scoreContainer}>
+        <View style={styles.scoreBadge}>
+          <Text style={styles.scoreText}>{Math.round(message.relationshipScore)}</Text>
+        </View>
+        <Text style={styles.categoryText}>{message.category}</Text>
+      </View>
+
+      {/* Message Content */}
+      <Text style={styles.messageContent} numberOfLines={3}>
+        {message.content}
+      </Text>
+
+      {/* Relationship Context */}
+      <View style={styles.contextRow}>
+        <Text style={styles.contextText}>{formatRelationshipContext(message)}</Text>
+      </View>
+
+      {/* Time Estimate */}
+      <View style={styles.timeEstimateRow}>
+        <Text style={styles.timeEstimateIcon}>⏱</Text>
+        <Text style={styles.timeEstimateText}>~{message.estimatedResponseTime} min to respond</Text>
+      </View>
+    </TouchableOpacity>
+  );
 
   // Loading state
   if (isLoading) {
@@ -334,15 +159,16 @@ export default function DailyDigestScreen() {
   if (!digest) {
     return (
       <View style={styles.container}>
-        <NavigationHeader title="Daily Digest" />
+        <NavigationHeader title="Meaningful 10" />
         <View style={styles.emptyContainer} accessible={true} accessibilityRole="text">
           <Text style={styles.emptyIcon}>📭</Text>
-          <Text style={styles.emptyTitle}>No Digest Available</Text>
+          <Text style={styles.emptyTitle}>No Messages Today</Text>
           <Text style={styles.emptyText}>
-            The daily agent hasn&apos;t processed any messages yet.
+            Your daily digest will appear here each morning with your top 10 most important
+            messages.
           </Text>
           <Text style={styles.emptyHint}>
-            Check back tomorrow morning or enable the daily agent in settings.
+            Check back tomorrow or adjust your daily agent settings.
           </Text>
           <TouchableOpacity
             style={styles.settingsButton}
@@ -358,139 +184,114 @@ export default function DailyDigestScreen() {
     );
   }
 
-  // Error state (if workflow failed)
-  const hasError = digest.summary.totalHandled === 0 && digest.summary.totalNeedingReview === 0;
-  if (hasError) {
-    return (
-      <View style={styles.container}>
-        <NavigationHeader title="Daily Digest" />
-        <View style={styles.errorContainer} accessible={true} accessibilityRole="alert">
-          <Text style={styles.errorIcon}>⚠️</Text>
-          <Text style={styles.errorTitle}>Workflow Error</Text>
-          <Text style={styles.errorText}>
-            The daily agent encountered an error during processing.
-          </Text>
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={() => router.push('/(tabs)/profile/agent-execution-logs')}
-            accessible={true}
-            accessibilityRole="button"
-            accessibilityLabel="View execution logs"
-          >
-            <Text style={styles.retryButtonText}>View Logs</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      <NavigationHeader title="Daily Digest" />
+      <NavigationHeader title="Meaningful 10" />
 
-      {/* Summary Header */}
-      <View
-        style={styles.summaryHeader}
-        accessible={true}
-        accessibilityRole="header"
-        accessibilityLabel={digest.summary.summaryText}
-      >
-        <Text style={styles.summaryText}>{digest.summary.summaryText}</Text>
-      </View>
-
-      {/* Tab Selector */}
-      <View style={styles.tabContainer} accessible={true} accessibilityRole="tablist">
-        <TouchableOpacity
-          style={[styles.tab, selectedTab === 'pending' && styles.tabActive]}
-          onPress={() => setSelectedTab('pending')}
-          accessible={true}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: selectedTab === 'pending' }}
-          accessibilityLabel={`Pending review: ${digest.summary.totalNeedingReview} messages`}
-        >
-          <Text
-            style={[styles.tabText, selectedTab === 'pending' && styles.tabTextActive]}
-          >
-            Pending Review ({digest.summary.totalNeedingReview})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, selectedTab === 'handled' && styles.tabActive]}
-          onPress={() => setSelectedTab('handled')}
-          accessible={true}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: selectedTab === 'handled' }}
-          accessibilityLabel={`Handled: ${digest.summary.totalHandled} messages`}
-        >
-          <Text
-            style={[styles.tabText, selectedTab === 'handled' && styles.tabTextActive]}
-          >
-            Handled ({digest.summary.totalHandled})
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Bulk Actions (only for pending tab) */}
-      {selectedTab === 'pending' && digest.pendingMessages.length > 0 && (
-        <View style={styles.bulkActions}>
-          <TouchableOpacity
-            style={[styles.bulkButton, styles.bulkButtonReject]}
-            onPress={handleRejectAll}
-            disabled={isProcessing}
-            accessible={true}
-            accessibilityRole="button"
-            accessibilityLabel="Reject all pending responses"
-          >
-            <Text style={styles.bulkButtonText}>Reject All</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.bulkButton, styles.bulkButtonApprove]}
-            onPress={handleApproveAll}
-            disabled={isProcessing}
-            accessible={true}
-            accessibilityRole="button"
-            accessibilityLabel="Approve and send all pending responses"
-          >
-            <Text style={[styles.bulkButtonText, styles.bulkButtonTextApprove]}>
-              Approve All
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Message List */}
-      <FlatList
-        data={selectedTab === 'pending' ? digest.pendingMessages : digest.handledMessages}
-        renderItem={renderMessageItem}
-        keyExtractor={(item) => item.messageId}
-        contentContainerStyle={styles.messageList}
+      <ScrollView
         refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            tintColor="#007AFF"
-          />
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor="#007AFF" />
         }
-        ListEmptyComponent={
-          <View style={styles.emptyListContainer}>
-            <Text style={styles.emptyListText}>
-              {selectedTab === 'pending'
-                ? 'No messages pending review'
-                : 'No messages were auto-handled'}
+      >
+        {/* Capacity Summary */}
+        <View style={styles.capacitySummary}>
+          <View style={styles.capacityRow}>
+            <Text style={styles.capacityLabel}>Today&apos;s Focus</Text>
+            <Text style={styles.capacityValue}>
+              {digest.capacityUsed} messages • ~{digest.estimatedTimeCommitment} min
             </Text>
           </View>
-        }
-      />
-
-      {/* Processing Indicator */}
-      {isProcessing && (
-        <View style={styles.processingOverlay}>
-          <View style={styles.processingContainer}>
-            <ActivityIndicator size="large" color="#007AFF" />
-            <Text style={styles.processingText}>Processing...</Text>
-          </View>
         </View>
-      )}
+
+        {/* High Priority Section */}
+        {digest.highPriority.length > 0 && (
+          <View style={styles.prioritySection}>
+            <View style={styles.sectionHeader}>
+              <View style={[styles.priorityIcon, styles.priorityIconHigh]}>
+                <Text style={styles.priorityIconText}>🔥</Text>
+              </View>
+              <View style={styles.sectionHeaderText}>
+                <Text style={styles.sectionTitle}>High Priority</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Respond today • Top {digest.highPriority.length}
+                </Text>
+              </View>
+            </View>
+            {digest.highPriority.map(renderMessageItem)}
+          </View>
+        )}
+
+        {/* Medium Priority Section */}
+        {digest.mediumPriority.length > 0 && (
+          <View style={styles.prioritySection}>
+            <View style={styles.sectionHeader}>
+              <View style={[styles.priorityIcon, styles.priorityIconMedium]}>
+                <Text style={styles.priorityIconText}>📌</Text>
+              </View>
+              <View style={styles.sectionHeaderText}>
+                <Text style={styles.sectionTitle}>Medium Priority</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Respond this week • {digest.mediumPriority.length} messages
+                </Text>
+              </View>
+            </View>
+            {digest.mediumPriority.map(renderMessageItem)}
+          </View>
+        )}
+
+        {/* Auto-Handled Section */}
+        {(digest.autoHandled.faqCount > 0 || digest.autoHandled.archivedCount > 0) && (
+          <View style={styles.prioritySection}>
+            <View style={styles.sectionHeader}>
+              <View style={[styles.priorityIcon, styles.priorityIconAuto]}>
+                <Text style={styles.priorityIconText}>✅</Text>
+              </View>
+              <View style={styles.sectionHeaderText}>
+                <Text style={styles.sectionTitle}>Auto-Handled</Text>
+                <Text style={styles.sectionSubtitle}>
+                  {digest.autoHandled.faqCount} FAQ responses • {digest.autoHandled.archivedCount}{' '}
+                  archived
+                </Text>
+              </View>
+            </View>
+            <View style={styles.autoHandledCard}>
+              <Text style={styles.autoHandledText}>
+                {digest.autoHandled.faqCount} messages received automatic FAQ responses.{'\n'}
+                {digest.autoHandled.archivedCount} low-priority messages were archived.
+              </Text>
+              {digest.autoHandled.boundaryMessageSent && (
+                <Text style={styles.autoHandledHint}>
+                  ℹ️ Boundary message sent to archived senders
+                </Text>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Empty State - No Messages */}
+        {digest.highPriority.length === 0 &&
+          digest.mediumPriority.length === 0 &&
+          digest.autoHandled.faqCount === 0 &&
+          digest.autoHandled.archivedCount === 0 && (
+            <View style={styles.emptyListContainer}>
+              <Text style={styles.emptyListIcon}>🎉</Text>
+              <Text style={styles.emptyListTitle}>All Caught Up!</Text>
+              <Text style={styles.emptyListText}>No new messages to handle today.</Text>
+            </View>
+          )}
+
+        {/* Settings Link */}
+        <View style={styles.settingsLink}>
+          <TouchableOpacity
+            onPress={() => router.push('/(tabs)/profile/daily-agent-settings')}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Adjust capacity settings"
+          >
+            <Text style={styles.settingsLinkText}>⚙️ Adjust Capacity Settings</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -550,109 +351,71 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-  },
-  errorIcon: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
-  errorTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#FF3B30',
-    marginBottom: 8,
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#666666',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  retryButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-    minHeight: 44,
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  summaryHeader: {
+  // Capacity Summary
+  capacitySummary: {
     backgroundColor: '#FFFFFF',
     padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5E5',
   },
-  summaryText: {
-    fontSize: 20,
+  capacityRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  capacityLabel: {
+    fontSize: 16,
     fontWeight: '600',
     color: '#000000',
-    textAlign: 'center',
   },
-  tabContainer: {
+  capacityValue: {
+    fontSize: 14,
+    color: '#666666',
+  },
+  // Priority Sections
+  prioritySection: {
+    marginTop: 24,
+    paddingHorizontal: 16,
+  },
+  sectionHeader: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 16,
     alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-    minHeight: 44,
+    marginBottom: 12,
   },
-  tabActive: {
-    borderBottomColor: '#007AFF',
-  },
-  tabText: {
-    fontSize: 16,
-    color: '#8E8E93',
-  },
-  tabTextActive: {
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  bulkActions: {
-    flexDirection: 'row',
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
-    gap: 12,
-  },
-  bulkButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
+  priorityIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
     alignItems: 'center',
-    minHeight: 44,
+    marginRight: 12,
   },
-  bulkButtonReject: {
-    backgroundColor: '#FF3B30',
+  priorityIconHigh: {
+    backgroundColor: '#FFE5E5',
   },
-  bulkButtonApprove: {
-    backgroundColor: '#34C759',
+  priorityIconMedium: {
+    backgroundColor: '#E5F0FF',
   },
-  bulkButtonText: {
-    fontSize: 16,
+  priorityIconAuto: {
+    backgroundColor: '#E5FFE5',
+  },
+  priorityIconText: {
+    fontSize: 20,
+  },
+  sectionHeaderText: {
+    flex: 1,
+  },
+  sectionTitle: {
+    fontSize: 18,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: '#000000',
   },
-  bulkButtonTextApprove: {
-    color: '#FFFFFF',
+  sectionSubtitle: {
+    fontSize: 14,
+    color: '#666666',
+    marginTop: 2,
   },
-  messageList: {
-    padding: 16,
-  },
+  // Message Cards
   messageCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -664,122 +427,100 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  messageHeader: {
+  scoreContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  senderName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000000',
-    flex: 1,
-  },
-  categoryBadge: {
-    paddingHorizontal: 12,
+  scoreBadge: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
+    marginRight: 8,
+  },
+  scoreText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   categoryText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    color: '#666666',
+    textTransform: 'capitalize',
   },
-  messagePreview: {
+  messageContent: {
+    fontSize: 15,
+    color: '#000000',
+    lineHeight: 22,
+    marginBottom: 12,
+  },
+  contextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  contextText: {
+    fontSize: 13,
+    color: '#666666',
+  },
+  timeEstimateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  timeEstimateIcon: {
+    fontSize: 14,
+    marginRight: 4,
+  },
+  timeEstimateText: {
+    fontSize: 13,
+    color: '#8E8E93',
+  },
+  // Auto-Handled Card
+  autoHandledCard: {
+    backgroundColor: '#F9F9F9',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  autoHandledText: {
     fontSize: 14,
     color: '#666666',
-    marginBottom: 12,
     lineHeight: 20,
   },
-  responseContainer: {
-    backgroundColor: '#F2F2F7',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-  },
-  responseLabel: {
+  autoHandledHint: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#007AFF',
-    marginBottom: 4,
+    color: '#8E8E93',
+    marginTop: 8,
   },
-  responseText: {
-    fontSize: 14,
-    color: '#000000',
-    lineHeight: 20,
-  },
-  faqBadge: {
-    backgroundColor: '#34C759',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-    marginBottom: 12,
-  },
-  faqBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  messageActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionButton: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  actionButtonReject: {
-    backgroundColor: '#FF3B30',
-  },
-  actionButtonEdit: {
-    backgroundColor: '#8E8E93',
-  },
-  actionButtonApprove: {
-    backgroundColor: '#34C759',
-  },
-  actionButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  actionButtonTextApprove: {
-    color: '#FFFFFF',
-  },
+  // Empty List State
   emptyListContainer: {
-    padding: 32,
+    padding: 48,
     alignItems: 'center',
+  },
+  emptyListIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  emptyListTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#000000',
+    marginBottom: 8,
   },
   emptyListText: {
     fontSize: 16,
     color: '#8E8E93',
     textAlign: 'center',
   },
-  processingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  processingContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+  // Settings Link
+  settingsLink: {
     padding: 24,
     alignItems: 'center',
   },
-  processingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#000000',
-    fontWeight: '600',
+  settingsLinkText: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '500',
   },
 });
