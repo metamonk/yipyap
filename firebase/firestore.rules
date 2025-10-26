@@ -444,6 +444,16 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Meaningful 10 Digests (Story 6.1) - users can read, only Cloud Functions can write
+    match /users/{userId}/meaningful10_digests/{digestId} {
+      // Read: Users can only read their own Meaningful 10 digests
+      allow read: if request.auth != null &&
+                    request.auth.uid == userId;
+
+      // Write: Only Cloud Functions can write (no client writes allowed)
+      allow write: if false;
+    }
+
     // Agent Execution Logs - users can read, only Cloud Functions can write
     match /users/{userId}/agent_logs/{logId} {
       // Read: Users can only read their own agent logs
