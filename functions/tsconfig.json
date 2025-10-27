@@ -14,5 +14,6 @@
     "resolveJsonModule": true
   },
   "compileOnSave": true,
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["scripts", "lib", "node_modules"]
 }
