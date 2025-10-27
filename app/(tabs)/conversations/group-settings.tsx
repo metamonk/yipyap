@@ -359,51 +359,54 @@ export default function GroupSettingsScreen() {
     }
   };
 
-  // Dynamic styles based on theme
+  // Dynamic styles based on theme (Robinhood minimal aesthetic)
   const dynamicStyles = StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: theme.colors.backgroundSecondary,
+      backgroundColor: theme.colors.background,
     },
     loadingContainer: {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: theme.colors.backgroundSecondary,
+      backgroundColor: theme.colors.background,
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: theme.spacing.base,
-      paddingVertical: theme.spacing.md,
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      paddingBottom: 16,
       backgroundColor: theme.colors.surface,
-      borderBottomWidth: 1,
+      borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: theme.colors.borderLight,
     },
     headerTitle: {
-      fontSize: 18,
-      fontWeight: theme.typography.fontWeight.semibold,
+      fontSize: 17,
+      fontWeight: '600',
       color: theme.colors.textPrimary,
       flex: 1,
       textAlign: 'center',
     },
     saveButtonText: {
       color: theme.colors.accent,
-      fontSize: theme.typography.fontSize.base,
-      fontWeight: theme.typography.fontWeight.semibold,
+      fontSize: 17,
+      fontWeight: '600',
     },
     section: {
       backgroundColor: theme.colors.surface,
-      marginTop: theme.spacing.lg,
-      paddingHorizontal: theme.spacing.base,
-      paddingVertical: theme.spacing.base,
+      marginBottom: StyleSheet.hairlineWidth,
+      paddingHorizontal: 20,
+      paddingVertical: 20,
     },
     sectionTitle: {
-      fontSize: theme.typography.fontSize.base,
-      fontWeight: theme.typography.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-      marginBottom: theme.spacing.md,
+      fontSize: 13,
+      fontWeight: '600',
+      color: theme.colors.textSecondary,
+      marginBottom: 16,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
     },
     memberCount: {
       fontSize: theme.typography.fontSize.sm,
@@ -435,69 +438,71 @@ export default function GroupSettingsScreen() {
       color: theme.colors.error,
     },
     input: {
-      fontSize: theme.typography.fontSize.base,
-      padding: theme.spacing.md,
-      borderWidth: 1,
+      fontSize: 17,
+      padding: 16,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.colors.borderLight,
-      borderRadius: theme.borderRadius.md,
-      backgroundColor: theme.colors.surface,
+      borderRadius: 12,
+      backgroundColor: theme.colors.backgroundSecondary,
       color: theme.colors.textPrimary,
     },
     inputDisabled: {
       backgroundColor: theme.colors.backgroundSecondary,
-      color: theme.colors.textSecondary,
+      color: theme.colors.textTertiary,
+      opacity: 0.6,
     },
     helperText: {
-      fontSize: theme.typography.fontSize.xs,
+      fontSize: 13,
       color: theme.colors.textSecondary,
-      marginTop: theme.spacing.xs,
+      marginTop: 8,
+      lineHeight: 18,
     },
     addMembersButton: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: theme.spacing.md,
-      paddingHorizontal: theme.spacing.base,
+      paddingVertical: 16,
+      paddingHorizontal: 20,
       backgroundColor: theme.colors.accent,
-      borderRadius: theme.borderRadius.md,
-      marginBottom: theme.spacing.md,
-      gap: theme.spacing.sm,
+      borderRadius: 12,
+      marginBottom: 12,
+      gap: 8,
     },
     addMembersButtonText: {
-      fontSize: theme.typography.fontSize.base,
+      fontSize: 17,
       color: '#FFF',
-      fontWeight: theme.typography.fontWeight.semibold,
+      fontWeight: '600',
     },
     manageButton: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingVertical: theme.spacing.md,
-      paddingHorizontal: theme.spacing.base,
+      paddingVertical: 16,
+      paddingHorizontal: 20,
       backgroundColor: theme.colors.backgroundSecondary,
-      borderRadius: theme.borderRadius.md,
+      borderRadius: 12,
     },
     manageButtonText: {
-      fontSize: theme.typography.fontSize.base,
+      fontSize: 17,
       color: theme.colors.accent,
-      fontWeight: theme.typography.fontWeight.medium,
+      fontWeight: '500',
     },
     leaveButton: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: theme.spacing.md,
-      paddingHorizontal: theme.spacing.base,
+      paddingVertical: 16,
+      paddingHorizontal: 20,
       backgroundColor: theme.colors.surface,
-      borderRadius: theme.borderRadius.md,
-      borderWidth: 1,
+      borderRadius: 12,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.colors.error,
-      gap: theme.spacing.sm,
+      gap: 8,
     },
     leaveButtonText: {
-      fontSize: theme.typography.fontSize.base,
+      fontSize: 17,
       color: theme.colors.error,
-      fontWeight: theme.typography.fontWeight.semibold,
+      fontWeight: '600',
     },
     creatorPhotoPlaceholder: {
       width: 48,
@@ -508,30 +513,36 @@ export default function GroupSettingsScreen() {
       alignItems: 'center',
     },
     creatorName: {
-      fontSize: theme.typography.fontSize.base,
-      fontWeight: theme.typography.fontWeight.semibold,
+      fontSize: 17,
+      fontWeight: '600',
       color: theme.colors.textPrimary,
     },
     creatorUsername: {
-      fontSize: theme.typography.fontSize.sm,
+      fontSize: 15,
       color: theme.colors.textSecondary,
       marginTop: 2,
     },
     creatorBadge: {
       backgroundColor: theme.colors.accent,
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.xs,
-      borderRadius: theme.borderRadius.md,
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+      borderRadius: 12,
     },
     creatorBadgeText: {
-      fontSize: theme.typography.fontSize.xs,
+      fontSize: 12,
       color: '#FFF',
-      fontWeight: theme.typography.fontWeight.semibold,
+      fontWeight: '600',
     },
     settingDescription: {
-      fontSize: theme.typography.fontSize.sm,
+      fontSize: 15,
       color: theme.colors.textSecondary,
-      lineHeight: 18,
+      lineHeight: 20,
+      marginTop: 4,
+    },
+    settingTitle: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: theme.colors.textPrimary,
     },
   });
 
@@ -645,11 +656,12 @@ export default function GroupSettingsScreen() {
 
         {/* FAQ Auto-Response Settings (Story 5.4 - Task 13) */}
         <View style={dynamicStyles.section}>
+          <Text style={dynamicStyles.sectionTitle}>FAQ Auto-Response</Text>
           <View style={styles.settingRow}>
             <View style={styles.settingInfo}>
               <View style={styles.settingHeader}>
-                <Ionicons name="chatbubbles" size={20} color={theme.colors.accent} style={styles.settingIcon} />
-                <Text style={dynamicStyles.sectionTitle}>FAQ Auto-Response</Text>
+                <Ionicons name="chatbubbles" size={24} color={theme.colors.accent} style={styles.settingIcon} />
+                <Text style={dynamicStyles.settingTitle}>Auto-respond to FAQs</Text>
               </View>
               <Text style={dynamicStyles.settingDescription}>
                 Automatically respond to frequently asked questions with saved templates
@@ -760,19 +772,19 @@ const styles = StyleSheet.create({
   },
   settingRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
   },
   settingInfo: {
     flex: 1,
-    marginRight: 12,
+    marginRight: 16,
   },
   settingHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   settingIcon: {
-    marginRight: 8,
+    marginRight: 12,
   },
 });

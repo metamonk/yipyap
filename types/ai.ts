@@ -217,7 +217,7 @@ export interface VoiceCharacteristics {
   punctuationStyle: string;
 
   /** Frequency of emoji usage */
-  emojiUsage: 'none' | 'occasional' | 'frequent';
+  emojiUsage: 'none' | 'rare' | 'occasional' | 'frequent';
 
   /** Optional additional writing patterns noted by AI analysis */
   writingPatterns?: string;
@@ -1392,6 +1392,12 @@ export interface Meaningful10DigestMessage {
 
   /** Conversation document ID */
   conversationId: string;
+
+  /** Message sender user ID */
+  senderId: string;
+
+  /** Message sender display name */
+  senderName: string;
 
   /** Message content preview */
   content: string;

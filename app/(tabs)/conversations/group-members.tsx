@@ -136,59 +136,61 @@ export default function GroupMembersScreen() {
     );
   };
 
-  // Dynamic styles based on theme
+  // Dynamic styles based on theme (Robinhood minimal aesthetic)
   const dynamicStyles = StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: theme.colors.backgroundSecondary,
+      backgroundColor: theme.colors.background,
     },
     loadingContainer: {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: theme.colors.backgroundSecondary,
+      backgroundColor: theme.colors.background,
     },
     header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: theme.spacing.base,
-      paddingVertical: theme.spacing.md,
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      paddingBottom: 16,
       backgroundColor: theme.colors.surface,
-      borderBottomWidth: 1,
+      borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: theme.colors.borderLight,
     },
     headerTitle: {
-      fontSize: 18,
-      fontWeight: theme.typography.fontWeight.semibold,
+      fontSize: 17,
+      fontWeight: '600',
       color: theme.colors.textPrimary,
+      textAlign: 'center',
     },
     headerSubtitle: {
-      fontSize: theme.typography.fontSize.xs,
+      fontSize: 13,
       color: theme.colors.textSecondary,
       marginTop: 2,
+      textAlign: 'center',
     },
     groupInfo: {
-      paddingHorizontal: theme.spacing.base,
-      paddingVertical: theme.spacing.md,
+      paddingHorizontal: 20,
+      paddingVertical: 20,
       backgroundColor: theme.colors.surface,
-      borderBottomWidth: 1,
+      borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: theme.colors.borderLight,
     },
     groupName: {
-      fontSize: theme.typography.fontSize.base,
-      fontWeight: theme.typography.fontWeight.semibold,
+      fontSize: 17,
+      fontWeight: '600',
       color: theme.colors.textPrimary,
-      marginBottom: 4,
+      marginBottom: 8,
     },
     creatorHint: {
-      fontSize: theme.typography.fontSize.xs,
+      fontSize: 15,
       color: theme.colors.textSecondary,
+      lineHeight: 20,
     },
     emptyText: {
-      fontSize: theme.typography.fontSize.base,
+      fontSize: 17,
       color: theme.colors.textSecondary,
-      marginTop: theme.spacing.base,
+      marginTop: 16,
+      textAlign: 'center',
     },
   });
 
@@ -211,17 +213,19 @@ export default function GroupMembersScreen() {
   return (
     <SafeAreaView style={dynamicStyles.container}>
       {/* Header */}
-      <View style={dynamicStyles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={28} color={theme.colors.accent} />
-        </TouchableOpacity>
-        <View style={styles.headerInfo}>
+      <View>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="chevron-back" size={28} color={theme.colors.accent} />
+          </TouchableOpacity>
+          <View style={styles.placeholder} />
+        </View>
+        <View style={dynamicStyles.header}>
           <Text style={dynamicStyles.headerTitle}>Members</Text>
           <Text style={dynamicStyles.headerSubtitle}>
             {participants.length} {participants.length === 1 ? 'member' : 'members'}
           </Text>
         </View>
-        <View style={styles.placeholder} />
       </View>
 
       {/* Group Info */}
@@ -253,12 +257,15 @@ export default function GroupMembersScreen() {
 
 // Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
   backButton: {
     padding: 4,
-  },
-  headerInfo: {
-    flex: 1,
-    alignItems: 'center',
   },
   placeholder: {
     width: 36,

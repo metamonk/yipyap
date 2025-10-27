@@ -1474,6 +1474,7 @@ async function generateMeaningful10Digest(
       scoredMessages.push({
         id: message.id,
         conversationId: msgData.conversationId,
+        senderId: msgData.senderId, // Add sender ID
         content: msgData.text || '',
         timestamp: msgData.timestamp,
         score,
@@ -1539,10 +1540,30 @@ async function generateMeaningful10Digest(
     }
 
     // Build Meaningful 10 digest structure with capacity-aware selection
+
+    // Fetch sender names for meaningful messages
+    const uniqueSenderIds = [...new Set(meaningful.map(m => m.senderId))];
+    const senderNamesMap = new Map<string, string>();
+
+    if (uniqueSenderIds.length > 0) {
+      const userDocsPromises = uniqueSenderIds.map(id => db.collection('users').doc(id).get());
+      const userDocs = await Promise.all(userDocsPromises);
+      userDocs.forEach((doc, idx) => {
+        if (doc.exists) {
+          const userData = doc.data();
+          senderNamesMap.set(uniqueSenderIds[idx], userData?.displayName || 'Unknown');
+        } else {
+          senderNamesMap.set(uniqueSenderIds[idx], 'Unknown');
+        }
+      });
+    }
+
     // Map to Meaningful10DigestMessage format (relationshipScore instead of score)
     const mapToDigestMessage = (m: any) => ({
       id: m.id,
       conversationId: m.conversationId,
+      senderId: m.senderId,
+      senderName: senderNamesMap.get(m.senderId) || 'Unknown',
       content: m.content,
       timestamp: m.timestamp,
       relationshipScore: m.score, // Map score -> relationshipScore

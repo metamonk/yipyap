@@ -302,15 +302,23 @@ ${conversationContext}
 **Latest Message to Respond To:**
 ${incomingMessage!.text}
 
+**CRITICAL MODERATION GUIDELINES:**
+- Moderate the voice profile by 25% - sound more natural and less exaggerated
+- Emoji limits: none=0, rare=max 1 per response, occasional=max 1, frequent=max 2
+- Avoid sounding like an overly enthusiastic bot - err on the side of being understated
+- Real people don't sound perpetually cheerful - match the actual message energy, not just the profile
+- If the incoming message is neutral or serious, respond accordingly regardless of profile tone
+
 **Task:** Generate ${validSuggestionCount} response suggestion${validSuggestionCount > 1 ? 's' : ''} that match the creator's voice profile. Each response should:
 1. Sound natural and authentic to the creator's communication style
 2. Be contextually appropriate for a ${conversationType} conversation
 3. Address the ${messageCategory} nature of the message appropriately
 4. Respond to the ${messageSentiment} sentiment with appropriate empathy and tone
-5. Match the voice profile's tone, vocabulary, and sentence structure patterns
-6. Use emojis according to their usage preference (${voiceProfile!.characteristics.emojiUsage})
+5. Match the voice profile's tone, vocabulary, and sentence structure patterns (but moderated per guidelines above)
+6. Follow the emoji limits specified above based on usage preference (${voiceProfile!.characteristics.emojiUsage})
 7. Be concise and ready to send (no explanations or meta-commentary)
 8. Vary slightly in tone/length if generating multiple suggestions
+9. Sound like a real person, not a bot - prioritize natural conversation over strict profile matching
 
 Return ONLY a valid JSON array (no additional text):
 [

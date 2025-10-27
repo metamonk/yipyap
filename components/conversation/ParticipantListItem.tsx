@@ -9,6 +9,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/contexts/ThemeContext';
 import { Avatar } from '@/components/common/Avatar';
 import { PresenceIndicator } from '@/components/PresenceIndicator';
 import type { User } from '@/types/user';
@@ -59,6 +60,8 @@ export const ParticipantListItem: React.FC<ParticipantListItemProps> = ({
   onRemove,
   removing = false,
 }) => {
+  const { theme } = useTheme();
+
   /**
    * Handle remove button press with confirmation
    */
@@ -95,8 +98,53 @@ export const ParticipantListItem: React.FC<ParticipantListItemProps> = ({
   // Determine if remove button should be shown
   const canRemove = isCreator && !isParticipantCreator && !isCurrentUser;
 
+  // Dynamic styles based on theme (Robinhood minimal aesthetic)
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+      backgroundColor: theme.colors.surface,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    name: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: theme.colors.textPrimary,
+    },
+    creatorBadge: {
+      backgroundColor: theme.colors.accent,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 10,
+    },
+    creatorBadgeText: {
+      fontSize: 12,
+      color: '#FFF',
+      fontWeight: '600',
+    },
+    youBadge: {
+      backgroundColor: theme.colors.textSecondary,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 10,
+    },
+    youBadgeText: {
+      fontSize: 12,
+      color: '#FFF',
+      fontWeight: '600',
+    },
+    username: {
+      fontSize: 15,
+      color: theme.colors.textSecondary,
+      marginTop: 2,
+    },
+  });
+
   return (
-    <View style={styles.container}>
+    <View style={dynamicStyles.container}>
       <View style={styles.avatarContainer}>
         <Avatar
           photoURL={participant.photoURL || null}
@@ -109,19 +157,19 @@ export const ParticipantListItem: React.FC<ParticipantListItemProps> = ({
       </View>
       <View style={styles.info}>
         <View style={styles.nameContainer}>
-          <Text style={styles.name}>{participant.displayName}</Text>
+          <Text style={dynamicStyles.name}>{participant.displayName}</Text>
           {isParticipantCreator && (
-            <View style={styles.creatorBadge}>
-              <Text style={styles.creatorBadgeText}>Creator</Text>
+            <View style={dynamicStyles.creatorBadge}>
+              <Text style={dynamicStyles.creatorBadgeText}>Creator</Text>
             </View>
           )}
           {isCurrentUser && !isParticipantCreator && (
-            <View style={styles.youBadge}>
-              <Text style={styles.youBadgeText}>You</Text>
+            <View style={dynamicStyles.youBadge}>
+              <Text style={dynamicStyles.youBadgeText}>You</Text>
             </View>
           )}
         </View>
-        {participant.username && <Text style={styles.username}>@{participant.username}</Text>}
+        {participant.username && <Text style={dynamicStyles.username}>@{participant.username}</Text>}
       </View>
       {canRemove && (
         <TouchableOpacity
@@ -131,23 +179,15 @@ export const ParticipantListItem: React.FC<ParticipantListItemProps> = ({
           accessibilityLabel={`Remove ${participant.displayName}`}
           accessibilityRole="button"
         >
-          <Ionicons name="close-circle" size={24} color="#FF3B30" />
+          <Ionicons name="close-circle" size={24} color={theme.colors.error} />
         </TouchableOpacity>
       )}
     </View>
   );
 };
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F2F2F7',
-  },
   avatarContainer: {
     position: 'relative',
   },
@@ -164,38 +204,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  name: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-  },
-  creatorBadge: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  creatorBadgeText: {
-    fontSize: 11,
-    color: '#FFF',
-    fontWeight: '600',
-  },
-  youBadge: {
-    backgroundColor: '#8E8E93',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  youBadgeText: {
-    fontSize: 11,
-    color: '#FFF',
-    fontWeight: '600',
-  },
-  username: {
-    fontSize: 14,
-    color: '#8E8E93',
-    marginTop: 2,
   },
   removeButton: {
     padding: 8,

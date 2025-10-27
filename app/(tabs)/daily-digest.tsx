@@ -91,6 +91,9 @@ export default function DailyDigestScreen() {
     categoryText: {
       color: theme.colors.textSecondary,
     },
+    senderName: {
+      color: theme.colors.textPrimary,
+    },
     messageContent: {
       color: theme.colors.textPrimary,
     },
@@ -224,6 +227,9 @@ export default function DailyDigestScreen() {
         <Text style={[styles.categoryText, dynamicStyles.categoryText]}>{message.category}</Text>
       </View>
 
+      {/* Sender Name */}
+      <Text style={[styles.senderName, dynamicStyles.senderName]}>{message.senderName}</Text>
+
       {/* Message Content */}
       <Text style={[styles.messageContent, dynamicStyles.messageContent]} numberOfLines={3}>
         {message.content}
@@ -266,7 +272,7 @@ export default function DailyDigestScreen() {
     return (
       <View style={[styles.container, dynamicStyles.container]}>
         <NavigationHeader
-          title="Meaningful 10"
+          title="Daily"
           rightAction={{
             icon: 'settings-outline',
             onPress: () => goToProfileSettings(ROUTES.PROFILE.DAILY_AGENT_SETTINGS),
@@ -299,7 +305,7 @@ export default function DailyDigestScreen() {
   return (
     <View style={[styles.container, dynamicStyles.container]}>
       <NavigationHeader
-        title="Meaningful 10"
+        title="Daily"
         rightAction={{
           icon: 'settings-outline',
           onPress: () => goToProfileSettings(ROUTES.PROFILE.DAILY_AGENT_SETTINGS + '?from=daily-digest'),
@@ -587,6 +593,12 @@ const styles = StyleSheet.create({
   categoryText: {
     fontSize: 12,
     textTransform: 'capitalize',
+  },
+  senderName: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 12,
+    marginBottom: 8,
   },
   messageContent: {
     fontSize: 15,

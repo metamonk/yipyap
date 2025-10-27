@@ -30,7 +30,7 @@ import {
   getOpportunityNotificationSettings,
   updateOpportunityNotificationSettings,
 } from '@/services/userService';
-import { clearCache } from '@/services/dashboardService';
+import { clearCache } from '@/services/cacheService';
 import { NotificationPreferences, User } from '@/types/user';
 
 /**

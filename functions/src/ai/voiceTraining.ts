@@ -46,7 +46,7 @@ interface VoiceCharacteristicsResponse {
   vocabulary: string[];
   sentenceStructure: string;
   punctuationStyle: string;
-  emojiUsage: 'none' | 'occasional' | 'frequent';
+  emojiUsage: 'none' | 'rare' | 'occasional' | 'frequent';
   writingPatterns?: string;
 }
 
@@ -196,23 +196,29 @@ export const generateVoiceProfile = functions.https.onCall(
 Messages:
 ${messageSamples.map((msg, i) => `${i + 1}. ${msg}`).join('\n')}
 
+**IMPORTANT GUIDELINES:**
+- Be conservative and realistic in your analysis - err on the side of understating traits
+- Most people communicate in a neutral, conversational tone - don't over-interpret friendliness as high energy
+- Count emojis carefully - occasional use does not mean frequent use
+- Avoid categorizing someone as overly positive or cheerful unless clearly demonstrated across ALL messages
+
 Analyze their communication style and provide a JSON response with the following structure:
 {
-  "tone": "friendly|professional|casual|enthusiastic|warm|confident|etc",
+  "tone": "neutral|friendly|professional|casual|warm|direct|thoughtful",
   "vocabulary": ["array", "of", "common", "words", "phrases", "they", "use"],
   "sentenceStructure": "short|medium|complex",
   "punctuationStyle": "minimal|moderate|expressive",
-  "emojiUsage": "none|occasional|frequent",
+  "emojiUsage": "none|rare|occasional|frequent",
   "writingPatterns": "Any notable patterns in how they write (optional)"
 }
 
 Focus on:
-1. Overall tone and emotional style
-2. Common words, phrases, and expressions they frequently use
+1. Overall tone - default to "neutral" or "casual" unless there's strong evidence otherwise
+2. Common words, phrases, and expressions they frequently use (not just any words)
 3. Sentence length and complexity patterns
 4. How they use punctuation (minimal, lots of exclamation marks, etc.)
-5. How often they use emojis
-6. Any unique writing patterns or quirks
+5. Emoji frequency: none (0%), rare (<10%), occasional (10-30%), frequent (>30%)
+6. Any unique writing patterns or quirks (only if genuinely distinctive)
 
 Return ONLY valid JSON, no additional text.`;
 

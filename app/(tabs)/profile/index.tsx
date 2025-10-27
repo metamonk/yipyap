@@ -231,6 +231,17 @@ export default function ProfileScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
+            style={dynamicStyles.settingsButton}
+            onPress={() => router.push('/(tabs)/profile/faq-analytics')}
+          >
+            <View style={dynamicStyles.settingsContent}>
+              <Ionicons name="bar-chart-outline" size={22} color={theme.colors.textSecondary} />
+              <Text style={dynamicStyles.settingsText}>FAQ Analytics</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={theme.colors.textTertiary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[dynamicStyles.settingsButton, dynamicStyles.settingsButtonLast]}
             onPress={() => router.push('/(tabs)/profile/voice-settings')}
           >

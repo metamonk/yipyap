@@ -39,7 +39,7 @@ interface DailySummaryWidgetProps {
   /** Error message if data fetch failed */
   error?: string | null;
 
-  /** Optional title (default: "Your Meaningful 10 Today") */
+  /** Optional title (default: "Your Daily") */
   title?: string;
 
   /** Callback when refresh button is pressed */
@@ -55,7 +55,7 @@ interface DailySummaryWidgetProps {
 export function DailySummaryWidget({
   loading: externalLoading = false,
   error: externalError = null,
-  title = 'Your Meaningful 10 Today',
+  title = 'Your Daily',
   onRefresh,
   onViewDetails,
 }: DailySummaryWidgetProps) {
@@ -192,7 +192,7 @@ export function DailySummaryWidget({
   }
 
   return (
-    <View style={[styles.container, dynamicStyles.container]} accessibilityLabel="Meaningful 10 summary widget">
+    <View style={[styles.container, dynamicStyles.container]} accessibilityLabel="Daily summary widget">
       {/* Title Row with Refresh */}
       <View style={styles.titleRow}>
         <Text style={[styles.title, dynamicStyles.title]}>{title}</Text>
