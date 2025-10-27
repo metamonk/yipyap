@@ -9,6 +9,8 @@
 
 import React, { FC, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
+import { useTheme } from '@/contexts/ThemeContext';
+import type { Theme } from '@/constants/theme';
 
 /**
  * Represents a typing user with display information
@@ -60,6 +62,8 @@ export interface TypingIndicatorProps {
  * ```
  */
 export const TypingIndicator: FC<TypingIndicatorProps> = ({ typingUsers }) => {
+  const { theme } = useTheme();
+
   // Don't render anything if no users are typing
   if (!typingUsers || typingUsers.length === 0) {
     return null;
@@ -69,9 +73,9 @@ export const TypingIndicator: FC<TypingIndicatorProps> = ({ typingUsers }) => {
   const typingText = formatTypingText(typingUsers);
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.text}>{typingText}</Text>
-      <AnimatedDots />
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <Text style={[styles.text, { color: theme.colors.textTertiary }]}>{typingText}</Text>
+      <AnimatedDots theme={theme} />
     </View>
   );
 };
@@ -114,12 +118,12 @@ function formatTypingText(typingUsers: TypingUser[]): string {
  * Renders three dots that bounce up and down with staggered timing
  * for a smooth typing animation effect.
  */
-const AnimatedDots: FC = () => {
+const AnimatedDots: FC<{ theme: Theme }> = ({ theme }) => {
   return (
     <View style={styles.dotsContainer}>
-      <Dot delay={0} />
-      <Dot delay={150} />
-      <Dot delay={300} />
+      <Dot delay={0} theme={theme} />
+      <Dot delay={150} theme={theme} />
+      <Dot delay={300} theme={theme} />
     </View>
   );
 };
@@ -133,7 +137,7 @@ const AnimatedDots: FC = () => {
  * Uses React Native Animated API for smooth 60fps animation.
  * Bounces up and down continuously with configurable delay.
  */
-const Dot: FC<{ delay: number }> = ({ delay }) => {
+const Dot: FC<{ delay: number; theme: Theme }> = ({ delay, theme }) => {
   // Use useState to initialize Animated.Value (avoids ref access during render)
   const [translateY] = useState(() => new Animated.Value(0));
 
@@ -164,7 +168,7 @@ const Dot: FC<{ delay: number }> = ({ delay }) => {
 
   return (
     <Animated.View style={[styles.dot, { transform: [{ translateY }] }]}>
-      <View style={styles.dotInner} />
+      <View style={[styles.dotInner, { backgroundColor: theme.colors.textTertiary }]} />
     </Animated.View>
   );
 };
@@ -175,11 +179,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#FFFFFF',
   },
   text: {
     fontSize: 14,
-    color: '#8E8E93',
     fontStyle: 'italic',
   },
   dotsContainer: {
@@ -198,6 +200,5 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: '#8E8E93',
   },
 });

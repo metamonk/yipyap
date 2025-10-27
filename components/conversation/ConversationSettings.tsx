@@ -26,6 +26,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/contexts/ThemeContext';
 import { updateConversationAutoResponse } from '@/services/conversationService';
 import type { Conversation } from '@/types/models';
 
@@ -83,6 +84,7 @@ export const ConversationSettings: FC<ConversationSettingsProps> = ({
   conversation,
   userId,
 }) => {
+  const { theme } = useTheme();
   const [autoResponseEnabled, setAutoResponseEnabled] = useState(true);
   const [isTogglingAutoResponse, setIsTogglingAutoResponse] = useState(false);
 
@@ -155,6 +157,64 @@ export const ConversationSettings: FC<ConversationSettingsProps> = ({
     }
   };
 
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 16,
+      backgroundColor: theme.colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    headerTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+      color: theme.colors.textPrimary,
+      flex: 1,
+      textAlign: 'center',
+    },
+    section: {
+      backgroundColor: theme.colors.surface,
+      marginTop: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 16,
+      borderTopWidth: 1,
+      borderBottomWidth: 1,
+      borderColor: theme.colors.borderLight,
+    },
+    sectionTitle: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: theme.colors.textSecondary,
+      marginBottom: 12,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    settingLabel: {
+      fontSize: 17,
+      fontWeight: '400',
+      color: theme.colors.textPrimary,
+    },
+    settingDescription: {
+      fontSize: 15,
+      color: theme.colors.textSecondary,
+      lineHeight: 20,
+    },
+    helperText: {
+      fontSize: 13,
+      color: theme.colors.textTertiary,
+      marginTop: 8,
+      fontStyle: 'italic',
+    },
+  });
+
   return (
     <Modal
       visible={visible}
@@ -162,26 +222,31 @@ export const ConversationSettings: FC<ConversationSettingsProps> = ({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={dynamicStyles.container}>
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Conversation Settings</Text>
+        <View style={dynamicStyles.header}>
+          <Text style={dynamicStyles.headerTitle}>Conversation Settings</Text>
           <TouchableOpacity onPress={onClose} style={styles.closeButton} testID="close-button">
-            <Ionicons name="close" size={28} color="#007AFF" />
+            <Ionicons name="close" size={28} color={theme.colors.accent} />
           </TouchableOpacity>
         </View>
 
         <ScrollView style={styles.content}>
           {/* FAQ Auto-Response Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>FAQ Auto-Response</Text>
+          <View style={dynamicStyles.section}>
+            <Text style={dynamicStyles.sectionTitle}>FAQ Auto-Response</Text>
             <View style={styles.settingRow}>
               <View style={styles.settingInfo}>
                 <View style={styles.settingHeader}>
-                  <Ionicons name="chatbubbles" size={20} color="#007AFF" style={styles.settingIcon} />
-                  <Text style={styles.settingLabel}>Auto-respond to FAQs</Text>
+                  <Ionicons
+                    name="chatbubbles"
+                    size={20}
+                    color={theme.colors.accent}
+                    style={styles.settingIcon}
+                  />
+                  <Text style={dynamicStyles.settingLabel}>Auto-respond to FAQs</Text>
                 </View>
-                <Text style={styles.settingDescription}>
+                <Text style={dynamicStyles.settingDescription}>
                   Automatically respond to frequently asked questions with saved templates
                 </Text>
               </View>
@@ -189,13 +254,15 @@ export const ConversationSettings: FC<ConversationSettingsProps> = ({
                 value={autoResponseEnabled}
                 onValueChange={handleToggleAutoResponse}
                 disabled={(!isCreator && conversation.type === 'group') || isTogglingAutoResponse}
-                trackColor={{ false: '#E5E5EA', true: '#34C759' }}
-                thumbColor={autoResponseEnabled ? '#FFF' : '#F4F3F4'}
-                ios_backgroundColor="#E5E5EA"
+                trackColor={{ false: theme.colors.borderLight, true: theme.colors.accent }}
+                thumbColor="#FFF"
+                ios_backgroundColor={theme.colors.borderLight}
               />
             </View>
             {!isCreator && conversation.type === 'group' && (
-              <Text style={styles.helperText}>Only the group creator can change this setting</Text>
+              <Text style={dynamicStyles.helperText}>
+                Only the group creator can change this setting
+              </Text>
             )}
           </View>
 
@@ -207,47 +274,14 @@ export const ConversationSettings: FC<ConversationSettingsProps> = ({
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#000',
-    flex: 1,
-    textAlign: 'center',
-  },
   closeButton: {
     position: 'absolute',
     right: 16,
-    top: 12,
+    top: 16,
     padding: 4,
   },
   content: {
     flex: 1,
-  },
-  section: {
-    backgroundColor: '#FFF',
-    marginTop: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-    marginBottom: 12,
   },
   settingRow: {
     flexDirection: 'row',
@@ -261,24 +295,9 @@ const styles = StyleSheet.create({
   settingHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   settingIcon: {
     marginRight: 8,
-  },
-  settingLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#000',
-  },
-  settingDescription: {
-    fontSize: 14,
-    color: '#8E8E93',
-    lineHeight: 18,
-  },
-  helperText: {
-    fontSize: 12,
-    color: '#8E8E93',
-    marginTop: 6,
   },
 });

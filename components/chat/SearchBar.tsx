@@ -1,6 +1,7 @@
 import React, { memo, useState, useCallback, useEffect, useRef } from 'react';
 import { View, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/contexts/ThemeContext';
 
 /**
  * Props for the SearchBar component
@@ -53,6 +54,7 @@ const DEBOUNCE_DELAY = 300; // milliseconds
  */
 export const SearchBar = memo<SearchBarProps>(
   ({ onSearch, onClear, placeholder = 'Search...', disabled = false, testID }) => {
+    const { theme } = useTheme();
     const [inputValue, setInputValue] = useState('');
     const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -91,18 +93,46 @@ export const SearchBar = memo<SearchBarProps>(
       onClear();
     }, [onClear]);
 
+    // Dynamic styles based on theme
+    const dynamicStyles = StyleSheet.create({
+      container: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: theme.colors.backgroundSecondary,
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: Platform.OS === 'ios' ? 8 : 6,
+        marginHorizontal: 16,
+        marginVertical: 8,
+      },
+      input: {
+        flex: 1,
+        fontSize: 16,
+        color: theme.colors.textPrimary,
+        paddingVertical: 0,
+      },
+      inputDisabled: {
+        color: theme.colors.textTertiary,
+      },
+    });
+
     return (
-      <View style={styles.container} testID={testID}>
+      <View style={dynamicStyles.container} testID={testID}>
         {/* Search Icon */}
-        <Ionicons name="search" size={20} color={COLORS.secondaryText} style={styles.searchIcon} />
+        <Ionicons
+          name="search"
+          size={20}
+          color={theme.colors.textSecondary}
+          style={styles.searchIcon}
+        />
 
         {/* Search Input */}
         <TextInput
-          style={[styles.input, disabled && styles.inputDisabled]}
+          style={[dynamicStyles.input, disabled && dynamicStyles.inputDisabled]}
           value={inputValue}
           onChangeText={handleChangeText}
           placeholder={placeholder}
-          placeholderTextColor={COLORS.secondaryText}
+          placeholderTextColor={theme.colors.textSecondary}
           editable={!disabled}
           autoCapitalize="none"
           autoCorrect={false}
@@ -118,7 +148,7 @@ export const SearchBar = memo<SearchBarProps>(
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             testID={testID ? `${testID}-clear-button` : 'search-clear-button'}
           >
-            <Ionicons name="close-circle" size={20} color={COLORS.secondaryText} />
+            <Ionicons name="close-circle" size={20} color={theme.colors.textSecondary} />
           </TouchableOpacity>
         )}
       </View>
@@ -128,41 +158,9 @@ export const SearchBar = memo<SearchBarProps>(
 
 SearchBar.displayName = 'SearchBar';
 
-/**
- * Color palette for consistent styling
- */
-const COLORS = {
-  primary: '#007AFF', // iOS blue
-  background: '#FFFFFF',
-  secondaryBg: '#F2F2F7', // Input background
-  border: '#E5E5EA',
-  text: '#000000',
-  secondaryText: '#8E8E93', // Placeholder, timestamps
-  disabled: '#C7C7CC',
-};
-
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.secondaryBg,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: Platform.OS === 'ios' ? 8 : 6,
-    marginHorizontal: 16,
-    marginVertical: 8,
-  },
   searchIcon: {
     marginRight: 8,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: COLORS.text,
-    paddingVertical: 0, // Remove default padding for consistent height
-  },
-  inputDisabled: {
-    color: COLORS.disabled,
   },
   clearButton: {
     marginLeft: 8,
