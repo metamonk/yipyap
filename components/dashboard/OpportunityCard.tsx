@@ -16,6 +16,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
+import { useTheme } from '@/contexts/ThemeContext';
 import type { Message } from '@/types/models';
 import type { OpportunityType } from '@/services/aiClientService';
 
@@ -34,39 +35,30 @@ interface OpportunityCardProps {
 }
 
 /**
- * Get color for opportunity type badge
+ * Get color for opportunity type badge (theme-aware)
  */
-function getTypeColor(type: OpportunityType): string {
-  switch (type) {
-    case 'sponsorship':
-      return '#8B5CF6'; // Purple
-    case 'collaboration':
-      return '#3B82F6'; // Blue
-    case 'partnership':
-      return '#10B981'; // Green
-    case 'sale':
-      return '#F59E0B'; // Orange
-    default:
-      return '#6B7280'; // Gray
-  }
+function getTypeColor(type: OpportunityType, accentColor: string): string {
+  // Use accent color for all types for consistent Robinhood-style design
+  return accentColor;
 }
 
 /**
- * Get background color for opportunity score
+ * Get background color for opportunity score (theme-aware)
  */
-function getScoreBackgroundColor(score: number): string {
-  if (score >= 90) return '#DCFCE7'; // Light green
-  if (score >= 70) return '#FEF3C7'; // Light yellow
-  return '#FEE2E2'; // Light red
+function getScoreBackgroundColor(score: number, theme: any): string {
+  // Use theme's success/warning/error backgrounds for score badges
+  if (score >= 90) return theme.colors.success + '20'; // Success with opacity
+  if (score >= 70) return theme.colors.warning + '20'; // Warning with opacity
+  return theme.colors.error + '20'; // Error with opacity
 }
 
 /**
- * Get text color for opportunity score
+ * Get text color for opportunity score (theme-aware)
  */
-function getScoreTextColor(score: number): string {
-  if (score >= 90) return '#15803D'; // Dark green
-  if (score >= 70) return '#A16207'; // Dark yellow
-  return '#B91C1C'; // Dark red
+function getScoreTextColor(score: number, theme: any): string {
+  if (score >= 90) return theme.colors.success;
+  if (score >= 70) return theme.colors.warning;
+  return theme.colors.error;
 }
 
 /**
@@ -79,6 +71,7 @@ function getScoreTextColor(score: number): string {
  */
 export function OpportunityCard({ message, onPress, animated = false }: OpportunityCardProps) {
   const router = useRouter();
+  const { theme } = useTheme();
 
   // Animation values (Story 5.6 - Task 13.4)
   const translateX = useSharedValue(animated ? 300 : 0);
@@ -88,6 +81,32 @@ export function OpportunityCard({ message, onPress, animated = false }: Opportun
   const type = message.metadata.opportunityType || 'sale';
   const analysis = message.metadata.opportunityAnalysis || 'Business opportunity detected';
   const indicators = message.metadata.opportunityIndicators || [];
+
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      backgroundColor: theme.colors.surface,
+      ...theme.shadows.sm,
+    },
+    timestamp: {
+      color: theme.colors.textSecondary,
+    },
+    analysis: {
+      color: theme.colors.textPrimary,
+    },
+    messagePreview: {
+      color: theme.colors.textSecondary,
+    },
+    indicator: {
+      backgroundColor: theme.colors.backgroundSecondary,
+    },
+    indicatorText: {
+      color: theme.colors.textSecondary,
+    },
+    moreIndicators: {
+      color: theme.colors.textTertiary,
+    },
+  });
 
   /**
    * Trigger slide-in animation on mount (Story 5.6 - Task 13.4)
@@ -133,7 +152,7 @@ export function OpportunityCard({ message, onPress, animated = false }: Opportun
   return (
     <Animated.View style={animatedStyle}>
       <TouchableOpacity
-        style={styles.container}
+        style={[styles.container, dynamicStyles.container]}
         onPress={handlePress}
         activeOpacity={0.7}
         accessibilityRole="button"
@@ -142,26 +161,26 @@ export function OpportunityCard({ message, onPress, animated = false }: Opportun
       >
       {/* Header: Score + Type Badge */}
       <View style={styles.header}>
-        <View style={[styles.scoreBadge, { backgroundColor: getScoreBackgroundColor(score) }]}>
-          <Text style={[styles.scoreText, { color: getScoreTextColor(score) }]}>
+        <View style={[styles.scoreBadge, { backgroundColor: getScoreBackgroundColor(score, theme) }]}>
+          <Text style={[styles.scoreText, { color: getScoreTextColor(score, theme) }]}>
             {score}
           </Text>
         </View>
 
-        <View style={[styles.typeBadge, { backgroundColor: getTypeColor(type) }]}>
+        <View style={[styles.typeBadge, { backgroundColor: getTypeColor(type, theme.colors.accent) }]}>
           <Text style={styles.typeText}>{type.toUpperCase()}</Text>
         </View>
 
-        <Text style={styles.timestamp}>{timeStr}</Text>
+        <Text style={[styles.timestamp, dynamicStyles.timestamp]}>{timeStr}</Text>
       </View>
 
       {/* Analysis Summary */}
-      <Text style={styles.analysis} numberOfLines={2}>
+      <Text style={[styles.analysis, dynamicStyles.analysis]} numberOfLines={2}>
         {analysis}
       </Text>
 
       {/* Message Preview */}
-      <Text style={styles.messagePreview} numberOfLines={3}>
+      <Text style={[styles.messagePreview, dynamicStyles.messagePreview]} numberOfLines={3}>
         {message.text}
       </Text>
 
@@ -169,12 +188,12 @@ export function OpportunityCard({ message, onPress, animated = false }: Opportun
       {indicators.length > 0 && (
         <View style={styles.indicatorsContainer}>
           {indicators.slice(0, 3).map((indicator, index) => (
-            <View key={index} style={styles.indicator}>
-              <Text style={styles.indicatorText}>{indicator}</Text>
+            <View key={index} style={[styles.indicator, dynamicStyles.indicator]}>
+              <Text style={[styles.indicatorText, dynamicStyles.indicatorText]}>{indicator}</Text>
             </View>
           ))}
           {indicators.length > 3 && (
-            <Text style={styles.moreIndicators}>+{indicators.length - 3} more</Text>
+            <Text style={[styles.moreIndicators, dynamicStyles.moreIndicators]}>+{indicators.length - 3} more</Text>
           )}
         </View>
       )}
@@ -183,17 +202,12 @@ export function OpportunityCard({ message, onPress, animated = false }: Opportun
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
   header: {
     flexDirection: 'row',
@@ -224,19 +238,16 @@ const styles = StyleSheet.create({
   },
   timestamp: {
     fontSize: 12,
-    color: '#9CA3AF',
     marginLeft: 'auto',
   },
   analysis: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#1F2937',
     marginBottom: 8,
     lineHeight: 20,
   },
   messagePreview: {
     fontSize: 14,
-    color: '#4B5563',
     lineHeight: 20,
     marginBottom: 12,
   },
@@ -246,7 +257,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   indicator: {
-    backgroundColor: '#F3F4F6',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
@@ -255,11 +265,9 @@ const styles = StyleSheet.create({
   },
   indicatorText: {
     fontSize: 11,
-    color: '#6B7280',
   },
   moreIndicators: {
     fontSize: 11,
-    color: '#9CA3AF',
     fontStyle: 'italic',
   },
 });

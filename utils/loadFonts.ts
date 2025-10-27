@@ -7,7 +7,7 @@
  */
 
 import * as Font from 'expo-font';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 
 /**
  * Preloads all icon fonts used in the application
@@ -24,10 +24,8 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 export async function loadFonts(): Promise<void> {
   try {
     await Font.loadAsync({
-      // Preload Ionicons font
+      // Preload Ionicons font (consistent icon set across the app)
       ...Ionicons.font,
-      // Preload MaterialIcons font
-      ...MaterialIcons.font,
     });
   } catch (error) {
     // Log error but don't crash the app

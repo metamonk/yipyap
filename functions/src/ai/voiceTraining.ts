@@ -1,17 +1,21 @@
 /**
- * Voice Profile Training Cloud Function (Story 5.5)
+ * Voice Profile Training Cloud Function (Story 5.5, migrated to OpenAI SDK in Story 6.9)
  * @module functions/src/ai/voiceTraining
  *
  * @remarks
  * Generates and updates creator voice profiles from message history.
- * Uses GPT-4 Turbo for voice characteristic analysis.
+ * Uses GPT-4 Turbo for voice characteristic analysis via direct OpenAI SDK calls.
  * Requires minimum 10 message samples for training (testing threshold - production: 50+).
+ *
+ * **Migration Notes (Story 6.9):**
+ * - Migrated from Vercel AI SDK to official OpenAI SDK
+ * - All prompts and parsing logic remain identical
+ * - Output parity maintained with original implementation
  */
 
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
-import { openai } from '@ai-sdk/openai';
-import { generateText } from 'ai';
+import OpenAI from 'openai';
 
 /**
  * Minimum number of messages required to create a voice profile
@@ -214,11 +218,26 @@ Return ONLY valid JSON, no additional text.`;
 
       console.log(`[VoiceTraining] Sending analysis request to GPT-4 Turbo`);
 
-      const { text: aiResponse } = await generateText({
-        model: openai(VOICE_ANALYSIS_MODEL),
-        prompt: analysisPrompt,
+      // Initialize OpenAI SDK
+      const openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+      });
+
+      // Call GPT-4 Turbo using OpenAI SDK (Story 6.9)
+      const completion = await openai.chat.completions.create({
+        model: VOICE_ANALYSIS_MODEL,
+        messages: [{ role: 'user', content: analysisPrompt }],
         temperature: 0.3, // Lower temperature for consistent analysis
       });
+
+      const aiResponse = completion.choices[0]?.message?.content;
+
+      if (!aiResponse) {
+        throw new functions.https.HttpsError(
+          'internal',
+          'No response from OpenAI API. Please try again.'
+        );
+      }
 
       console.log(`[VoiceTraining] Received AI response, parsing...`);
 

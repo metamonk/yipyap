@@ -1,20 +1,13 @@
 /**
  * AI service module exports
  * @module functions/src/ai
+ *
+ * Note: Provider abstraction (AIService, initialize, providers) removed in Story 6.11
+ * All AI operations now use direct OpenAI SDK calls for simplicity
  */
-
-// Initialization
-export { initializeAI } from './initialize';
-
-// Main service
-export { AIService } from './aiService';
 
 // Model selection
 export { selectModel } from './modelSelector';
-
-// Providers
-export { OpenAIProvider, createProvider, checkProviderHealth } from './providers';
-export type { AIProvider } from './providers';
 
 // Monitoring
 export { initLangfuse, logAIOperation, trackCost, shutdownMonitoring } from './monitoring';

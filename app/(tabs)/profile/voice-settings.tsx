@@ -18,6 +18,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationHeader } from '../../_components/NavigationHeader';
+import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/hooks/useAuth';
 import { updateUserSettings } from '@/services/userService';
 import { voiceMatchingService } from '@/services/voiceMatchingService';
@@ -31,6 +32,7 @@ import type { VoiceMatchingSettings } from '@/types/user';
  */
 export default function VoiceSettingsScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
   const { userProfile } = useAuth();
 
   // Initialize settings from user profile or use defaults
@@ -217,16 +219,124 @@ export default function VoiceSettingsScreen() {
     }
   };
 
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    centerContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: theme.colors.background,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: '700',
+      color: theme.colors.textPrimary,
+      marginBottom: 8,
+    },
+    subtitle: {
+      fontSize: 15,
+      color: theme.colors.textSecondary,
+      lineHeight: 20,
+      marginBottom: 32,
+    },
+    sectionHeader: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: theme.colors.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 12,
+      marginTop: 8,
+    },
+    card: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 24,
+      ...theme.shadows.sm,
+    },
+    settingRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 12,
+    },
+    settingRowWithBorder: {
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    settingLabel: {
+      fontSize: 16,
+      color: theme.colors.textPrimary,
+      fontWeight: '600',
+      marginBottom: 4,
+    },
+    settingHint: {
+      fontSize: 14,
+      color: theme.colors.textSecondary,
+      lineHeight: 18,
+    },
+    infoCard: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 16,
+      borderLeftWidth: 4,
+      borderLeftColor: theme.colors.accent,
+      borderWidth: 1,
+      borderColor: theme.colors.borderLight,
+    },
+    infoText: {
+      fontSize: 14,
+      color: theme.colors.textSecondary,
+      lineHeight: 20,
+    },
+    warningCard: {
+      backgroundColor: theme.colors.warningBackground || '#FFF3CD',
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 16,
+      borderLeftWidth: 4,
+      borderLeftColor: theme.colors.warning || '#FFC107',
+    },
+    warningText: {
+      fontSize: 14,
+      color: theme.colors.warningText || '#856404',
+      lineHeight: 20,
+    },
+    trainButton: {
+      backgroundColor: theme.colors.accent,
+      padding: 18,
+      borderRadius: 12,
+      marginBottom: 24,
+      alignItems: 'center',
+      ...theme.shadows.sm,
+    },
+    trainButtonDisabled: {
+      backgroundColor: theme.colors.disabled || '#C7C7CC',
+    },
+    trainButtonText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '600',
+      marginLeft: 8,
+    },
+  });
+
   if (!userProfile) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#6C63FF" />
+      <View style={dynamicStyles.centerContainer}>
+        <ActivityIndicator size="large" color={theme.colors.accent} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={dynamicStyles.container}>
       <NavigationHeader
         title="Voice Settings"
         showBack={true}
@@ -234,47 +344,63 @@ export default function VoiceSettingsScreen() {
       />
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        <Text style={styles.title}>Voice Matching Settings</Text>
-        <Text style={styles.subtitle}>
+        <Text style={dynamicStyles.title}>Voice Matching Settings</Text>
+        <Text style={dynamicStyles.subtitle}>
           Customize how AI suggestions match your unique communication style
         </Text>
 
-        {/* Enable Voice Matching */}
-        <View style={styles.settingRow}>
-          <View style={styles.settingInfo}>
-            <Text style={styles.settingLabel}>Enable Voice Matching</Text>
-            <Text style={styles.settingHint}>
-              Generate AI suggestions that match your style
-            </Text>
+        {/* VOICE MATCHING SETTINGS CARD */}
+        <Text style={dynamicStyles.sectionHeader}>VOICE MATCHING</Text>
+        <View style={dynamicStyles.card}>
+          {/* Enable Voice Matching */}
+          <View style={[dynamicStyles.settingRow, dynamicStyles.settingRowWithBorder]}>
+            <View style={styles.settingInfo}>
+              <Text style={dynamicStyles.settingLabel}>Enable Voice Matching</Text>
+              <Text style={dynamicStyles.settingHint}>
+                Generate AI suggestions that match your style
+              </Text>
+            </View>
+            <Switch
+              value={settings.enabled}
+              onValueChange={handleToggleEnabled}
+              disabled={isSaving}
+              trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+              thumbColor="#FFFFFF"
+              ios_backgroundColor={theme.colors.borderLight}
+              testID="toggle-enabled"
+            />
           </View>
-          <Switch
-            value={settings.enabled}
-            onValueChange={handleToggleEnabled}
-            disabled={isSaving}
-            testID="toggle-enabled"
-          />
+
+          {/* Auto-Show Suggestions */}
+          <View style={dynamicStyles.settingRow}>
+            <View style={styles.settingInfo}>
+              <Text style={dynamicStyles.settingLabel}>Auto-Show Suggestions</Text>
+              <Text style={dynamicStyles.settingHint}>
+                Automatically display suggestions for incoming messages
+              </Text>
+            </View>
+            <Switch
+              value={settings.autoShowSuggestions}
+              onValueChange={handleToggleAutoShow}
+              disabled={isSaving || !settings.enabled}
+              trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+              thumbColor="#FFFFFF"
+              ios_backgroundColor={theme.colors.borderLight}
+              testID="toggle-auto-show"
+            />
+          </View>
         </View>
 
-        {/* Auto-Show Suggestions */}
-        <View style={styles.settingRow}>
-          <View style={styles.settingInfo}>
-            <Text style={styles.settingLabel}>Auto-Show Suggestions</Text>
-            <Text style={styles.settingHint}>
-              Automatically display suggestions for incoming messages
-            </Text>
+        {/* SUGGESTIONS SETTINGS CARD */}
+        <Text style={dynamicStyles.sectionHeader}>SUGGESTIONS</Text>
+        <View style={dynamicStyles.card}>
+          {/* Suggestion Count */}
+          <View style={[dynamicStyles.settingRow, dynamicStyles.settingRowWithBorder]}>
+            <View style={styles.settingInfo}>
+              <Text style={dynamicStyles.settingLabel}>Number of Suggestions</Text>
+              <Text style={dynamicStyles.settingHint}>How many response options to generate</Text>
+            </View>
           </View>
-          <Switch
-            value={settings.autoShowSuggestions}
-            onValueChange={handleToggleAutoShow}
-            disabled={isSaving || !settings.enabled}
-            testID="toggle-auto-show"
-          />
-        </View>
-
-        {/* Suggestion Count */}
-        <View style={styles.settingSection}>
-          <Text style={styles.settingLabel}>Number of Suggestions</Text>
-          <Text style={styles.settingHint}>How many response options to generate</Text>
           <View style={styles.pickerContainer}>
             <SettingsPicker
               value={settings.suggestionCount}
@@ -288,12 +414,14 @@ export default function VoiceSettingsScreen() {
               testID="picker-suggestion-count"
             />
           </View>
-        </View>
 
-        {/* Retraining Schedule */}
-        <View style={styles.settingSection}>
-          <Text style={styles.settingLabel}>Retraining Schedule</Text>
-          <Text style={styles.settingHint}>How often to update your voice profile</Text>
+          {/* Retraining Schedule */}
+          <View style={dynamicStyles.settingRow}>
+            <View style={styles.settingInfo}>
+              <Text style={dynamicStyles.settingLabel}>Retraining Schedule</Text>
+              <Text style={dynamicStyles.settingHint}>How often to update your voice profile</Text>
+            </View>
+          </View>
           <View style={styles.pickerContainer}>
             <SettingsPicker
               value={settings.retrainingSchedule}
@@ -309,38 +437,49 @@ export default function VoiceSettingsScreen() {
           </View>
         </View>
 
+        {/* TRAINING SECTION */}
+        <Text style={dynamicStyles.sectionHeader}>TRAINING</Text>
+
         {/* Training Eligibility Status */}
         {!loadingProfile && voiceProfile && voiceProfile.trainingSampleCount < 10 && (
-          <View style={styles.messageCountContainer}>
-            <Ionicons name="information-circle" size={20} color="#FF9500" />
-            <Text style={styles.messageCountText}>
-              {voiceProfile.trainingSampleCount} / 10 messages - Send{' '}
-              {10 - voiceProfile.trainingSampleCount} more to enable training
-            </Text>
+          <View style={dynamicStyles.warningCard}>
+            <View style={styles.iconRow}>
+              <Ionicons name="information-circle" size={20} color={theme.colors.warning || '#FF9500'} />
+              <View style={styles.iconRowText}>
+                <Text style={dynamicStyles.warningText}>
+                  {voiceProfile.trainingSampleCount} / 10 messages - Send{' '}
+                  {10 - voiceProfile.trainingSampleCount} more to enable training
+                </Text>
+              </View>
+            </View>
           </View>
         )}
 
         {/* Stale Profile Warning */}
         {!loadingProfile && voiceProfile && voiceProfile.trainingSampleCount >= 10 && (
-          <View style={styles.staleProfileWarning}>
-            <Ionicons name="alert-circle" size={20} color="#856404" />
-            <Text style={styles.staleProfileText}>
-              Note: Profile shows {voiceProfile.trainingSampleCount} samples from previous training.
-              If training fails, your messages may have been deleted or you're using a different
-              environment.
-            </Text>
+          <View style={dynamicStyles.infoCard}>
+            <View style={styles.iconRow}>
+              <Ionicons name="alert-circle" size={20} color={theme.colors.accent} />
+              <View style={styles.iconRowText}>
+                <Text style={dynamicStyles.infoText}>
+                  Note: Profile shows {voiceProfile.trainingSampleCount} samples from previous training.
+                  If training fails, your messages may have been deleted or you're using a different
+                  environment.
+                </Text>
+              </View>
+            </View>
           </View>
         )}
 
         {/* Train Now Button */}
         <TouchableOpacity
           style={[
-            styles.trainButton,
+            dynamicStyles.trainButton,
             (isTraining ||
               !settings.enabled ||
               loadingProfile ||
               (voiceProfile && voiceProfile.trainingSampleCount < 10)) &&
-              styles.trainButtonDisabled,
+              dynamicStyles.trainButtonDisabled,
           ]}
           onPress={handleTrainProfile}
           disabled={
@@ -354,17 +493,17 @@ export default function VoiceSettingsScreen() {
           {isTraining ? (
             <View style={styles.trainButtonContent}>
               <ActivityIndicator size="small" color="#FFFFFF" />
-              <Text style={styles.trainButtonText}>Training...</Text>
+              <Text style={dynamicStyles.trainButtonText}>Training...</Text>
             </View>
           ) : loadingProfile ? (
             <View style={styles.trainButtonContent}>
               <ActivityIndicator size="small" color="#FFFFFF" />
-              <Text style={styles.trainButtonText}>Loading...</Text>
+              <Text style={dynamicStyles.trainButtonText}>Loading...</Text>
             </View>
           ) : (
             <View style={styles.trainButtonContent}>
               <Ionicons name="flash" size={20} color="#FFFFFF" />
-              <Text style={styles.trainButtonText}>
+              <Text style={dynamicStyles.trainButtonText}>
                 {voiceProfile && voiceProfile.trainingSampleCount < 10
                   ? 'Insufficient Messages'
                   : 'Train Voice Profile Now'}
@@ -383,127 +522,32 @@ export default function VoiceSettingsScreen() {
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-  },
   content: {
     flex: 1,
   },
   contentContainer: {
     padding: 24,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#000000',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666666',
-    marginBottom: 32,
-    lineHeight: 22,
-  },
-  settingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
   settingInfo: {
     flex: 1,
     marginRight: 16,
   },
-  settingSection: {
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  settingLabel: {
-    fontSize: 17,
-    color: '#000000',
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  settingHint: {
-    fontSize: 14,
-    color: '#999999',
-    lineHeight: 18,
-  },
   pickerContainer: {
     marginTop: 12,
-  },
-  trainButton: {
-    backgroundColor: '#6C63FF',
-    padding: 18,
-    borderRadius: 16,
-    marginTop: 32,
-    alignItems: 'center',
-    shadowColor: '#6C63FF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  trainButtonDisabled: {
-    backgroundColor: '#C7C7CC',
-    shadowOpacity: 0,
-    elevation: 0,
   },
   trainButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  trainButtonText: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  messageCountContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFF3CD',
-    padding: 12,
-    borderRadius: 12,
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: '#FFC107',
-    gap: 8,
-  },
-  messageCountText: {
-    fontSize: 14,
-    color: '#856404',
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  staleProfileWarning: {
+  iconRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#E7F3FF',
-    padding: 12,
-    borderRadius: 12,
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: '#90CAF9',
-    gap: 8,
+    gap: 12,
   },
-  staleProfileText: {
+  iconRowText: {
     flex: 1,
-    fontSize: 13,
-    color: '#1565C0',
-    lineHeight: 18,
   },
 });

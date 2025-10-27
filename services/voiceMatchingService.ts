@@ -27,6 +27,7 @@ import {
 import { trackOperationStart, trackOperationEnd } from './aiPerformanceService';
 import { checkUserBudgetStatus } from './aiAvailabilityService';
 import { checkRateLimit, incrementOperationCount } from './aiRateLimitService';
+import type { ResponseDraft, PersonalizationSuggestion } from '../types/ai';
 
 /**
  * Response suggestion structure from Cloud Function
@@ -144,6 +145,24 @@ export class VoiceMatchingError extends Error {
     this.type = type;
     this.originalError = originalError;
   }
+}
+
+/**
+ * Result from draft generation (Story 6.2)
+ * @interface
+ */
+export interface DraftGenerationResult {
+  /** Whether operation succeeded */
+  success: boolean;
+
+  /** Generated draft (if successful) */
+  draft?: ResponseDraft;
+
+  /** Generation latency in milliseconds */
+  latency?: number;
+
+  /** Error message if operation failed */
+  error?: string;
 }
 
 /**
@@ -607,6 +626,577 @@ export class VoiceMatchingService {
       console.error('[VoiceMatchingService] Error checking voice profile:', error);
       return false;
     }
+  }
+
+  // =============================================
+  // Story 6.2: Draft-First Response Interface
+  // =============================================
+
+  /**
+   * Generates a draft-first response with confidence scoring and personalization suggestions
+   *
+   * @param conversationId - The conversation ID
+   * @param incomingMessageId - The message to respond to
+   * @param messageCategory - Category of the message (for requiresEditing determination)
+   * @returns Promise resolving to draft generation result
+   *
+   * @throws {VoiceMatchingError} When voice profile not found or generation fails
+   *
+   * @example
+   * ```typescript
+   * const result = await voiceMatchingService.generateDraft(
+   *   'conv123',
+   *   'msg456',
+   *   'business_opportunity'
+   * );
+   *
+   * if (result.success && result.draft) {
+   *   console.log('Draft:', result.draft.text);
+   *   console.log('Confidence:', result.draft.confidence);
+   *   console.log('Requires editing:', result.draft.requiresEditing);
+   * }
+   * ```
+   */
+  async generateDraft(
+    conversationId: string,
+    incomingMessageId: string,
+    messageCategory?: string
+  ): Promise<DraftGenerationResult> {
+    const startTime = Date.now();
+
+    // Get current user for tracking
+    const auth = getFirebaseAuth();
+    const currentUser = auth.currentUser;
+    const userId = currentUser?.uid;
+
+    // Check if user's AI features are disabled due to budget
+    if (userId) {
+      const budgetStatus = await checkUserBudgetStatus(userId);
+      if (!budgetStatus.enabled) {
+        return {
+          success: false,
+          error: budgetStatus.message || 'AI features are temporarily disabled',
+        };
+      }
+    }
+
+    // Check rate limit for voice matching operation
+    if (userId) {
+      const rateLimitCheck = await checkRateLimit(userId, 'voice_matching');
+      if (!rateLimitCheck.allowed) {
+        return {
+          success: false,
+          error: rateLimitCheck.status.message || 'Rate limit exceeded',
+        };
+      }
+    }
+
+    // Start performance tracking
+    const operationId = `draft_generation_${incomingMessageId}_${Date.now()}`;
+    if (userId) {
+      trackOperationStart(operationId, 'voice_matching');
+    }
+
+    try {
+      // Validate inputs
+      if (!conversationId || !incomingMessageId) {
+        throw new VoiceMatchingError(
+          VoiceMatchingErrorType.UNKNOWN,
+          'Conversation ID and message ID are required'
+        );
+      }
+
+      // Get Cloud Functions instance
+      const functions = getFunctions();
+      const generateDraftFunction = httpsCallable<
+        {
+          conversationId: string;
+          incomingMessageId: string;
+          suggestionCount: number;
+        },
+        {
+          success: boolean;
+          suggestions?: Array<{ text: string }>;
+          error?: string;
+        }
+      >(functions, 'generateResponseSuggestions');
+
+      // Call Cloud Function (generate 1 suggestion for draft mode)
+      const result = await generateDraftFunction({
+        conversationId,
+        incomingMessageId,
+        suggestionCount: 1,
+      });
+
+      const responseData = result.data;
+
+      // Validate response
+      if (!responseData.success || !responseData.suggestions || responseData.suggestions.length === 0) {
+        throw new VoiceMatchingError(
+          VoiceMatchingErrorType.UNKNOWN,
+          responseData.error || 'Failed to generate draft. Please try again.'
+        );
+      }
+
+      // Use the first (and only) suggestion as the draft
+      const draftText = responseData.suggestions[0].text;
+
+      // Calculate confidence score (0-100) based on voice profile metrics
+      const confidence = await this.calculateConfidence(userId || '');
+
+      // Generate personalization suggestions
+      const personalizationSuggestions = this.generatePersonalizationSuggestions(
+        draftText,
+        messageCategory
+      );
+
+      // Determine if editing is required based on message category
+      const requiresEditing = this.determineRequiresEditing(messageCategory, confidence);
+
+      // Calculate estimated time saved (based on message length)
+      const timeSaved = Math.ceil(draftText.length / 50); // ~50 chars per minute typing
+
+      // Build ResponseDraft object
+      const draft: ResponseDraft = {
+        text: draftText,
+        confidence,
+        requiresEditing,
+        personalizationSuggestions,
+        timeSaved,
+        messageId: incomingMessageId,
+        conversationId,
+        version: 1,
+      };
+
+      const latency = Date.now() - startTime;
+
+      // Track successful operation
+      if (userId) {
+        trackOperationEnd(operationId, {
+          userId,
+          operation: 'voice_matching',
+          success: true,
+          modelUsed: 'gpt-4-turbo',
+          tokensUsed: {
+            prompt: 0,
+            completion: 0,
+            total: 0,
+          },
+          costCents: 0,
+          cacheHit: false,
+        }).catch((error) => {
+          console.error('[voiceMatchingService] Failed to track performance:', error);
+        });
+
+        // Increment rate limit counter for successful operation
+        await incrementOperationCount(userId, 'voice_matching');
+      }
+
+      return {
+        success: true,
+        draft,
+        latency,
+      };
+    } catch (error: unknown) {
+      const err = error as { code?: string; message?: string };
+      const latency = Date.now() - startTime;
+
+      // Track failed operation
+      if (userId) {
+        let errorType: 'network' | 'timeout' | 'rate_limit' | 'model_error' | 'unknown' =
+          'unknown';
+
+        if (err.code === 'unauthenticated') {
+          errorType = 'network';
+        } else if (err.code === 'deadline-exceeded' || err.message?.includes('timeout')) {
+          errorType = 'timeout';
+        } else if (err.code === 'unavailable') {
+          errorType = 'network';
+        } else if (err.code === 'failed-precondition') {
+          errorType = 'model_error';
+        }
+
+        trackOperationEnd(operationId, {
+          userId,
+          operation: 'voice_matching',
+          success: false,
+          errorType,
+          modelUsed: 'gpt-4-turbo',
+          tokensUsed: {
+            prompt: 0,
+            completion: 0,
+            total: 0,
+          },
+          costCents: 0,
+          cacheHit: false,
+        }).catch((trackError) => {
+          console.error('[voiceMatchingService] Failed to track performance:', trackError);
+        });
+      }
+
+      return {
+        success: false,
+        error: err.message || 'Failed to generate draft',
+        latency,
+      };
+    }
+  }
+
+  /**
+   * Regenerates a new draft avoiding previous draft versions
+   *
+   * @param conversationId - The conversation ID
+   * @param incomingMessageId - The message to respond to
+   * @param previousDrafts - Array of previous draft texts to avoid
+   * @param messageCategory - Category of the message
+   * @returns Promise resolving to draft generation result
+   *
+   * @throws {VoiceMatchingError} When voice profile not found or generation fails
+   *
+   * @example
+   * ```typescript
+   * const result = await voiceMatchingService.regenerateDraft(
+   *   'conv123',
+   *   'msg456',
+   *   ['Previous draft 1', 'Previous draft 2'],
+   *   'fan_engagement'
+   * );
+   * ```
+   */
+  async regenerateDraft(
+    conversationId: string,
+    incomingMessageId: string,
+    previousDrafts: string[],
+    messageCategory?: string
+  ): Promise<DraftGenerationResult> {
+    const startTime = Date.now();
+
+    // Get current user
+    const auth = getFirebaseAuth();
+    const currentUser = auth.currentUser;
+    const userId = currentUser?.uid;
+
+    // Check budget and rate limits (same as generateDraft)
+    if (userId) {
+      const budgetStatus = await checkUserBudgetStatus(userId);
+      if (!budgetStatus.enabled) {
+        return {
+          success: false,
+          error: budgetStatus.message || 'AI features are temporarily disabled',
+        };
+      }
+
+      const rateLimitCheck = await checkRateLimit(userId, 'voice_matching');
+      if (!rateLimitCheck.allowed) {
+        return {
+          success: false,
+          error: rateLimitCheck.status.message || 'Rate limit exceeded',
+        };
+      }
+    }
+
+    // Start performance tracking
+    const operationId = `draft_regeneration_${incomingMessageId}_${Date.now()}`;
+    if (userId) {
+      trackOperationStart(operationId, 'voice_matching');
+    }
+
+    try {
+      // Get Cloud Functions instance
+      const functions = getFunctions();
+      const regenerateDraftFunction = httpsCallable<
+        {
+          conversationId: string;
+          incomingMessageId: string;
+          suggestionCount: number;
+        },
+        {
+          success: boolean;
+          suggestions?: Array<{ text: string }>;
+          error?: string;
+        }
+      >(functions, 'generateResponseSuggestions');
+
+      // Call Cloud Function to generate new draft
+      // Note: The existing Cloud Function doesn't support avoiding previous drafts yet
+      // This is a limitation that can be addressed in a future update
+      const result = await regenerateDraftFunction({
+        conversationId,
+        incomingMessageId,
+        suggestionCount: 1,
+      });
+
+      const responseData = result.data;
+
+      // Validate response
+      if (!responseData.success || !responseData.suggestions || responseData.suggestions.length === 0) {
+        throw new VoiceMatchingError(
+          VoiceMatchingErrorType.UNKNOWN,
+          responseData.error || 'Failed to regenerate draft. Please try again.'
+        );
+      }
+
+      // Use the first (and only) suggestion as the draft
+      const draftText = responseData.suggestions[0].text;
+
+      // Calculate confidence score based on voice profile metrics
+      const confidence = await this.calculateConfidence(userId || '');
+
+      // Generate personalization suggestions
+      const personalizationSuggestions = this.generatePersonalizationSuggestions(
+        draftText,
+        messageCategory
+      );
+
+      // Determine if editing is required
+      const requiresEditing = this.determineRequiresEditing(messageCategory, confidence);
+
+      // Calculate time saved
+      const timeSaved = Math.ceil(draftText.length / 50);
+
+      // Increment version number based on previousDrafts length
+      const version = previousDrafts.length + 1;
+
+      // Build ResponseDraft object
+      const draft: ResponseDraft = {
+        text: draftText,
+        confidence,
+        requiresEditing,
+        personalizationSuggestions,
+        timeSaved,
+        messageId: incomingMessageId,
+        conversationId,
+        version,
+      };
+
+      const latency = Date.now() - startTime;
+
+      // Track successful operation
+      if (userId) {
+        trackOperationEnd(operationId, {
+          userId,
+          operation: 'voice_matching',
+          success: true,
+          modelUsed: 'gpt-4-turbo',
+          tokensUsed: {
+            prompt: 0,
+            completion: 0,
+            total: 0,
+          },
+          costCents: 0,
+          cacheHit: false,
+        }).catch((error) => {
+          console.error('[voiceMatchingService] Failed to track performance:', error);
+        });
+
+        await incrementOperationCount(userId, 'voice_matching');
+      }
+
+      return {
+        success: true,
+        draft,
+        latency,
+      };
+    } catch (error: unknown) {
+      const err = error as { code?: string; message?: string };
+      const latency = Date.now() - startTime;
+
+      // Track failed operation
+      if (userId) {
+        let errorType: 'network' | 'timeout' | 'rate_limit' | 'model_error' | 'unknown' =
+          'unknown';
+
+        if (err.code === 'unauthenticated') {
+          errorType = 'network';
+        } else if (err.code === 'deadline-exceeded' || err.message?.includes('timeout')) {
+          errorType = 'timeout';
+        } else if (err.code === 'unavailable') {
+          errorType = 'network';
+        } else if (err.code === 'failed-precondition') {
+          errorType = 'model_error';
+        }
+
+        trackOperationEnd(operationId, {
+          userId,
+          operation: 'voice_matching',
+          success: false,
+          errorType,
+          modelUsed: 'gpt-4-turbo',
+          tokensUsed: {
+            prompt: 0,
+            completion: 0,
+            total: 0,
+          },
+          costCents: 0,
+          cacheHit: false,
+        }).catch((trackError) => {
+          console.error('[voiceMatchingService] Failed to track performance:', trackError);
+        });
+      }
+
+      return {
+        success: false,
+        error: err.message || 'Failed to regenerate draft',
+        latency,
+      };
+    }
+  }
+
+  /**
+   * Calculates confidence score based on voice profile metrics
+   *
+   * @param userId - The user's ID
+   * @returns Promise resolving to confidence score (0-100)
+   *
+   * @private
+   */
+  private async calculateConfidence(userId: string): Promise<number> {
+    try {
+      if (!userId) {
+        return 70; // Default medium confidence
+      }
+
+      const db = getFirebaseDb();
+      const profileRef = doc(db, 'voice_profiles', userId);
+      const profileDoc = await getDoc(profileRef);
+
+      if (!profileDoc.exists()) {
+        return 60; // Lower confidence if no profile
+      }
+
+      const profile = profileDoc.data();
+      const metrics = profile.metrics || {};
+
+      // Calculate confidence based on voice profile performance
+      const acceptRate =
+        metrics.totalSuggestionsGenerated > 0
+          ? (metrics.acceptedSuggestions || 0) / metrics.totalSuggestionsGenerated
+          : 0;
+
+      const avgRating = metrics.averageSatisfactionRating || 0;
+
+      // Weighted confidence calculation
+      // 60% based on accept rate, 40% based on avg rating
+      const confidence = Math.round(acceptRate * 60 + (avgRating / 5) * 40);
+
+      // Clamp between 50-95 (never 0-49 or 96-100)
+      return Math.min(Math.max(confidence, 50), 95);
+    } catch (error) {
+      console.error('[voiceMatchingService] Error calculating confidence:', error);
+      return 70; // Default to medium confidence on error
+    }
+  }
+
+  /**
+   * Generates personalization suggestions for draft editing
+   *
+   * @param draftText - The generated draft text
+   * @param messageCategory - Category of the incoming message
+   * @returns Array of 3 personalization suggestions
+   *
+   * @private
+   */
+  private generatePersonalizationSuggestions(
+    draftText: string,
+    messageCategory?: string
+  ): PersonalizationSuggestion[] {
+    // Base suggestions applicable to all messages
+    const baseSuggestions: PersonalizationSuggestion[] = [
+      {
+        text: 'Add specific detail about their message',
+        type: 'context',
+      },
+      {
+        text: 'Include personal callback to previous conversation',
+        type: 'callback',
+      },
+      {
+        text: 'End with a question to continue dialogue',
+        type: 'question',
+      },
+    ];
+
+    // Category-specific suggestions
+    const categorySuggestions: Record<string, PersonalizationSuggestion[]> = {
+      business_opportunity: [
+        {
+          text: 'Mention specific interest in their proposal',
+          type: 'detail',
+        },
+        {
+          text: 'Add professional tone and credentials',
+          type: 'tone',
+        },
+        {
+          text: 'Suggest next steps or timeline',
+          type: 'detail',
+        },
+      ],
+      fan_engagement: [
+        {
+          text: 'Add enthusiasm and personal appreciation',
+          type: 'tone',
+        },
+        {
+          text: 'Reference their specific comment or question',
+          type: 'context',
+        },
+        {
+          text: 'Share behind-the-scenes detail or story',
+          type: 'detail',
+        },
+      ],
+      question_support: [
+        {
+          text: 'Make sure answer directly addresses their question',
+          type: 'context',
+        },
+        {
+          text: 'Add helpful resource or link if relevant',
+          type: 'detail',
+        },
+        {
+          text: 'Offer follow-up support if needed',
+          type: 'question',
+        },
+      ],
+    };
+
+    // Return category-specific suggestions if available, otherwise use base suggestions
+    if (messageCategory && categorySuggestions[messageCategory]) {
+      return categorySuggestions[messageCategory];
+    }
+
+    return baseSuggestions;
+  }
+
+  /**
+   * Determines if editing is required based on message category and confidence
+   *
+   * @param messageCategory - Category of the incoming message
+   * @param confidence - Confidence score (0-100)
+   * @returns True if editing is required before sending
+   *
+   * @private
+   */
+  private determineRequiresEditing(messageCategory?: string, confidence?: number): boolean {
+    // Always require editing for business opportunities
+    if (messageCategory === 'business_opportunity') {
+      return true;
+    }
+
+    // Always require editing for high-priority messages
+    if (messageCategory === 'urgent' || messageCategory === 'crisis') {
+      return true;
+    }
+
+    // Require editing if confidence is low (< 70%)
+    if (confidence && confidence < 70) {
+      return true;
+    }
+
+    // Otherwise, editing is optional but encouraged
+    return false;
   }
 }
 

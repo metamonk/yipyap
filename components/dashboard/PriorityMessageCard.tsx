@@ -21,6 +21,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/contexts/ThemeContext';
 import type { PriorityMessageFeedItem } from '@/types/dashboard';
 
 /**
@@ -38,6 +39,7 @@ interface PriorityMessageCardProps {
  * PriorityMessageCard Component
  */
 export function PriorityMessageCard({ item, onPress }: PriorityMessageCardProps) {
+  const { theme } = useTheme();
   const {
     priorityType,
     senderName,
@@ -49,7 +51,7 @@ export function PriorityMessageCard({ item, onPress }: PriorityMessageCardProps)
   } = item;
 
   // Get priority badge config
-  const priorityConfig = getPriorityConfig(priorityType);
+  const priorityConfig = getPriorityConfig(priorityType, theme);
 
   // Truncate message text to ~100 characters
   const truncatedText = messageText.length > 100
@@ -59,9 +61,33 @@ export function PriorityMessageCard({ item, onPress }: PriorityMessageCardProps)
   // Format relative timestamp
   const relativeTime = getRelativeTime(timestamp.toDate());
 
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    card: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.borderLight,
+      ...theme.shadows.sm,
+    },
+    senderName: {
+      color: theme.colors.textPrimary,
+    },
+    messagePreview: {
+      color: theme.colors.textSecondary,
+    },
+    opportunityBadge: {
+      backgroundColor: theme.colors.success + '20',
+    },
+    opportunityScore: {
+      color: theme.colors.success,
+    },
+    timestamp: {
+      color: theme.colors.textTertiary,
+    },
+  });
+
   return (
     <TouchableOpacity
-      style={styles.card}
+      style={[styles.card, dynamicStyles.card]}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${priorityType} message from ${senderName}: ${truncatedText}`}
@@ -77,10 +103,10 @@ export function PriorityMessageCard({ item, onPress }: PriorityMessageCardProps)
       {/* Message Content */}
       <View style={styles.content}>
         {/* Sender Name */}
-        <Text style={styles.senderName}>{senderName}</Text>
+        <Text style={[styles.senderName, dynamicStyles.senderName]}>{senderName}</Text>
 
         {/* Message Preview */}
-        <Text style={styles.messagePreview} numberOfLines={2}>
+        <Text style={[styles.messagePreview, dynamicStyles.messagePreview]} numberOfLines={2}>
           {truncatedText}
         </Text>
 
@@ -88,7 +114,7 @@ export function PriorityMessageCard({ item, onPress }: PriorityMessageCardProps)
         <View style={styles.metadataRow}>
           {/* Category Badge */}
           {category && (
-            <View style={[styles.metadataBadge, { backgroundColor: getCategoryColor(category) }]}>
+            <View style={[styles.metadataBadge, { backgroundColor: getCategoryColor(theme.colors.accent) }]}>
               <Text style={styles.metadataBadgeText}>{getCategoryLabel(category)}</Text>
             </View>
           )}
@@ -99,21 +125,21 @@ export function PriorityMessageCard({ item, onPress }: PriorityMessageCardProps)
               <Ionicons
                 name={getSentimentIcon(sentiment)}
                 size={14}
-                color={getSentimentColor(sentiment)}
+                color={getSentimentColor(sentiment, theme)}
               />
             </View>
           )}
 
           {/* Opportunity Score */}
           {opportunityScore && opportunityScore >= 70 && (
-            <View style={styles.opportunityBadge}>
-              <Ionicons name="trending-up" size={12} color="#38A169" />
-              <Text style={styles.opportunityScore}>{opportunityScore}</Text>
+            <View style={[styles.opportunityBadge, dynamicStyles.opportunityBadge]}>
+              <Ionicons name="trending-up" size={12} color={theme.colors.success} />
+              <Text style={[styles.opportunityScore, dynamicStyles.opportunityScore]}>{opportunityScore}</Text>
             </View>
           )}
 
           {/* Timestamp */}
-          <Text style={styles.timestamp}>{relativeTime}</Text>
+          <Text style={[styles.timestamp, dynamicStyles.timestamp]}>{relativeTime}</Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -121,26 +147,26 @@ export function PriorityMessageCard({ item, onPress }: PriorityMessageCardProps)
 }
 
 /**
- * Get priority configuration (color, icon, label)
+ * Get priority configuration (color, icon, label) - theme-aware
  */
-function getPriorityConfig(priorityType: 'crisis' | 'high_value_opportunity' | 'urgent') {
+function getPriorityConfig(priorityType: 'crisis' | 'high_value_opportunity' | 'urgent', theme: any) {
   const configs = {
     crisis: {
       label: 'Crisis',
-      color: '#E53E3E',
-      backgroundColor: '#FEF2F2',
+      color: theme.colors.error,
+      backgroundColor: theme.colors.error + '20',
       icon: 'alert-circle' as const,
     },
     high_value_opportunity: {
       label: 'High-Value',
-      color: '#38A169',
-      backgroundColor: '#F0FDF4',
+      color: theme.colors.success,
+      backgroundColor: theme.colors.success + '20',
       icon: 'trending-up' as const,
     },
     urgent: {
       label: 'Urgent',
-      color: '#DD6B20',
-      backgroundColor: '#FFFAF0',
+      color: theme.colors.warning,
+      backgroundColor: theme.colors.warning + '20',
       icon: 'warning' as const,
     },
   };
@@ -149,18 +175,10 @@ function getPriorityConfig(priorityType: 'crisis' | 'high_value_opportunity' | '
 }
 
 /**
- * Get category color based on category type
+ * Get category color based on category type - use accent for all (minimal design)
  */
-function getCategoryColor(category: string): string {
-  const colors: Record<string, string> = {
-    fan_engagement: '#3182CE',
-    business_opportunity: '#38A169',
-    urgent: '#DD6B20',
-    spam: '#6B7280',
-    general: '#9CA3AF',
-  };
-
-  return colors[category] || '#9CA3AF';
+function getCategoryColor(accentColor: string): string {
+  return accentColor;
 }
 
 /**
@@ -193,17 +211,17 @@ function getSentimentIcon(sentiment: string): 'happy-outline' | 'sad-outline' | 
 }
 
 /**
- * Get sentiment color
+ * Get sentiment color - theme-aware
  */
-function getSentimentColor(sentiment: string): string {
+function getSentimentColor(sentiment: string, theme: any): string {
   const colors: Record<string, string> = {
-    positive: '#48BB78',
-    negative: '#F56565',
-    neutral: '#A0AEC0',
-    mixed: '#9F7AEA',
+    positive: theme.colors.success,
+    negative: theme.colors.error,
+    neutral: theme.colors.textSecondary,
+    mixed: theme.colors.accent,
   };
 
-  return colors[sentiment] || '#A0AEC0';
+  return colors[sentiment] || theme.colors.textSecondary;
 }
 
 /**
@@ -229,19 +247,13 @@ function getRelativeTime(date: Date): string {
   }
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
     borderRadius: 12,
     padding: 12,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
   },
   priorityBadge: {
     flexDirection: 'row',
@@ -265,11 +277,9 @@ const styles = StyleSheet.create({
   senderName: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#1F2937',
   },
   messagePreview: {
     fontSize: 14,
-    color: '#4B5563',
     lineHeight: 20,
   },
   metadataRow: {
@@ -297,7 +307,6 @@ const styles = StyleSheet.create({
   opportunityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0FDF4',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -306,11 +315,9 @@ const styles = StyleSheet.create({
   opportunityScore: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#38A169',
   },
   timestamp: {
     fontSize: 11,
-    color: '#9CA3AF',
     marginLeft: 'auto',
   },
 });

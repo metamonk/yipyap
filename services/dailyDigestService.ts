@@ -131,6 +131,52 @@ export async function getDailyDigest(userId?: string): Promise<DailyDigest | nul
 }
 
 /**
+ * Get the latest Meaningful 10 daily digest for a user
+ *
+ * @param userId - Optional user ID (defaults to current user)
+ * @returns The latest Meaningful 10 digest with priority tiers, or null if none exists
+ *
+ * @remarks
+ * Returns a digest with three priority tiers:
+ * - High Priority (top 3): Respond today
+ * - Medium Priority (2-7 messages): Respond this week
+ * - Auto-handled: FAQ responses + archived conversations
+ */
+export async function getMeaningful10Digest(userId?: string): Promise<import('../types/ai').Meaningful10Digest | null> {
+  try {
+    const db = getFirebaseDb();
+    const auth = getFirebaseAuth();
+    const currentUser = auth.currentUser;
+
+    if (!currentUser && !userId) {
+      throw new Error('User must be authenticated to access meaningful 10 digest');
+    }
+
+    const uid = userId || currentUser!.uid;
+    const digestsQuery = query(
+      collection(db, 'users', uid, 'meaningful10_digests'),
+      orderBy('date', 'desc'),
+      firestoreLimit(1)
+    );
+
+    const querySnapshot = await getDocs(digestsQuery);
+
+    if (querySnapshot.empty) {
+      return null;
+    }
+
+    const digestData = querySnapshot.docs[0].data() as import('../types/ai').Meaningful10Digest;
+    return digestData;
+  } catch (error) {
+    console.error('Error fetching meaningful 10 digest:', error);
+    if (error instanceof FirestoreError) {
+      throw new Error(`Failed to load meaningful 10 digest: ${error.message}`);
+    }
+    throw error;
+  }
+}
+
+/**
  * Queries messages across conversations by metadata field
  * @internal Helper function for getDailyDigest
  *

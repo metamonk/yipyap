@@ -11,8 +11,9 @@ import {
   DocumentData
 } from 'firebase/firestore';
 import { getFirebaseDb } from './firebase';
-import { Message } from '../types/models';
+import { Message, User } from '../types/models';
 import { DashboardSummary, AIPerformanceMetrics, PriorityMessageFeedItem } from '../types/dashboard';
+import { getUserProfile } from './userService';
 
 /**
  * Service class for managing dashboard operations and data aggregation
@@ -297,6 +298,23 @@ export class DashboardService {
       const messageArrays = await Promise.all(messageQueries);
       const allPriorityMessages = messageArrays.flat();
 
+      // Fetch sender profiles for all priority messages
+      const uniqueSenderIds = Array.from(new Set(allPriorityMessages.map(msg => msg.senderId)));
+      const senderProfiles: Record<string, User> = {};
+
+      await Promise.all(
+        uniqueSenderIds.map(async (senderId) => {
+          try {
+            const user = await getUserProfile(senderId);
+            if (user) {
+              senderProfiles[senderId] = user;
+            }
+          } catch (err) {
+            console.error(`Failed to fetch user ${senderId}:`, err);
+          }
+        })
+      );
+
       // Calculate priority score for each message
       const priorityFeedItems: PriorityMessageFeedItem[] = allPriorityMessages.map(msg => {
         let priorityScore = 0;
@@ -320,11 +338,15 @@ export class DashboardService {
           priorityType = 'urgent';
         }
 
+        // Get sender name from fetched profiles
+        const sender = senderProfiles[msg.senderId];
+        const senderName = sender?.displayName || 'Unknown';
+
         return {
           id: msg.id,
           conversationId: msg.conversationId,
           senderId: msg.senderId,
-          senderName: 'Unknown', // TODO: Fetch sender name from users collection
+          senderName,
           messageText: msg.text,
           timestamp: msg.timestamp,
           priorityScore,

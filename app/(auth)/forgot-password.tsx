@@ -12,6 +12,9 @@
  */
 
 import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/contexts/ThemeContext';
+import { Button } from '@/components/common/Button';
+import { Input } from '@/components/common/Input';
 import { isValidEmail } from '@/services/authService';
 import { useRouter } from 'expo-router';
 import { memo, useEffect, useState } from 'react';
@@ -20,19 +23,19 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 /**
  * Password reset screen
  */
 const ForgotPasswordScreen = memo(function ForgotPasswordScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
   const { user, isLoading, sendPasswordResetEmail, error, clearError } = useAuth();
 
   // Form state
@@ -95,75 +98,168 @@ const ForgotPasswordScreen = memo(function ForgotPasswordScreen() {
 
   const isButtonDisabled = isLoading || !email || emailSent;
 
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    scrollContent: {
+      flexGrow: 1,
+      justifyContent: 'center',
+    },
+    formContainer: {
+      paddingHorizontal: theme.spacing.xl,
+      paddingVertical: theme.spacing['3xl'],
+    },
+    title: {
+      fontSize: 32,
+      fontWeight: theme.typography.fontWeight.bold,
+      color: theme.colors.textPrimary,
+      textAlign: 'center',
+      marginBottom: theme.spacing.md,
+    },
+    subtitle: {
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.textSecondary,
+      textAlign: 'center',
+      marginBottom: theme.spacing.xl,
+      lineHeight: 20,
+    },
+    successMessage: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: theme.colors.successBackground || '#E8F5E9',
+      padding: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      marginBottom: theme.spacing.base,
+    },
+    successIcon: {
+      fontSize: 20,
+      color: theme.colors.success || '#4CAF50',
+      marginRight: theme.spacing.sm,
+    },
+    successText: {
+      flex: 1,
+      color: theme.colors.success || '#2E7D32',
+      fontSize: theme.typography.fontSize.sm,
+    },
+    helpContainer: {
+      backgroundColor: theme.colors.surface,
+      padding: theme.spacing.base,
+      borderRadius: theme.borderRadius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.borderLight,
+      marginTop: theme.spacing.xl,
+    },
+    helpTitle: {
+      fontSize: theme.typography.fontSize.sm,
+      fontWeight: theme.typography.fontWeight.semibold,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.md,
+    },
+    helpText: {
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.xs,
+      lineHeight: 18,
+    },
+    loadingOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.3)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: theme.spacing.base,
+    },
+    loadingText: {
+      color: '#fff',
+      fontSize: theme.typography.fontSize.base,
+      fontWeight: theme.typography.fontWeight.medium,
+    },
+  });
+
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={dynamicStyles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <View style={styles.formContainer}>
-          <Text style={styles.title}>Reset Password</Text>
-          <Text style={styles.subtitle}>
-            Enter your email address and we&apos;ll send you instructions to reset your password.
-          </Text>
-
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor="#999"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              editable={!isLoading && !emailSent}
-            />
+      <ScrollView
+        contentContainerStyle={dynamicStyles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={dynamicStyles.formContainer}>
+          {/* Icon for visual appeal - Robinhood style */}
+          <View style={styles.iconContainer}>
+            <Ionicons name="lock-closed-outline" size={64} color={theme.colors.accent} />
           </View>
 
+          <Text style={dynamicStyles.title}>Reset Password</Text>
+          <Text style={dynamicStyles.subtitle}>
+            Enter your email address and we'll send you instructions to reset your password.
+          </Text>
+
+          {/* Using Input component instead of TextInput */}
+          <Input
+            label="Email"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            textContentType="emailAddress"
+            editable={!isLoading && !emailSent}
+            placeholder="your.email@example.com"
+          />
+
           {emailSent && (
-            <View style={styles.successMessage}>
-              <Text style={styles.successIcon}>✓</Text>
-              <Text style={styles.successText}>Password reset email sent successfully!</Text>
+            <View style={dynamicStyles.successMessage}>
+              <Text style={dynamicStyles.successIcon}>✓</Text>
+              <Text style={dynamicStyles.successText}>Password reset email sent successfully!</Text>
             </View>
           )}
 
-          <Pressable
-            style={[styles.resetButton, isButtonDisabled && styles.buttonDisabled]}
+          {/* Using Button component instead of Pressable */}
+          <Button
+            variant="primary"
             onPress={handleSendResetEmail}
             disabled={isButtonDisabled}
+            loading={isLoading}
+            style={styles.resetButton}
           >
-            {isLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : emailSent ? (
-              <Text style={styles.resetButtonText}>Email Sent</Text>
-            ) : (
-              <Text style={styles.resetButtonText}>Send Reset Email</Text>
-            )}
-          </Pressable>
+            {emailSent ? 'Email Sent' : 'Send Reset Email'}
+          </Button>
 
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-          </View>
+          <View style={styles.divider} />
 
-          <Pressable style={styles.backButton} onPress={handleBackToLogin} disabled={isLoading}>
-            <Text style={styles.backButtonText}>← Back to Sign In</Text>
-          </Pressable>
+          {/* Back button using Button component with ghost variant */}
+          <Button
+            variant="ghost"
+            onPress={handleBackToLogin}
+            disabled={isLoading}
+            style={styles.backButton}
+          >
+            ← Back to Sign In
+          </Button>
 
-          <View style={styles.helpContainer}>
-            <Text style={styles.helpTitle}>Didn&apos;t receive the email?</Text>
-            <Text style={styles.helpText}>• Check your spam or junk folder</Text>
-            <Text style={styles.helpText}>• Verify you entered the correct email</Text>
-            <Text style={styles.helpText}>• Wait a few minutes and try again</Text>
+          {/* Help section with theme colors */}
+          <View style={dynamicStyles.helpContainer}>
+            <Text style={dynamicStyles.helpTitle}>Didn't receive the email?</Text>
+            <Text style={dynamicStyles.helpText}>• Check your spam or junk folder</Text>
+            <Text style={dynamicStyles.helpText}>• Verify you entered the correct email</Text>
+            <Text style={dynamicStyles.helpText}>• Wait a few minutes and try again</Text>
           </View>
         </View>
       </ScrollView>
 
       {isLoading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#4285F4" />
-          <Text style={styles.loadingText}>Sending email...</Text>
+        <View style={dynamicStyles.loadingOverlay}>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={dynamicStyles.loadingText}>Sending email...</Text>
         </View>
       )}
     </KeyboardAvoidingView>
@@ -172,128 +268,20 @@ const ForgotPasswordScreen = memo(function ForgotPasswordScreen() {
 
 export default ForgotPasswordScreen;
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-  },
-  formContainer: {
-    paddingHorizontal: 32,
-    paddingVertical: 48,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 32,
-    lineHeight: 20,
-  },
-  inputContainer: {
-    marginBottom: 24,
-  },
-  input: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 8,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    color: '#333',
-  },
-  successMessage: {
-    flexDirection: 'row',
+  iconContainer: {
     alignItems: 'center',
-    backgroundColor: '#E8F5E9',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  successIcon: {
-    fontSize: 20,
-    color: '#4CAF50',
-    marginRight: 8,
-  },
-  successText: {
-    flex: 1,
-    color: '#2E7D32',
-    fontSize: 14,
+    marginBottom: 24,
   },
   resetButton: {
-    backgroundColor: '#4285F4',
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
+    marginTop: 8,
     marginBottom: 24,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  resetButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
   divider: {
     marginBottom: 24,
   },
-  dividerLine: {
-    height: 1,
-    backgroundColor: '#ddd',
-  },
   backButton: {
-    alignItems: 'center',
     marginBottom: 32,
-  },
-  backButtonText: {
-    color: '#4285F4',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  helpContainer: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  helpTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
-  },
-  helpText: {
-    fontSize: 13,
-    color: '#666',
-    marginBottom: 6,
-    lineHeight: 18,
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16,
-  },
-  loadingText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '500',
   },
 });

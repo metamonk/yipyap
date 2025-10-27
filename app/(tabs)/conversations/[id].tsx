@@ -33,8 +33,10 @@ import { TypingIndicator } from '@/components/chat/TypingIndicator';
 import { Avatar } from '@/components/common/Avatar';
 import { PresenceIndicator } from '@/components/PresenceIndicator';
 import { ConversationSettings } from '@/components/conversation/ConversationSettings';
+import { ResponseDraftCard } from '@/components/voice/ResponseDraftCard';
 import { useMessages } from '@/hooks/useMessages';
 import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/contexts/ThemeContext';
 import { useMessageSearch } from '@/hooks/useMessageSearch';
 import { useTypingIndicator } from '@/hooks/useTypingIndicator';
 import {
@@ -45,9 +47,12 @@ import {
 import { getUserProfile, getUserProfiles } from '@/services/userService';
 import { markMessageAsRead } from '@/services/messageService';
 import { setActiveConversation } from '@/services/notificationService';
+import { voiceMatchingService } from '@/services/voiceMatchingService';
+import { draftManagementService } from '@/services/draftManagementService';
 import { groupMessagesWithSeparators } from '@/utils/messageHelpers';
 import type { Conversation, ChatListItem, Message } from '@/types/models';
 import type { User as UserProfile } from '@/types/user';
+import type { ResponseDraft } from '@/types/ai';
 
 /**
  * Chat screen component for real-time 1:1 and group messaging
@@ -86,7 +91,8 @@ export default function ChatScreen() {
     [params.participantIds]
   );
 
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
+  const { theme } = useTheme();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [otherUser, setOtherUser] = useState<UserProfile | null>(null);
   const [participantProfiles, setParticipantProfiles] = useState<Map<string, UserProfile>>(
@@ -100,6 +106,15 @@ export default function ChatScreen() {
   const [isMuted, setIsMuted] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const highlightOpacity = useRef(new Animated.Value(0)).current;
+
+  // Draft management state
+  const [activeDraft, setActiveDraft] = useState<ResponseDraft | null>(null);
+  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
+  const [isRegeneratingDraft, setIsRegeneratingDraft] = useState(false);
+  const [draftMessageId, setDraftMessageId] = useState<string | null>(null);
+  const [showDraftModal, setShowDraftModal] = useState(false);
+  const previousDrafts = useRef<string[]>([]);
+  const [draftTextToPopulate, setDraftTextToPopulate] = useState<string | undefined>(undefined);
 
   // Prepare draft params for useMessages if in draft mode
   // Memoize to prevent recreating object on every render (would cause unnecessary effect runs)
@@ -335,13 +350,14 @@ export default function ChatScreen() {
       if (isGroupChat) {
         // For group chats, get sender info from participant profiles cache
         const senderProfile = participantProfiles.get(message.senderId);
-        senderDisplayName = senderProfile?.displayName || 'Unknown User';
+        // Use metadata.senderDisplayName as fallback for auto-responses
+        senderDisplayName = senderProfile?.displayName || message.metadata?.senderDisplayName || 'Unknown User';
         senderPhotoURL = senderProfile?.photoURL || null;
       } else {
         // For direct chats, use current user or other user info
         senderDisplayName = isOwnMessage
           ? user?.displayName || 'You'
-          : otherUser?.displayName || 'Unknown';
+          : otherUser?.displayName || message.metadata?.senderDisplayName || 'Unknown';
         senderPhotoURL = isOwnMessage ? user?.photoURL || null : otherUser?.photoURL || null;
       }
 
@@ -587,6 +603,180 @@ export default function ChatScreen() {
   };
 
   /**
+   * Generate draft for a specific message
+   * @param messageId - The message ID to generate a draft for
+   * @param openModal - Whether to open the modal after generation (default: false for auto-gen)
+   */
+  const handleGenerateDraft = useCallback(async (messageId: string, openModal: boolean = false) => {
+    if (!user?.uid || !conversationId || isGeneratingDraft) {
+      return;
+    }
+
+    setIsGeneratingDraft(true);
+    setDraftMessageId(messageId);
+
+    try {
+      const result = await voiceMatchingService.generateDraft(
+        conversationId,
+        messageId
+      );
+
+      if (result.success && result.draft) {
+        setActiveDraft(result.draft);
+        previousDrafts.current = [result.draft.text];
+        // Only open modal if explicitly requested (manual generation)
+        if (openModal) {
+          setShowDraftModal(true);
+        }
+      } else {
+        // Only show alert for manual generation
+        if (openModal) {
+          Alert.alert('Error', result.error || 'Failed to generate draft. Please try again.');
+        } else {
+          console.error('Draft generation failed:', result.error);
+        }
+      }
+    } catch (error) {
+      console.error('Error generating draft:', error);
+      // Only show alert for manual generation
+      if (openModal) {
+        Alert.alert('Error', 'Failed to generate draft. Please try again.');
+      }
+    } finally {
+      setIsGeneratingDraft(false);
+    }
+  }, [user?.uid, conversationId, isGeneratingDraft]);
+
+  /**
+   * Auto-generate draft for incoming messages (background, non-invasive)
+   * Only generates if user has autoShowSuggestions enabled
+   * Stores in activeDraft state without populating input field
+   */
+  useEffect(() => {
+    // Skip if conditions not met
+    if (
+      !conversationId ||
+      !user?.uid ||
+      !userProfile?.settings?.voiceMatching?.enabled ||
+      !userProfile?.settings?.voiceMatching?.autoShowSuggestions ||
+      messages.length === 0
+    ) {
+      return;
+    }
+
+    // Get the last message
+    const lastMessage = messages[0]; // messages are ordered desc by timestamp
+
+    // Only auto-generate for incoming messages (not from current user)
+    if (lastMessage.senderId === user.uid) {
+      return;
+    }
+
+    // Check if we already have a draft for this message
+    if (activeDraft?.messageId === lastMessage.id) {
+      return;
+    }
+
+    // Check if we're already generating
+    if (isGeneratingDraft) {
+      return;
+    }
+
+    // Auto-generate draft silently in background
+    handleGenerateDraft(lastMessage.id);
+  }, [
+    messages,
+    conversationId,
+    user?.uid,
+    userProfile?.settings?.voiceMatching?.enabled,
+    userProfile?.settings?.voiceMatching?.autoShowSuggestions,
+    activeDraft?.messageId,
+    isGeneratingDraft,
+    handleGenerateDraft,
+  ]);
+
+  /**
+   * Send draft as message
+   */
+  const handleSendDraft = useCallback(async (
+    text: string,
+    metadata: {
+      wasEdited: boolean;
+      editCount: number;
+      timeToEdit: number;
+      overrideApplied: boolean;
+    }
+  ) => {
+    if (!user?.uid || !conversationId || !draftMessageId) {
+      return;
+    }
+
+    try {
+      // Send the message using the existing sendMessage function
+      // TODO: Add metadata tracking to the message (Story 6.2 - Analytics)
+      // This will require extending the sendMessage function to accept metadata
+      await sendMessage(text);
+
+      // Clear draft state and close modal
+      setActiveDraft(null);
+      setDraftMessageId(null);
+      previousDrafts.current = [];
+      setShowDraftModal(false);
+    } catch (error) {
+      console.error('Error sending draft:', error);
+      throw error;
+    }
+  }, [user?.uid, conversationId, draftMessageId, activeDraft, sendMessage]);
+
+  /**
+   * Discard draft
+   */
+  const handleDiscardDraft = useCallback(() => {
+    setActiveDraft(null);
+    setDraftMessageId(null);
+    previousDrafts.current = [];
+    setShowDraftModal(false);
+  }, []);
+
+  /**
+   * Close draft modal
+   */
+  const handleCloseDraftModal = useCallback(() => {
+    setShowDraftModal(false);
+  }, []);
+
+  /**
+   * Regenerate draft (create new version)
+   */
+  const handleRegenerateDraft = useCallback(async () => {
+    if (!user?.uid || !conversationId || !draftMessageId || isRegeneratingDraft) {
+      return;
+    }
+
+    setIsRegeneratingDraft(true);
+
+    try {
+      const result = await voiceMatchingService.regenerateDraft(
+        conversationId,
+        draftMessageId,
+        previousDrafts.current
+      );
+
+      if (result.success && result.draft) {
+        setActiveDraft(result.draft);
+        previousDrafts.current.push(result.draft.text);
+      } else {
+        Alert.alert('Error', result.error || 'Failed to regenerate draft. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error regenerating draft:', error);
+      Alert.alert('Error', 'Failed to regenerate draft. Please try again.');
+    } finally {
+      setIsRegeneratingDraft(false);
+    }
+  }, [user?.uid, conversationId, draftMessageId, isRegeneratingDraft]);
+
+  /**
    * Scroll to and highlight target message (from search results)
    */
   useEffect(() => {
@@ -640,12 +830,112 @@ export default function ChatScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- flatListRef and highlightOpacity are stable refs
   }, [targetMessageId, chatItems]);
 
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: theme.colors.background,
+    },
+    loadingText: {
+      marginTop: 12,
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.textSecondary,
+    },
+    errorText: {
+      marginTop: 12,
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.error,
+      textAlign: 'center',
+      paddingHorizontal: 32,
+    },
+    retryButton: {
+      marginTop: 24,
+      paddingVertical: 12,
+      paddingHorizontal: 32,
+      backgroundColor: theme.colors.accent,
+      borderRadius: theme.borderRadius.md,
+    },
+    retryButtonText: {
+      color: '#FFFFFF',
+      fontSize: theme.typography.fontSize.base,
+      fontWeight: theme.typography.fontWeight.semibold,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: theme.spacing.base,
+      paddingVertical: 12,
+      backgroundColor: theme.colors.backgroundSecondary,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    headerName: {
+      fontSize: 18,
+      fontWeight: theme.typography.fontWeight.semibold,
+      color: theme.colors.textPrimary,
+    },
+    headerSubtext: {
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.textSecondary,
+      marginTop: 2,
+    },
+    offlineIndicator: {
+      fontSize: theme.typography.fontSize.xs,
+      color: theme.colors.warning || '#FF9500',
+      marginTop: 2,
+    },
+    emptyStateText: {
+      marginTop: theme.spacing.base,
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.textSecondary,
+      textAlign: 'center',
+    },
+    loadingMoreText: {
+      marginTop: theme.spacing.sm,
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.textSecondary,
+    },
+    endMessagesText: {
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.textTertiary,
+      fontStyle: 'italic',
+    },
+    menuContainer: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.borderRadius.xl,
+      minWidth: 250,
+      ...theme.shadows.lg,
+    },
+    menuItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: theme.spacing.base,
+      paddingHorizontal: theme.spacing.base,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    menuItemText: {
+      marginLeft: 12,
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.textPrimary,
+    },
+    menuItemTextMuted: {
+      color: theme.colors.textSecondary,
+    },
+  });
+
   // Show loading spinner while conversation data loads
   if (conversationLoading) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Loading conversation...</Text>
+      <SafeAreaView style={dynamicStyles.loadingContainer}>
+        <ActivityIndicator size="large" color={theme.colors.accent} />
+        <Text style={dynamicStyles.loadingText}>Loading conversation...</Text>
       </SafeAreaView>
     );
   }
@@ -653,11 +943,11 @@ export default function ChatScreen() {
   // Show error state if conversation failed to load
   if (!conversation) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <Ionicons name="alert-circle-outline" size={64} color="#FF3B30" />
-        <Text style={styles.errorText}>{conversationError || 'Unable to load conversation'}</Text>
+      <SafeAreaView style={dynamicStyles.loadingContainer}>
+        <Ionicons name="alert-circle-outline" size={64} color={theme.colors.error} />
+        <Text style={dynamicStyles.errorText}>{conversationError || 'Unable to load conversation'}</Text>
         <TouchableOpacity
-          style={styles.retryButton}
+          style={dynamicStyles.retryButton}
           onPress={() => {
             if (router.canGoBack()) {
               router.back();
@@ -666,18 +956,18 @@ export default function ChatScreen() {
             }
           }}
         >
-          <Text style={styles.retryButtonText}>Go Back</Text>
+          <Text style={dynamicStyles.retryButtonText}>Go Back</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={dynamicStyles.container} edges={['top', 'left', 'right']}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={dynamicStyles.header}>
         <TouchableOpacity onPress={handleGoBack} style={styles.backButton} testID="back-button">
-          <Ionicons name="chevron-back" size={28} color="#007AFF" />
+          <Ionicons name="chevron-back" size={28} color={theme.colors.accent} />
         </TouchableOpacity>
 
         <View style={styles.headerInfo}>
@@ -691,13 +981,13 @@ export default function ChatScreen() {
               />
               <View style={styles.headerTextContainer}>
                 <View style={styles.headerNameRow}>
-                  <Text style={styles.headerName}>{conversation.groupName || 'Group Chat'}</Text>
+                  <Text style={dynamicStyles.headerName}>{conversation.groupName || 'Group Chat'}</Text>
                 </View>
-                <Text style={styles.headerSubtext}>
+                <Text style={dynamicStyles.headerSubtext}>
                   {conversation.participantIds.length} participants
                 </Text>
                 {isOffline && (
-                  <Text style={styles.offlineIndicator}>
+                  <Text style={dynamicStyles.offlineIndicator}>
                     Offline - messages will send when connected
                   </Text>
                 )}
@@ -713,7 +1003,7 @@ export default function ChatScreen() {
               />
               <View style={styles.headerTextContainer}>
                 <View style={styles.headerNameRow}>
-                  <Text style={styles.headerName}>{otherUser.displayName}</Text>
+                  <Text style={dynamicStyles.headerName}>{otherUser.displayName}</Text>
                 </View>
                 <PresenceIndicator
                   userId={otherUser.uid}
@@ -722,7 +1012,7 @@ export default function ChatScreen() {
                   showStatusText={true}
                 />
                 {isOffline && (
-                  <Text style={styles.offlineIndicator}>
+                  <Text style={dynamicStyles.offlineIndicator}>
                     Offline - messages will send when connected
                   </Text>
                 )}
@@ -738,7 +1028,7 @@ export default function ChatScreen() {
             style={styles.iconButton}
             testID="search-toggle-button"
           >
-            <Ionicons name={showSearch ? 'close' : 'search'} size={24} color="#007AFF" />
+            <Ionicons name={showSearch ? 'close' : 'search'} size={24} color={theme.colors.accent} />
           </TouchableOpacity>
 
           {!isDraft && (
@@ -747,7 +1037,7 @@ export default function ChatScreen() {
               style={styles.iconButton}
               testID="menu-button"
             >
-              <Ionicons name="ellipsis-vertical" size={24} color="#007AFF" />
+              <Ionicons name="ellipsis-vertical" size={24} color={theme.colors.accent} />
             </TouchableOpacity>
           )}
         </View>
@@ -765,48 +1055,48 @@ export default function ChatScreen() {
           activeOpacity={1}
           onPress={() => setShowMenu(false)}
         >
-          <View style={styles.menuContainer}>
+          <View style={dynamicStyles.menuContainer}>
             {conversation.type === 'group' && (
               <TouchableOpacity
-                style={styles.menuItem}
+                style={dynamicStyles.menuItem}
                 onPress={() => {
                   setShowMenu(false);
                   router.push(`/(tabs)/conversations/group-settings?id=${conversationId}`);
                 }}
               >
-                <Ionicons name="information-circle-outline" size={22} color="#007AFF" />
-                <Text style={styles.menuItemText}>Group Info</Text>
+                <Ionicons name="information-circle-outline" size={22} color={theme.colors.accent} />
+                <Text style={dynamicStyles.menuItemText}>Group Info</Text>
               </TouchableOpacity>
             )}
             {conversation.type === 'direct' && (
               <TouchableOpacity
-                style={styles.menuItem}
+                style={dynamicStyles.menuItem}
                 onPress={() => {
                   setShowMenu(false);
                   setShowSettings(true);
                 }}
               >
-                <Ionicons name="settings-outline" size={22} color="#007AFF" />
-                <Text style={styles.menuItemText}>Conversation Settings</Text>
+                <Ionicons name="settings-outline" size={22} color={theme.colors.accent} />
+                <Text style={dynamicStyles.menuItemText}>Conversation Settings</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity style={styles.menuItem} onPress={handleMuteToggle}>
+            <TouchableOpacity style={dynamicStyles.menuItem} onPress={handleMuteToggle}>
               <Ionicons
                 name={isMuted ? 'notifications' : 'notifications-off'}
                 size={22}
-                color="#007AFF"
+                color={theme.colors.accent}
               />
-              <Text style={styles.menuItemText}>
+              <Text style={dynamicStyles.menuItemText}>
                 {isMuted ? 'Unmute Notifications' : 'Mute Notifications'}
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.menuItem, styles.menuItemLast]}
+              style={[dynamicStyles.menuItem, styles.menuItemLast]}
               onPress={() => setShowMenu(false)}
             >
-              <Ionicons name="close" size={22} color="#8E8E93" />
-              <Text style={[styles.menuItemText, styles.menuItemTextMuted]}>Cancel</Text>
+              <Ionicons name="close" size={22} color={theme.colors.textSecondary} />
+              <Text style={[dynamicStyles.menuItemText, dynamicStyles.menuItemTextMuted]}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -840,8 +1130,8 @@ export default function ChatScreen() {
       >
         {messagesLoading ? (
           <View style={styles.messagesLoadingContainer}>
-            <ActivityIndicator size="large" color="#007AFF" />
-            <Text style={styles.loadingText}>Loading messages...</Text>
+            <ActivityIndicator size="large" color={theme.colors.accent} />
+            <Text style={dynamicStyles.loadingText}>Loading messages...</Text>
           </View>
         ) : (
           <FlatList
@@ -878,12 +1168,12 @@ export default function ChatScreen() {
             ListHeaderComponent={
               isLoadingMore ? (
                 <View style={styles.loadingMoreContainer}>
-                  <ActivityIndicator size="small" color="#007AFF" />
-                  <Text style={styles.loadingMoreText}>Loading older messages...</Text>
+                  <ActivityIndicator size="small" color={theme.colors.accent} />
+                  <Text style={dynamicStyles.loadingMoreText}>Loading older messages...</Text>
                 </View>
               ) : !hasMore && messages.length > 0 ? (
                 <View style={styles.loadingMoreContainer}>
-                  <Text style={styles.endMessagesText}>No more messages</Text>
+                  <Text style={dynamicStyles.endMessagesText}>No more messages</Text>
                 </View>
               ) : null
             }
@@ -892,10 +1182,10 @@ export default function ChatScreen() {
               <View style={styles.emptyState}>
                 <Ionicons
                   name={isSearching ? 'search-outline' : 'chatbubbles-outline'}
-                  size={64}
-                  color="#C7C7CC"
+                  size={80}
+                  color={theme.colors.textTertiary}
                 />
-                <Text style={styles.emptyStateText}>
+                <Text style={dynamicStyles.emptyStateText}>
                   {isSearching ? 'No messages found' : 'No messages yet. Start the conversation!'}
                 </Text>
               </View>
@@ -906,62 +1196,54 @@ export default function ChatScreen() {
         {/* Typing Indicator - positioned above MessageInput */}
         {typingUsers.length > 0 && <TypingIndicator typingUsers={typingUsers} />}
 
+        {/* Response Draft Card Modal (Story 6.2) */}
+        {activeDraft && draftMessageId && (
+          <ResponseDraftCard
+            draft={activeDraft}
+            conversationId={conversationId || ''}
+            onSend={handleSendDraft}
+            onDiscard={handleDiscardDraft}
+            onPopulateInput={(text) => {
+              setDraftTextToPopulate(text);
+              // Reset after a brief delay to allow the effect to trigger
+              setTimeout(() => setDraftTextToPopulate(undefined), 100);
+            }}
+            onRegenerateDraft={handleRegenerateDraft}
+            isRegenerating={isRegeneratingDraft}
+            visible={showDraftModal}
+            onClose={handleCloseDraftModal}
+          />
+        )}
+
         {/* Message Input */}
         <MessageInput
           onSend={sendMessage}
           conversationId={conversationId || ''}
           userId={user?.uid || ''}
           disabled={!user}
+          onGenerateDraft={() => {
+            if (activeDraft) {
+              // Reopen the modal with existing draft (instant, no loading)
+              setShowDraftModal(true);
+            } else {
+              // Generate new draft for the most recent message from another user
+              const lastOtherUserMessage = messages.find(m => m.senderId !== user?.uid);
+              if (lastOtherUserMessage) {
+                handleGenerateDraft(lastOtherUserMessage.id, true); // Pass true to open modal after generation
+              }
+            }
+          }}
+          isGeneratingDraft={isGeneratingDraft}
+          canGenerateDraft={messages.length > 0}
+          draftText={draftTextToPopulate}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#8E8E93',
-  },
-  errorText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#FF3B30',
-    textAlign: 'center',
-    paddingHorizontal: 32,
-  },
-  retryButton: {
-    marginTop: 24,
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#F9F9F9',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
   backButton: {
     marginRight: 12,
   },
@@ -987,21 +1269,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  headerName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#000000',
-  },
-  headerSubtext: {
-    fontSize: 14,
-    color: '#8E8E93',
-    marginTop: 2,
-  },
-  offlineIndicator: {
-    fontSize: 12,
-    color: '#FF9500',
-    marginTop: 2,
-  },
   chatContainer: {
     flex: 1,
   },
@@ -1020,25 +1287,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 40,
   },
-  emptyStateText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#8E8E93',
-    textAlign: 'center',
-  },
   loadingMoreContainer: {
     paddingVertical: 12,
     alignItems: 'center',
-  },
-  loadingMoreText: {
-    marginTop: 8,
-    fontSize: 14,
-    color: '#8E8E93',
-  },
-  endMessagesText: {
-    fontSize: 14,
-    color: '#C7C7CC',
-    fontStyle: 'italic',
   },
   highlightContainer: {
     borderRadius: 8,
@@ -1051,33 +1302,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  menuContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    minWidth: 250,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
   menuItemLast: {
     borderBottomWidth: 0,
-  },
-  menuItemText: {
-    marginLeft: 12,
-    fontSize: 16,
-    color: '#000000',
-  },
-  menuItemTextMuted: {
-    color: '#8E8E93',
   },
 });

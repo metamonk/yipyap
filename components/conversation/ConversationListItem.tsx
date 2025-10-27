@@ -7,7 +7,7 @@
  */
 
 import React, { FC, memo, useRef, useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, AccessibilityInfo } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, AccessibilityInfo, Animated } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/common/Avatar';
@@ -17,6 +17,7 @@ import { PresenceIndicator } from '@/components/PresenceIndicator';
 import { SentimentBadge } from '@/components/conversation/SentimentBadge';
 import { OpportunityBadge } from '@/components/conversation/OpportunityBadge';
 import { formatRelativeTime } from '@/utils/dateHelpers';
+import { useTheme } from '@/contexts/ThemeContext';
 import { collection, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { getFirebaseDb } from '@/services/firebase';
 import type { Conversation } from '@/types/models';
@@ -114,14 +115,18 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
     onLongPress,
     onToggleSelect,
   }) => {
+    const { theme } = useTheme();
     const { id, type, lastMessage, lastMessageTimestamp, unreadCount, mutedBy, sentimentStats } = conversation;
     const swipeableRef = useRef<Swipeable>(null);
+
+    // Robinhood-style press animation
+    const scaleAnim = useRef(new Animated.Value(1)).current;
 
     // State for opportunity score (Story 5.6)
     const [opportunityScore, setOpportunityScore] = useState<number>(0);
 
     // Get unread count for current user
-    const userUnreadCount = unreadCount[currentUserId] || 0;
+    const userUnreadCount = unreadCount?.[currentUserId] || 0;
 
     // Check if conversation is muted by current user
     const isMuted = mutedBy?.[currentUserId] === true;
@@ -174,9 +179,9 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
     // Truncate last message to 50 characters
     const MAX_PREVIEW_LENGTH = 50;
     const messagePreview =
-      lastMessage.text.length > MAX_PREVIEW_LENGTH
+      lastMessage?.text && lastMessage.text.length > MAX_PREVIEW_LENGTH
         ? `${lastMessage.text.substring(0, MAX_PREVIEW_LENGTH)}...`
-        : lastMessage.text;
+        : lastMessage?.text || '';
 
     // Format timestamp
     const timeAgo = formatRelativeTime(lastMessageTimestamp);
@@ -188,6 +193,25 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
       } else {
         onPress(id);
       }
+    };
+
+    // Robinhood-style press animation handlers
+    const handlePressIn = () => {
+      Animated.spring(scaleAnim, {
+        toValue: 0.98,
+        useNativeDriver: true,
+        damping: theme.animation.spring.damping,
+        stiffness: theme.animation.spring.stiffness,
+      }).start();
+    };
+
+    const handlePressOut = () => {
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        damping: theme.animation.spring.damping,
+        stiffness: theme.animation.spring.stiffness,
+      }).start();
     };
 
     const handleArchive = () => {
@@ -211,7 +235,7 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
         <View style={styles.actionsContainer}>
           {onArchive && (
             <TouchableOpacity
-              style={styles.archiveAction}
+              style={dynamicStyles.archiveAction}
               onPress={handleArchive}
               activeOpacity={0.7}
               testID={isArchived ? 'unarchive-button' : 'archive-button'}
@@ -226,7 +250,7 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
           )}
           {onDelete && (
             <TouchableOpacity
-              style={styles.deleteAction}
+              style={dynamicStyles.deleteAction}
               onPress={handleDelete}
               activeOpacity={0.7}
               testID="delete-button"
@@ -239,31 +263,88 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
       );
     };
 
+    // Dynamic styles based on theme
+    const dynamicStyles = StyleSheet.create({
+      container: {
+        flexDirection: 'row',
+        padding: theme.spacing.base,
+        marginHorizontal: theme.spacing.md,
+        marginVertical: theme.spacing.xs,
+        borderRadius: theme.borderRadius.lg,
+        backgroundColor: theme.colors.surface,
+        ...theme.shadows.sm, // Robinhood-style subtle shadow
+      },
+      selectedContainer: {
+        backgroundColor: theme.colors.accentSubtle,
+        borderWidth: 1,
+        borderColor: theme.colors.accent,
+      },
+      crisisContainer: {
+        backgroundColor: theme.colors.error + '10', // 10% opacity
+        borderLeftWidth: 3,
+        borderLeftColor: theme.colors.error,
+      },
+      name: {
+        fontSize: theme.typography.fontSize.md,
+        fontWeight: theme.typography.fontWeight.bold, // Robinhood uses bold names
+        color: theme.colors.textPrimary,
+        flexShrink: 1,
+      },
+      timestamp: {
+        fontSize: theme.typography.fontSize.xs,
+        color: theme.colors.textTertiary,
+        fontWeight: theme.typography.fontWeight.medium,
+      },
+      preview: {
+        flex: 1,
+        fontSize: theme.typography.fontSize.sm,
+        color: theme.colors.textSecondary,
+        marginRight: theme.spacing.sm,
+      },
+      archiveAction: {
+        backgroundColor: theme.colors.accent, // Green instead of blue
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: 80,
+        height: '100%',
+      },
+      deleteAction: {
+        backgroundColor: theme.colors.error,
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: 80,
+        height: '100%',
+      },
+    });
+
     const conversationItem = (
-      <TouchableOpacity
-        style={[
-          styles.container,
-          isSelected && styles.selectedContainer,
-          hasCrisis && styles.crisisContainer,
-        ]}
-        onPress={handlePress}
-        onLongPress={onLongPress}
-        delayLongPress={500}
-        testID="conversation-item"
-        activeOpacity={0.7}
-        accessibilityLabel={
-          hasCrisis
-            ? `Crisis detected. Conversation with ${otherParticipantName}`
-            : `Conversation with ${otherParticipantName}`
-        }
-      >
+      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+        <TouchableOpacity
+          style={[
+            dynamicStyles.container,
+            isSelected && dynamicStyles.selectedContainer,
+            hasCrisis && dynamicStyles.crisisContainer,
+          ]}
+          onPress={handlePress}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          onLongPress={onLongPress}
+          delayLongPress={500}
+          testID="conversation-item"
+          activeOpacity={1} // Let animation handle feedback
+          accessibilityLabel={
+            hasCrisis
+              ? `Crisis detected. Conversation with ${otherParticipantName}`
+              : `Conversation with ${otherParticipantName}`
+          }
+        >
         {/* Checkbox (Story 4.7) - shown in selection mode */}
         {isSelectionMode && (
           <View style={styles.checkboxContainer}>
             <Ionicons
               name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
               size={24}
-              color={isSelected ? '#007AFF' : '#999'}
+              color={isSelected ? theme.colors.accent : theme.colors.textTertiary}
             />
           </View>
         )}
@@ -290,14 +371,14 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
           {/* Top row: name, mute icon, sentiment badge, opportunity badge, and timestamp */}
           <View style={styles.topRow}>
             <View style={styles.nameContainer}>
-              <Text style={styles.name} numberOfLines={1}>
+              <Text style={dynamicStyles.name} numberOfLines={1}>
                 {otherParticipantName}
               </Text>
               {isMuted && (
                 <Ionicons
                   name="notifications-off-outline"
                   size={16}
-                  color="#8E8E93"
+                  color={theme.colors.textSecondary}
                   style={styles.muteIcon}
                 />
               )}
@@ -317,12 +398,12 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
                 </View>
               )}
             </View>
-            <Text style={styles.timestamp}>{timeAgo}</Text>
+            <Text style={dynamicStyles.timestamp}>{timeAgo}</Text>
           </View>
 
           {/* Bottom row: message preview and badge */}
           <View style={styles.bottomRow}>
-            <Text style={styles.preview} numberOfLines={1}>
+            <Text style={dynamicStyles.preview} numberOfLines={1}>
               {type === 'group' && conversation.participantIds
                 ? `${conversation.participantIds.length} members • ${messagePreview}`
                 : messagePreview}
@@ -335,6 +416,7 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
           </View>
         </View>
       </TouchableOpacity>
+    </Animated.View>
     );
 
     // If onArchive or onDelete is provided, wrap in Swipeable
@@ -357,22 +439,8 @@ export const ConversationListItem: FC<ConversationListItemProps> = memo(
 
 ConversationListItem.displayName = 'ConversationListItem';
 
+// Static styles (layout only - colors/sizing use theme via dynamicStyles)
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
-    backgroundColor: '#FFFFFF',
-  },
-  selectedContainer: {
-    backgroundColor: '#E3F2FD',
-  },
-  crisisContainer: {
-    backgroundColor: '#FFEBEE', // Light red background for crisis (WCAG AA compliant)
-    borderLeftWidth: 4,
-    borderLeftColor: '#EF4444', // Red accent border for crisis
-  },
   checkboxContainer: {
     justifyContent: 'center',
     marginRight: 12,
@@ -402,12 +470,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 8,
   },
-  name: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000000',
-    flexShrink: 1,
-  },
   muteIcon: {
     marginLeft: 6,
   },
@@ -417,20 +479,10 @@ const styles = StyleSheet.create({
   opportunityBadgeContainer: {
     marginLeft: 6,
   },
-  timestamp: {
-    fontSize: 12,
-    color: '#8E8E93',
-  },
   bottomRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  preview: {
-    flex: 1,
-    fontSize: 14,
-    color: '#8E8E93',
-    marginRight: 8,
   },
   badgeContainer: {
     marginLeft: 8,
@@ -438,25 +490,11 @@ const styles = StyleSheet.create({
   actionsContainer: {
     flexDirection: 'row',
   },
-  archiveAction: {
-    backgroundColor: '#007AFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 80,
-    height: '100%',
-  },
   archiveText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '600',
     marginTop: 4,
-  },
-  deleteAction: {
-    backgroundColor: '#FF3B30',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 80,
-    height: '100%',
   },
   deleteText: {
     color: '#FFFFFF',

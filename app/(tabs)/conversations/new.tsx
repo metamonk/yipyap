@@ -26,6 +26,7 @@ import { UserSearchDropdown } from '@/components/conversation/UserSearchDropdown
 import { ContactPickerModal } from '@/components/conversation/ContactPickerModal';
 import { GroupNameInput } from '@/components/conversation/GroupNameInput';
 import { GroupPhotoUpload } from '@/components/conversation/GroupPhotoUpload';
+import { useTheme } from '@/contexts/ThemeContext';
 import { userCacheService } from '@/services/userCacheService';
 import {
   createConversationWithFirstMessage,
@@ -57,6 +58,7 @@ import type { User } from '@/types/user';
 function NewConversationScreenContent() {
   // Get current authenticated user
   const { user } = useAuth();
+  const { theme } = useTheme();
   const currentUserId = user?.uid;
 
   // Use global conversation creation context
@@ -317,9 +319,56 @@ function NewConversationScreenContent() {
   // Selected user IDs for filtering
   const selectedUserIds = recipients.map((r) => r.uid);
 
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    messageLabel: {
+      fontSize: theme.typography.fontSize.xs,
+      fontWeight: theme.typography.fontWeight.semibold,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.sm,
+    },
+    messageInputContainer: {
+      flex: 1,
+      backgroundColor: theme.colors.backgroundSecondary,
+      borderRadius: theme.borderRadius.md,
+      padding: theme.spacing.md,
+      minHeight: 120,
+    },
+    messageInput: {
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.textPrimary,
+      lineHeight: 22,
+    },
+    messageHelp: {
+      fontSize: theme.typography.fontSize.xs,
+      color: theme.colors.textSecondary,
+      marginTop: theme.spacing.sm,
+      textAlign: 'center',
+    },
+    loadingOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    loadingText: {
+      color: '#FFFFFF',
+      fontSize: theme.typography.fontSize.base,
+      marginTop: theme.spacing.md,
+    },
+  });
+
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={dynamicStyles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
@@ -404,12 +453,12 @@ function NewConversationScreenContent() {
 
         {/* Message Input Area */}
         <View style={styles.messageContainer}>
-          <Text style={styles.messageLabel}>FIRST MESSAGE</Text>
-          <View style={styles.messageInputContainer}>
+          <Text style={dynamicStyles.messageLabel}>FIRST MESSAGE</Text>
+          <View style={dynamicStyles.messageInputContainer}>
             <TextInput
-              style={styles.messageInput}
+              style={dynamicStyles.messageInput}
               placeholder="Type your message..."
-              placeholderTextColor="#C7C7CC"
+              placeholderTextColor={theme.colors.textTertiary}
               value={messageText}
               onChangeText={handleMessageChange}
               multiline={true}
@@ -419,7 +468,7 @@ function NewConversationScreenContent() {
               testID="message-input"
             />
           </View>
-          <Text style={styles.messageHelp}>
+          <Text style={dynamicStyles.messageHelp}>
             {recipients.length === 0
               ? 'Add recipients above, then type your first message'
               : isGroupConversation
@@ -441,20 +490,17 @@ function NewConversationScreenContent() {
 
       {/* Creating Overlay */}
       {isCreating && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Creating conversation...</Text>
+        <View style={dynamicStyles.loadingOverlay}>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={dynamicStyles.loadingText}>Creating conversation...</Text>
         </View>
       )}
     </KeyboardAvoidingView>
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
   scrollContainer: {
     flex: 1,
   },
@@ -465,45 +511,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingTop: 16,
-  },
-  messageLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#8E8E93',
-    marginBottom: 8,
-  },
-  messageInputContainer: {
-    flex: 1,
-    backgroundColor: '#F2F2F7',
-    borderRadius: 10,
-    padding: 12,
-    minHeight: 120,
-  },
-  messageInput: {
-    fontSize: 16,
-    color: '#000000',
-    lineHeight: 22,
-  },
-  messageHelp: {
-    fontSize: 12,
-    color: '#8E8E93',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    marginTop: 12,
   },
 });
 

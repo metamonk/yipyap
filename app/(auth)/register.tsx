@@ -17,16 +17,17 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
   ActivityIndicator,
   Alert,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/contexts/ThemeContext';
+import { Button } from '@/components/common/Button';
+import { Input } from '@/components/common/Input';
 import { validatePassword, isValidEmail } from '@/services/authService';
 import { PasswordValidation } from '@/types/auth';
 
@@ -35,6 +36,7 @@ import { PasswordValidation } from '@/types/auth';
  */
 const RegisterScreen = memo(function RegisterScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
   const { user, isLoading, signUpWithEmailPassword, error, clearError } = useAuth();
 
   // Form state
@@ -42,8 +44,6 @@ const RegisterScreen = memo(function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [passwordValidation, setPasswordValidation] = useState<PasswordValidation>({
     isValid: false,
@@ -135,97 +135,145 @@ const RegisterScreen = memo(function RegisterScreen() {
     !passwordValidation.isValid ||
     password !== confirmPassword;
 
+  // Get confirm password error
+  const confirmPasswordError =
+    password && confirmPassword && password !== confirmPassword ? 'Passwords do not match' : undefined;
+
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    title: {
+      fontSize: theme.typography.fontSize['3xl'],
+      fontWeight: theme.typography.fontWeight.bold,
+      color: theme.colors.textPrimary,
+      textAlign: 'center',
+      marginBottom: theme.spacing.md,
+    },
+    subtitle: {
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.textSecondary,
+      textAlign: 'center',
+      marginBottom: theme.spacing['3xl'],
+    },
+    requirementText: {
+      fontSize: theme.typography.fontSize.xs,
+      color: theme.colors.textTertiary,
+      marginBottom: theme.spacing.xs,
+    },
+    requirementMet: {
+      color: theme.colors.success,
+      fontWeight: theme.typography.fontWeight.medium,
+    },
+    dividerText: {
+      marginHorizontal: theme.spacing.base,
+      color: theme.colors.textTertiary,
+      fontSize: theme.typography.fontSize.sm,
+    },
+    signInText: {
+      color: theme.colors.textSecondary,
+      fontSize: theme.typography.fontSize.sm,
+      textAlign: 'center',
+    },
+    signInLink: {
+      color: theme.colors.accent,
+      fontWeight: theme.typography.fontWeight.bold,
+    },
+    loadingOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: theme.colors.overlay,
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: theme.spacing.base,
+    },
+    loadingText: {
+      color: theme.colors.textInverse,
+      fontSize: theme.typography.fontSize.base,
+      fontWeight: theme.typography.fontWeight.medium,
+    },
+  });
+
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={dynamicStyles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.formContainer}>
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Join yipyap today</Text>
+          <Text style={dynamicStyles.title}>Create Account</Text>
+          <Text style={dynamicStyles.subtitle}>Join yipyap today</Text>
 
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder="Display Name (optional)"
-              placeholderTextColor="#999"
-              value={displayName}
-              onChangeText={setDisplayName}
-              autoCapitalize="words"
-              autoCorrect={false}
-              textContentType="name"
-              editable={!formLoading}
-            />
-          </View>
+          <Input
+            label="Display Name (optional)"
+            value={displayName}
+            onChangeText={setDisplayName}
+            placeholder="Your name"
+            autoCapitalize="words"
+            autoCorrect={false}
+            textContentType="name"
+            disabled={formLoading}
+          />
 
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor="#999"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              editable={!formLoading}
-            />
-          </View>
+          <Input
+            label="Email"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="your@email.com"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            textContentType="emailAddress"
+            disabled={formLoading}
+          />
 
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="#999"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-              autoCorrect={false}
-              textContentType="newPassword"
-              editable={!formLoading}
-            />
-            <Pressable
-              style={styles.passwordToggle}
-              onPress={() => setShowPassword(!showPassword)}
-              disabled={formLoading}
-            >
-              <Text style={styles.passwordToggleText}>{showPassword ? 'Hide' : 'Show'}</Text>
-            </Pressable>
-          </View>
+          <Input
+            label="Password"
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Create a password"
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            textContentType="newPassword"
+            disabled={formLoading}
+          />
 
           {password && (
             <View style={styles.passwordRequirements}>
               <Text
                 style={[
-                  styles.requirementText,
-                  passwordValidation.hasMinLength && styles.requirementMet,
+                  dynamicStyles.requirementText,
+                  passwordValidation.hasMinLength && dynamicStyles.requirementMet,
                 ]}
               >
                 {passwordValidation.hasMinLength ? '✓' : '○'} 8+ characters
               </Text>
               <Text
                 style={[
-                  styles.requirementText,
-                  passwordValidation.hasUpperCase && styles.requirementMet,
+                  dynamicStyles.requirementText,
+                  passwordValidation.hasUpperCase && dynamicStyles.requirementMet,
                 ]}
               >
                 {passwordValidation.hasUpperCase ? '✓' : '○'} Uppercase letter
               </Text>
               <Text
                 style={[
-                  styles.requirementText,
-                  passwordValidation.hasLowerCase && styles.requirementMet,
+                  dynamicStyles.requirementText,
+                  passwordValidation.hasLowerCase && dynamicStyles.requirementMet,
                 ]}
               >
                 {passwordValidation.hasLowerCase ? '✓' : '○'} Lowercase letter
               </Text>
               <Text
                 style={[
-                  styles.requirementText,
-                  passwordValidation.hasNumber && styles.requirementMet,
+                  dynamicStyles.requirementText,
+                  passwordValidation.hasNumber && dynamicStyles.requirementMet,
                 ]}
               >
                 {passwordValidation.hasNumber ? '✓' : '○'} Number
@@ -233,65 +281,57 @@ const RegisterScreen = memo(function RegisterScreen() {
             </View>
           )}
 
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={[
-                styles.input,
-                password && confirmPassword && password !== confirmPassword && styles.inputError,
-              ]}
-              placeholder="Confirm Password"
-              placeholderTextColor="#999"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry={!showConfirmPassword}
-              autoCapitalize="none"
-              autoCorrect={false}
-              textContentType="newPassword"
-              editable={!formLoading}
-            />
-            <Pressable
-              style={styles.passwordToggle}
-              onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-              disabled={formLoading}
-            >
-              <Text style={styles.passwordToggleText}>{showConfirmPassword ? 'Hide' : 'Show'}</Text>
-            </Pressable>
-          </View>
+          <Input
+            label="Confirm Password"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            placeholder="Re-enter your password"
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            textContentType="newPassword"
+            disabled={formLoading}
+            error={confirmPasswordError}
+          />
 
-          {password && confirmPassword && password !== confirmPassword && (
-            <Text style={styles.errorText}>Passwords do not match</Text>
-          )}
-
-          <Pressable
-            style={[styles.registerButton, isButtonDisabled && styles.buttonDisabled]}
+          <Button
+            variant="primary"
+            size="lg"
+            fullWidth
             onPress={handleRegister}
             disabled={isButtonDisabled}
+            loading={formLoading}
           >
-            {formLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.registerButtonText}>Create Account</Text>
-            )}
-          </Pressable>
+            Create Account
+          </Button>
 
           <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
-            <View style={styles.dividerLine} />
+            <View style={[styles.dividerLine, { backgroundColor: theme.colors.divider }]} />
+            <Text style={dynamicStyles.dividerText}>OR</Text>
+            <View style={[styles.dividerLine, { backgroundColor: theme.colors.divider }]} />
           </View>
 
-          <Pressable style={styles.signInButton} onPress={handleSignIn} disabled={formLoading}>
-            <Text style={styles.signInText}>
-              Already have an account? <Text style={styles.signInLink}>Sign In</Text>
+          <View style={{ alignItems: 'center' }}>
+            <Text style={dynamicStyles.signInText}>
+              Already have an account?
             </Text>
-          </Pressable>
+            <Button
+              variant="ghost"
+              size="md"
+              onPress={handleSignIn}
+              disabled={formLoading}
+              style={{ marginTop: theme.spacing.sm }}
+            >
+              Sign In
+            </Button>
+          </View>
         </View>
       </ScrollView>
 
       {isLoading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#4285F4" />
-          <Text style={styles.loadingText}>Creating account...</Text>
+        <View style={dynamicStyles.loadingOverlay}>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={dynamicStyles.loadingText}>Creating account...</Text>
         </View>
       )}
     </KeyboardAvoidingView>
@@ -300,11 +340,8 @@ const RegisterScreen = memo(function RegisterScreen() {
 
 export default RegisterScreen;
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
@@ -313,83 +350,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     paddingVertical: 48,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 48,
-  },
-  inputContainer: {
-    marginBottom: 16,
-    position: 'relative',
-  },
-  input: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 8,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    color: '#333',
-  },
-  inputError: {
-    borderColor: '#f44336',
-  },
-  passwordToggle: {
-    position: 'absolute',
-    right: 16,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
-  },
-  passwordToggleText: {
-    color: '#4285F4',
-    fontSize: 14,
-    fontWeight: '600',
-  },
   passwordRequirements: {
     marginBottom: 16,
     paddingHorizontal: 8,
-  },
-  requirementText: {
-    fontSize: 12,
-    color: '#999',
-    marginBottom: 4,
-  },
-  requirementMet: {
-    color: '#4CAF50',
-    fontWeight: '500',
-  },
-  errorText: {
-    color: '#f44336',
-    fontSize: 12,
-    marginTop: -12,
-    marginBottom: 16,
-    paddingHorizontal: 8,
-  },
-  registerButton: {
-    backgroundColor: '#4285F4',
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  registerButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
   divider: {
     flexDirection: 'row',
@@ -399,38 +362,5 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#ddd',
-  },
-  dividerText: {
-    marginHorizontal: 16,
-    color: '#999',
-    fontSize: 14,
-  },
-  signInButton: {
-    alignItems: 'center',
-  },
-  signInText: {
-    color: '#666',
-    fontSize: 14,
-  },
-  signInLink: {
-    color: '#4285F4',
-    fontWeight: '600',
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16,
-  },
-  loadingText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '500',
   },
 });

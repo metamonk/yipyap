@@ -24,6 +24,7 @@ import {
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { NavigationHeader } from '../../_components/NavigationHeader';
+import { useTheme } from '@/contexts/ThemeContext';
 import { getFirebaseAuth } from '@/services/firebase';
 import { getUserProfile, updateUserProfile } from '@/services/userService';
 import { uploadProfilePhoto } from '@/services/storageService';
@@ -36,6 +37,7 @@ import { useUserStore } from '@/stores/userStore';
  */
 export default function ProfileEditScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
   const auth = getFirebaseAuth();
   const currentUser = auth.currentUser;
   const { updateCurrentUser } = useUserStore();
@@ -234,18 +236,108 @@ export default function ProfileEditScreen() {
     photoUri !== undefined ||
     sendReadReceipts !== (originalProfile?.settings?.sendReadReceipts ?? true);
 
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    centerContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: theme.colors.background,
+    },
+    photoPlaceholder: {
+      width: '100%',
+      height: '100%',
+      backgroundColor: theme.colors.accent,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    label: {
+      fontSize: theme.typography.fontSize.base,
+      fontWeight: theme.typography.fontWeight.semibold,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.sm,
+    },
+    required: {
+      color: theme.colors.error,
+    },
+    input: {
+      height: 48,
+      borderWidth: 1,
+      borderColor: theme.colors.borderLight,
+      borderRadius: theme.borderRadius.md,
+      paddingHorizontal: theme.spacing.base,
+      fontSize: theme.typography.fontSize.base,
+      backgroundColor: theme.colors.surface,
+      color: theme.colors.textPrimary,
+    },
+    inputError: {
+      borderColor: theme.colors.error,
+    },
+    readOnlyInput: {
+      height: 48,
+      borderWidth: 1,
+      borderColor: theme.colors.borderLight,
+      borderRadius: theme.borderRadius.md,
+      paddingHorizontal: theme.spacing.base,
+      justifyContent: 'center',
+      backgroundColor: theme.colors.backgroundSecondary,
+    },
+    readOnlyText: {
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.textSecondary,
+    },
+    hint: {
+      fontSize: theme.typography.fontSize.xs,
+      color: theme.colors.textSecondary,
+      marginTop: 4,
+    },
+    errorText: {
+      fontSize: theme.typography.fontSize.xs,
+      color: theme.colors.error,
+      marginTop: 4,
+    },
+    settingsSection: {
+      paddingHorizontal: theme.spacing.xl,
+      paddingTop: theme.spacing['2xl'],
+      marginTop: theme.spacing.xl,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.borderLight,
+    },
+    sectionHeader: {
+      fontSize: 18,
+      fontWeight: theme.typography.fontWeight.semibold,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.base,
+    },
+    settingLabel: {
+      fontSize: theme.typography.fontSize.base,
+      fontWeight: theme.typography.fontWeight.medium,
+      color: theme.colors.textPrimary,
+      marginBottom: 4,
+    },
+    settingHint: {
+      fontSize: theme.typography.fontSize.xs,
+      color: theme.colors.textSecondary,
+      lineHeight: 18,
+    },
+  });
+
   if (isLoading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+      <View style={dynamicStyles.centerContainer}>
+        <ActivityIndicator size="large" color={theme.colors.accent} />
       </View>
     );
   }
 
   if (!originalProfile) {
     return (
-      <View style={styles.centerContainer}>
-        <Text style={styles.errorText}>Profile not found</Text>
+      <View style={dynamicStyles.centerContainer}>
+        <Text style={dynamicStyles.errorText}>Profile not found</Text>
       </View>
     );
   }
@@ -253,7 +345,7 @@ export default function ProfileEditScreen() {
   const displayPhotoUri = photoUri || currentPhotoURL;
 
   return (
-    <View style={styles.container}>
+    <View style={dynamicStyles.container}>
       <NavigationHeader
         title="Edit Profile"
         variant="modal"
@@ -293,7 +385,7 @@ export default function ProfileEditScreen() {
                 {displayPhotoUri ? (
                   <Image source={{ uri: displayPhotoUri }} style={styles.photoImage} />
                 ) : (
-                  <View style={styles.photoPlaceholder}>
+                  <View style={dynamicStyles.photoPlaceholder}>
                     <Text style={styles.photoPlaceholderText}>
                       {originalProfile.displayName.charAt(0).toUpperCase()}
                     </Text>
@@ -307,21 +399,22 @@ export default function ProfileEditScreen() {
 
             {/* Username (Read-Only) */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Username</Text>
-              <View style={styles.readOnlyInput}>
-                <Text style={styles.readOnlyText}>@{originalProfile.username}</Text>
+              <Text style={dynamicStyles.label}>Username</Text>
+              <View style={dynamicStyles.readOnlyInput}>
+                <Text style={dynamicStyles.readOnlyText}>@{originalProfile.username}</Text>
               </View>
-              <Text style={styles.hint}>Username cannot be changed</Text>
+              <Text style={dynamicStyles.hint}>Username cannot be changed</Text>
             </View>
 
             {/* Display Name Input */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                Display Name <Text style={styles.required}>*</Text>
+              <Text style={dynamicStyles.label}>
+                Display Name <Text style={dynamicStyles.required}>*</Text>
               </Text>
               <TextInput
-                style={[styles.input, displayNameError && styles.inputError]}
+                style={[dynamicStyles.input, displayNameError && dynamicStyles.inputError]}
                 placeholder="Enter display name"
+                placeholderTextColor={theme.colors.textTertiary}
                 value={displayName}
                 onChangeText={(text) => {
                   setDisplayName(text);
@@ -331,36 +424,36 @@ export default function ProfileEditScreen() {
                 editable={!isSaving}
                 maxLength={50}
               />
-              {displayNameError && <Text style={styles.errorText}>{displayNameError}</Text>}
+              {displayNameError && <Text style={dynamicStyles.errorText}>{displayNameError}</Text>}
             </View>
 
             {/* Email (Read-Only) */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
-              <View style={styles.readOnlyInput}>
-                <Text style={styles.readOnlyText}>{originalProfile.email}</Text>
+              <Text style={dynamicStyles.label}>Email</Text>
+              <View style={dynamicStyles.readOnlyInput}>
+                <Text style={dynamicStyles.readOnlyText}>{originalProfile.email}</Text>
               </View>
             </View>
 
             {/* Privacy Settings Section */}
-            <View style={styles.settingsSection}>
-              <Text style={styles.sectionHeader}>Privacy</Text>
+            <View style={dynamicStyles.settingsSection}>
+              <Text style={dynamicStyles.sectionHeader}>Privacy</Text>
 
               {/* Read Receipts Toggle */}
               <View style={styles.settingRow}>
                 <View style={styles.settingTextContainer}>
-                  <Text style={styles.settingLabel}>Send Read Receipts</Text>
-                  <Text style={styles.settingHint}>
-                    When disabled, others won&apos;t see when you&apos;ve read their messages
+                  <Text style={dynamicStyles.settingLabel}>Send Read Receipts</Text>
+                  <Text style={dynamicStyles.settingHint}>
+                    When disabled, others won't see when you've read their messages
                   </Text>
                 </View>
                 <Switch
                   value={sendReadReceipts}
                   onValueChange={setSendReadReceipts}
                   disabled={isSaving}
-                  trackColor={{ false: '#E5E5E5', true: '#34C759' }}
+                  trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
                   thumbColor="#FFFFFF"
-                  ios_backgroundColor="#E5E5E5"
+                  ios_backgroundColor={theme.colors.borderLight}
                   testID="read-receipts-toggle"
                 />
               </View>
@@ -372,19 +465,10 @@ export default function ProfileEditScreen() {
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
   keyboardContainer: {
     flex: 1,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
   },
   scrollContent: {
     flexGrow: 1,
@@ -407,13 +491,6 @@ const styles = StyleSheet.create({
   photoImage: {
     width: '100%',
     height: '100%',
-  },
-  photoPlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#007AFF',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   photoPlaceholderText: {
     fontSize: 48,
@@ -438,63 +515,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     marginBottom: 24,
   },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000000',
-    marginBottom: 8,
-  },
-  required: {
-    color: '#FF3B30',
-  },
-  input: {
-    height: 48,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    backgroundColor: '#FFFFFF',
-  },
-  inputError: {
-    borderColor: '#FF3B30',
-  },
-  readOnlyInput: {
-    height: 48,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    justifyContent: 'center',
-    backgroundColor: '#F5F5F5',
-  },
-  readOnlyText: {
-    fontSize: 16,
-    color: '#666666',
-  },
-  hint: {
-    fontSize: 12,
-    color: '#999999',
-    marginTop: 4,
-  },
-  errorText: {
-    fontSize: 12,
-    color: '#FF3B30',
-    marginTop: 4,
-  },
-  settingsSection: {
-    paddingHorizontal: 24,
-    paddingTop: 32,
-    marginTop: 24,
-    borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
-  },
-  sectionHeader: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#000000',
-    marginBottom: 16,
-  },
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -504,16 +524,5 @@ const styles = StyleSheet.create({
   settingTextContainer: {
     flex: 1,
     marginRight: 16,
-  },
-  settingLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#000000',
-    marginBottom: 4,
-  },
-  settingHint: {
-    fontSize: 13,
-    color: '#666666',
-    lineHeight: 18,
   },
 });

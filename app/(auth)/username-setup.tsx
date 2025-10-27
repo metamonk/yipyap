@@ -21,7 +21,10 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/contexts/ThemeContext';
+import { Button } from '@/components/common/Button';
 import { getFirebaseAuth } from '@/services/firebase';
 import { createUserProfile, checkUsernameAvailability } from '@/services/userService';
 import { uploadProfilePhoto } from '@/services/storageService';
@@ -38,6 +41,7 @@ import { validateUsername, validateDisplayName, UserProfileFormData } from '@/ty
  */
 export default function UsernameSetup() {
   const router = useRouter();
+  const { theme } = useTheme();
   const { refreshProfile } = useAuth();
   const auth = getFirebaseAuth();
   const currentUser = auth.currentUser;
@@ -205,15 +209,114 @@ export default function UsernameSetup() {
     !isCheckingUsername &&
     !isSubmitting;
 
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    content: {
+      flex: 1,
+      padding: theme.spacing.xl,
+      paddingTop: 60,
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: theme.typography.fontWeight.bold,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.sm,
+    },
+    subtitle: {
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.xl,
+    },
+    photoPlaceholder: {
+      width: '100%',
+      height: '100%',
+      backgroundColor: theme.colors.backgroundSecondary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: theme.colors.borderLight,
+      borderStyle: 'dashed',
+    },
+    photoPlaceholderText: {
+      fontSize: 48,
+      color: theme.colors.textTertiary,
+      marginBottom: theme.spacing.sm,
+    },
+    photoLabel: {
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.textSecondary,
+    },
+    changePhotoText: {
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.accent,
+      fontWeight: theme.typography.fontWeight.semibold,
+    },
+    label: {
+      fontSize: theme.typography.fontSize.base,
+      fontWeight: theme.typography.fontWeight.semibold,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.sm,
+    },
+    required: {
+      color: theme.colors.error,
+    },
+    input: {
+      height: 48,
+      borderWidth: 1,
+      borderColor: theme.colors.borderLight,
+      borderRadius: theme.borderRadius.md,
+      paddingHorizontal: theme.spacing.base,
+      fontSize: theme.typography.fontSize.base,
+      backgroundColor: theme.colors.surface,
+      color: theme.colors.textPrimary,
+    },
+    inputError: {
+      borderColor: theme.colors.error,
+    },
+    inputSuccess: {
+      borderColor: theme.colors.success || '#34C759',
+    },
+    checkmark: {
+      position: 'absolute',
+      right: 16,
+      top: 10,
+      fontSize: 24,
+      color: theme.colors.success || '#34C759',
+    },
+    hint: {
+      fontSize: theme.typography.fontSize.xs,
+      color: theme.colors.textSecondary,
+      marginTop: theme.spacing.xs,
+    },
+    errorText: {
+      fontSize: theme.typography.fontSize.xs,
+      color: theme.colors.error,
+      marginTop: theme.spacing.xs,
+    },
+  });
+
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={dynamicStyles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <View style={styles.content}>
-          <Text style={styles.title}>Complete Your Profile</Text>
-          <Text style={styles.subtitle}>Set up your username and profile information</Text>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={dynamicStyles.content}>
+          {/* Icon for visual appeal - Robinhood style */}
+          <View style={styles.iconContainer}>
+            <Ionicons name="person-circle-outline" size={64} color={theme.colors.accent} />
+          </View>
+
+          <Text style={dynamicStyles.title}>Complete Your Profile</Text>
+          <Text style={dynamicStyles.subtitle}>Set up your username and profile information</Text>
 
           {/* Profile Photo */}
           <View style={styles.photoSection}>
@@ -225,9 +328,9 @@ export default function UsernameSetup() {
               {photoUri ? (
                 <Image source={{ uri: photoUri }} style={styles.photoImage} />
               ) : (
-                <View style={styles.photoPlaceholder}>
-                  <Text style={styles.photoPlaceholderText}>+</Text>
-                  <Text style={styles.photoLabel}>Add Photo</Text>
+                <View style={dynamicStyles.photoPlaceholder}>
+                  <Text style={dynamicStyles.photoPlaceholderText}>+</Text>
+                  <Text style={dynamicStyles.photoLabel}>Add Photo</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -237,24 +340,25 @@ export default function UsernameSetup() {
                 onPress={handlePickImage}
                 disabled={isSubmitting}
               >
-                <Text style={styles.changePhotoText}>Change Photo</Text>
+                <Text style={dynamicStyles.changePhotoText}>Change Photo</Text>
               </TouchableOpacity>
             )}
           </View>
 
           {/* Username Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>
-              Username <Text style={styles.required}>*</Text>
+            <Text style={dynamicStyles.label}>
+              Username <Text style={dynamicStyles.required}>*</Text>
             </Text>
             <View style={styles.inputWrapper}>
               <TextInput
                 style={[
-                  styles.input,
-                  usernameError && styles.inputError,
-                  isUsernameAvailable && styles.inputSuccess,
+                  dynamicStyles.input,
+                  usernameError && dynamicStyles.inputError,
+                  isUsernameAvailable && dynamicStyles.inputSuccess,
                 ]}
                 placeholder="Enter username"
+                placeholderTextColor={theme.colors.textTertiary}
                 value={username}
                 onChangeText={(text) => setUsername(text.toLowerCase())}
                 autoCapitalize="none"
@@ -263,76 +367,60 @@ export default function UsernameSetup() {
                 maxLength={20}
               />
               {isCheckingUsername && (
-                <ActivityIndicator size="small" color="#007AFF" style={styles.inputIcon} />
+                <ActivityIndicator size="small" color={theme.colors.accent} style={styles.inputIcon} />
               )}
               {!isCheckingUsername && isUsernameAvailable && (
-                <Text style={styles.checkmark}>✓</Text>
+                <Text style={dynamicStyles.checkmark}>✓</Text>
               )}
             </View>
-            <Text style={styles.hint}>
+            <Text style={dynamicStyles.hint}>
               3-20 characters, lowercase letters, numbers, and underscores
             </Text>
-            {usernameError && <Text style={styles.errorText}>{usernameError}</Text>}
+            {usernameError && <Text style={dynamicStyles.errorText}>{usernameError}</Text>}
           </View>
 
           {/* Display Name Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>
-              Display Name <Text style={styles.required}>*</Text>
+            <Text style={dynamicStyles.label}>
+              Display Name <Text style={dynamicStyles.required}>*</Text>
             </Text>
             <TextInput
-              style={[styles.input, displayNameError && styles.inputError]}
+              style={[dynamicStyles.input, displayNameError && dynamicStyles.inputError]}
               placeholder="Enter display name"
+              placeholderTextColor={theme.colors.textTertiary}
               value={displayName}
               onChangeText={setDisplayName}
               autoCapitalize="words"
               editable={!isSubmitting}
               maxLength={50}
             />
-            {displayNameError && <Text style={styles.errorText}>{displayNameError}</Text>}
+            {displayNameError && <Text style={dynamicStyles.errorText}>{displayNameError}</Text>}
           </View>
 
-          {/* Submit Button */}
-          <TouchableOpacity
-            style={[styles.submitButton, !canSubmit && styles.submitButtonDisabled]}
+          {/* Submit Button - Using Button component */}
+          <Button
+            variant="primary"
             onPress={handleSubmit}
             disabled={!canSubmit}
+            loading={isSubmitting}
+            style={styles.submitButton}
           >
-            {isSubmitting ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Text style={styles.submitButtonText}>Complete Profile</Text>
-            )}
-          </TouchableOpacity>
+            Complete Profile
+          </Button>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
   scrollContent: {
     flexGrow: 1,
   },
-  content: {
-    flex: 1,
-    padding: 24,
-    paddingTop: 60,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#000000',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666666',
-    marginBottom: 32,
+  iconContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
   },
   photoSection: {
     alignItems: 'center',
@@ -348,99 +436,21 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  photoPlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#F0F0F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#E0E0E0',
-    borderStyle: 'dashed',
-  },
-  photoPlaceholderText: {
-    fontSize: 48,
-    color: '#CCCCCC',
-    marginBottom: 8,
-  },
-  photoLabel: {
-    fontSize: 14,
-    color: '#999999',
-  },
   changePhotoButton: {
     marginTop: 12,
-  },
-  changePhotoText: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '600',
   },
   inputGroup: {
     marginBottom: 24,
   },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000000',
-    marginBottom: 8,
-  },
-  required: {
-    color: '#FF3B30',
-  },
   inputWrapper: {
     position: 'relative',
-  },
-  input: {
-    height: 48,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    backgroundColor: '#FFFFFF',
-  },
-  inputError: {
-    borderColor: '#FF3B30',
-  },
-  inputSuccess: {
-    borderColor: '#34C759',
   },
   inputIcon: {
     position: 'absolute',
     right: 16,
     top: 12,
   },
-  checkmark: {
-    position: 'absolute',
-    right: 16,
-    top: 10,
-    fontSize: 24,
-    color: '#34C759',
-  },
-  hint: {
-    fontSize: 12,
-    color: '#999999',
-    marginTop: 4,
-  },
-  errorText: {
-    fontSize: 12,
-    color: '#FF3B30',
-    marginTop: 4,
-  },
   submitButton: {
-    height: 48,
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginTop: 16,
-  },
-  submitButtonDisabled: {
-    backgroundColor: '#CCCCCC',
-  },
-  submitButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
   },
 });

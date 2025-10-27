@@ -21,6 +21,7 @@ import {
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/contexts/ThemeContext';
 import { Avatar } from '@/components/common/Avatar';
 import { RecipientChip } from '@/components/conversation/RecipientChip';
 import { getAllUsers } from '@/services/userService';
@@ -65,6 +66,7 @@ export const AddParticipantsModal: React.FC<AddParticipantsModalProps> = ({
   conversation,
   onParticipantsAdded,
 }) => {
+  const { theme } = useTheme();
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
@@ -189,6 +191,73 @@ export const AddParticipantsModal: React.FC<AddParticipantsModalProps> = ({
     }
   };
 
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      backgroundColor: theme.colors.background,
+    },
+    header: {
+      backgroundColor: theme.colors.surface,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    cancelButtonText: {
+      color: theme.colors.accent,
+    },
+    headerTitle: {
+      color: theme.colors.textPrimary,
+    },
+    addButtonText: {
+      color: theme.colors.accent,
+    },
+    addButtonTextDisabled: {
+      color: theme.colors.textTertiary,
+    },
+    groupInfo: {
+      backgroundColor: theme.colors.surface,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    groupName: {
+      color: theme.colors.textPrimary,
+    },
+    memberCount: {
+      color: theme.colors.textSecondary,
+    },
+    selectedContainer: {
+      backgroundColor: theme.colors.surface,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    selectedLabel: {
+      color: theme.colors.textSecondary,
+    },
+    searchContainer: {
+      backgroundColor: theme.colors.surface,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    searchInput: {
+      color: theme.colors.textPrimary,
+    },
+    userItem: {
+      backgroundColor: theme.colors.surface,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    userName: {
+      color: theme.colors.textPrimary,
+    },
+    userUsername: {
+      color: theme.colors.textSecondary,
+    },
+    checkbox: {
+      borderColor: theme.colors.borderLight,
+    },
+    checkboxSelected: {
+      backgroundColor: theme.colors.accent,
+      borderColor: theme.colors.accent,
+    },
+    emptyText: {
+      color: theme.colors.textSecondary,
+    },
+  });
+
   /**
    * Render user item
    */
@@ -197,16 +266,16 @@ export const AddParticipantsModal: React.FC<AddParticipantsModalProps> = ({
 
     return (
       <TouchableOpacity
-        style={styles.userItem}
+        style={[styles.userItem, dynamicStyles.userItem]}
         onPress={() => handleSelectUser(item)}
         disabled={!isSelected && !canAddMore}
       >
         <Avatar photoURL={item.photoURL || null} displayName={item.displayName} size={40} />
         <View style={styles.userInfo}>
-          <Text style={styles.userName}>{item.displayName}</Text>
-          {item.username && <Text style={styles.userUsername}>@{item.username}</Text>}
+          <Text style={[styles.userName, dynamicStyles.userName]}>{item.displayName}</Text>
+          {item.username && <Text style={[styles.userUsername, dynamicStyles.userUsername]}>@{item.username}</Text>}
         </View>
-        <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+        <View style={[styles.checkbox, dynamicStyles.checkbox, isSelected && dynamicStyles.checkboxSelected]}>
           {isSelected && <Ionicons name="checkmark" size={18} color="#FFF" />}
         </View>
       </TouchableOpacity>
@@ -220,25 +289,26 @@ export const AddParticipantsModal: React.FC<AddParticipantsModalProps> = ({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, dynamicStyles.container]}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, dynamicStyles.header]}>
           <TouchableOpacity onPress={onClose} style={styles.cancelButton}>
-            <Text style={styles.cancelButtonText}>Cancel</Text>
+            <Text style={[styles.cancelButtonText, dynamicStyles.cancelButtonText]}>Cancel</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Add Members</Text>
+          <Text style={[styles.headerTitle, dynamicStyles.headerTitle]}>Add Members</Text>
           <TouchableOpacity
             onPress={handleAdd}
             disabled={selectedUsers.length === 0 || saving}
             style={styles.addButton}
           >
             {saving ? (
-              <ActivityIndicator size="small" color="#007AFF" />
+              <ActivityIndicator size="small" color={theme.colors.accent} />
             ) : (
               <Text
                 style={[
                   styles.addButtonText,
-                  selectedUsers.length === 0 && styles.addButtonTextDisabled,
+                  dynamicStyles.addButtonText,
+                  selectedUsers.length === 0 && dynamicStyles.addButtonTextDisabled,
                 ]}
               >
                 Add
@@ -248,17 +318,20 @@ export const AddParticipantsModal: React.FC<AddParticipantsModalProps> = ({
         </View>
 
         {/* Group Info */}
-        <View style={styles.groupInfo}>
-          <Text style={styles.groupName}>{conversation.groupName}</Text>
-          <Text style={styles.memberCount}>
+        <View style={[styles.groupInfo, dynamicStyles.groupInfo]}>
+          <View style={styles.groupIconContainer}>
+            <Ionicons name="people" size={20} color={theme.colors.accent} />
+            <Text style={[styles.groupName, dynamicStyles.groupName]}>{conversation.groupName}</Text>
+          </View>
+          <Text style={[styles.memberCount, dynamicStyles.memberCount]}>
             {currentCount} of {GROUP_SIZE_LIMIT} members • {remainingSlots} slots available
           </Text>
         </View>
 
         {/* Selected Users */}
         {selectedUsers.length > 0 && (
-          <View style={styles.selectedContainer}>
-            <Text style={styles.selectedLabel}>Selected ({selectedUsers.length})</Text>
+          <View style={[styles.selectedContainer, dynamicStyles.selectedContainer]}>
+            <Text style={[styles.selectedLabel, dynamicStyles.selectedLabel]}>SELECTED ({selectedUsers.length})</Text>
             <View style={styles.chipsContainer}>
               {selectedUsers.map((user) => (
                 <RecipientChip key={user.uid} user={user} onRemove={handleRemoveUser} index={0} />
@@ -268,12 +341,12 @@ export const AddParticipantsModal: React.FC<AddParticipantsModalProps> = ({
         )}
 
         {/* Search Input */}
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="#8E8E93" style={styles.searchIcon} />
+        <View style={[styles.searchContainer, dynamicStyles.searchContainer]}>
+          <Ionicons name="search" size={20} color={theme.colors.textSecondary} style={styles.searchIcon} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, dynamicStyles.searchInput]}
             placeholder="Search users..."
-            placeholderTextColor="#8E8E93"
+            placeholderTextColor={theme.colors.textTertiary}
             value={searchQuery}
             onChangeText={setSearchQuery}
             autoCapitalize="none"
@@ -281,7 +354,7 @@ export const AddParticipantsModal: React.FC<AddParticipantsModalProps> = ({
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
-              <Ionicons name="close-circle" size={20} color="#8E8E93" />
+              <Ionicons name="close-circle" size={20} color={theme.colors.textSecondary} />
             </TouchableOpacity>
           )}
         </View>
@@ -289,12 +362,12 @@ export const AddParticipantsModal: React.FC<AddParticipantsModalProps> = ({
         {/* User List */}
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#007AFF" />
+            <ActivityIndicator size="large" color={theme.colors.accent} />
           </View>
         ) : filteredUsers.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Ionicons name="people-outline" size={64} color="#C7C7CC" />
-            <Text style={styles.emptyText}>
+            <Ionicons name="people-outline" size={64} color={theme.colors.textTertiary} />
+            <Text style={[styles.emptyText, dynamicStyles.emptyText]}>
               {searchQuery ? 'No users found' : 'No users available to add'}
             </Text>
           </View>
@@ -302,7 +375,7 @@ export const AddParticipantsModal: React.FC<AddParticipantsModalProps> = ({
           <FlatList
             data={filteredUsers}
             renderItem={renderUserItem}
-            keyExtractor={(item) => item.uid}
+            keyExtractor={(item, index) => item.uid || `user-${index}`}
             contentContainerStyle={styles.listContent}
             keyboardShouldPersistTaps="handled"
           />
@@ -312,73 +385,68 @@ export const AddParticipantsModal: React.FC<AddParticipantsModalProps> = ({
   );
 };
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   cancelButton: {
     paddingVertical: 4,
+    minWidth: 60,
   },
   cancelButtonText: {
-    fontSize: 16,
-    color: '#007AFF',
+    fontSize: 17,
+    fontWeight: '400',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#000',
   },
   addButton: {
     paddingVertical: 4,
+    minWidth: 60,
+    alignItems: 'flex-end',
   },
   addButtonText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#007AFF',
-  },
-  addButtonTextDisabled: {
-    color: '#C7C7CC',
   },
   groupInfo: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  groupIconContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
   },
   groupName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#000',
-    marginBottom: 4,
   },
   memberCount: {
-    fontSize: 14,
-    color: '#8E8E93',
+    fontSize: 15,
   },
   selectedContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   selectedLabel: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#8E8E93',
-    marginBottom: 8,
+    letterSpacing: 0.5,
+    marginBottom: 12,
   },
   chipsContainer: {
     flexDirection: 'row',
@@ -388,19 +456,16 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   searchIcon: {
     marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
-    color: '#000',
+    fontSize: 17,
     paddingVertical: 8,
   },
   clearButton: {
@@ -412,24 +477,20 @@ const styles = StyleSheet.create({
   userItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 12,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F2F2F7',
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   userInfo: {
     flex: 1,
     marginLeft: 12,
   },
   userName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#000',
   },
   userUsername: {
-    fontSize: 14,
-    color: '#8E8E93',
+    fontSize: 15,
     marginTop: 2,
   },
   checkbox: {
@@ -437,13 +498,8 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#C7C7CC',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  checkboxSelected: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
   },
   loadingContainer: {
     flex: 1,
@@ -457,8 +513,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   emptyText: {
-    fontSize: 16,
-    color: '#8E8E93',
+    fontSize: 17,
     marginTop: 16,
     textAlign: 'center',
   },

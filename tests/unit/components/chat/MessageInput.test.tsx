@@ -20,10 +20,7 @@ jest.mock('@/services/voiceMatchingService', () => ({
   },
 }));
 
-// Mock ResponseSuggestions component
-jest.mock('@/components/chat/ResponseSuggestions', () => ({
-  ResponseSuggestions: 'ResponseSuggestions',
-}));
+// ResponseSuggestions removed in Story 6.7 - replaced with draft-first approach
 
 // Mock useAuth hook
 const mockUserProfile = {
@@ -321,139 +318,95 @@ describe('MessageInput', () => {
     });
   });
 
-  describe('AI Response Suggestions Integration (Story 5.5 - Task 9)', () => {
-    it('renders ResponseSuggestions when new incoming message detected', async () => {
-      const { queryByTestId } = render(<MessageInput {...defaultProps} />);
+  // Story 6.7: AI Response Suggestions Integration tests removed
+  // ResponseSuggestions component was deprecated in Epic 5 and replaced with
+  // draft-first approach (Story 6.2). AI suggestions are now loaded directly
+  // into the input field as editable text, no approval UI needed.
 
-      // Simulate incoming message via Firestore snapshot
-      const mockSnapshot = {
-        empty: false,
-        docs: [
-          {
-            id: 'msg456',
-            data: () => ({
-              senderId: 'other-user',
-              text: 'Hello!',
-              timestamp: { toMillis: () => Date.now() },
-            }),
-          },
-        ],
-      };
+  describe('AI Draft Button', () => {
+    it('does not show draft button when canGenerateDraft is false', () => {
+      const { queryByTestId } = render(
+        <MessageInput {...defaultProps} canGenerateDraft={false} />
+      );
 
-      // Trigger the snapshot callback
-      await waitFor(() => {
-        if (mockOnSnapshotCallback) {
-          mockOnSnapshotCallback(mockSnapshot);
-        }
-      });
-
-      // ResponseSuggestions component should be rendered
-      await waitFor(() => {
-        const suggestions = queryByTestId('response-suggestions-container');
-        expect(suggestions).toBeTruthy();
-      });
+      const draftButton = queryByTestId('generate-draft-button');
+      expect(draftButton).toBeNull();
     });
 
-    it('does not show suggestions for own messages', async () => {
-      const { queryByTestId } = render(<MessageInput {...defaultProps} />);
+    it('shows draft button when canGenerateDraft is true', () => {
+      const { getByTestId } = render(
+        <MessageInput {...defaultProps} canGenerateDraft={true} />
+      );
 
-      // Simulate own message via Firestore snapshot
-      const mockSnapshot = {
-        empty: false,
-        docs: [
-          {
-            id: 'msg456',
-            data: () => ({
-              senderId: 'user123', // Same as userId prop
-              text: 'My message',
-              timestamp: { toMillis: () => Date.now() },
-            }),
-          },
-        ],
-      };
-
-      // Trigger the snapshot callback
-      if (mockOnSnapshotCallback) {
-        mockOnSnapshotCallback(mockSnapshot);
-      }
-
-      // Wait a bit to ensure no suggestions are shown
-      await waitFor(() => {
-        const suggestions = queryByTestId('response-suggestions-container');
-        expect(suggestions).toBeFalsy();
-      });
+      const draftButton = getByTestId('generate-draft-button');
+      expect(draftButton).toBeTruthy();
     });
 
-    it('hides suggestions when user starts typing manually (AC: IV1)', async () => {
-      const { getByTestId, queryByTestId } = render(<MessageInput {...defaultProps} />);
+    it('calls onGenerateDraft when draft button is pressed', () => {
+      const mockOnGenerateDraft = jest.fn();
+      const { getByTestId } = render(
+        <MessageInput
+          {...defaultProps}
+          canGenerateDraft={true}
+          onGenerateDraft={mockOnGenerateDraft}
+        />
+      );
 
-      // First, trigger suggestions by simulating incoming message
-      const mockSnapshot = {
-        empty: false,
-        docs: [
-          {
-            id: 'msg456',
-            data: () => ({
-              senderId: 'other-user',
-              text: 'Hello!',
-              timestamp: { toMillis: () => Date.now() },
-            }),
-          },
-        ],
-      };
+      const draftButton = getByTestId('generate-draft-button');
+      fireEvent.press(draftButton);
 
-      if (mockOnSnapshotCallback) {
-        mockOnSnapshotCallback(mockSnapshot);
-      }
-
-      // Wait for suggestions to appear
-      await waitFor(() => {
-        expect(queryByTestId('response-suggestions-container')).toBeTruthy();
-      });
-
-      // Now user starts typing
-      const input = getByTestId('message-input');
-      fireEvent.changeText(input, 'My manual response');
-
-      // Suggestions should be hidden
-      await waitFor(() => {
-        expect(queryByTestId('response-suggestions-container')).toBeFalsy();
-      });
+      expect(mockOnGenerateDraft).toHaveBeenCalledTimes(1);
     });
 
-    // Note: The following tests verify that callbacks are wired correctly.
-    // The ResponseSuggestions component itself is tested separately in ResponseSuggestions.test.tsx
-    // These tests just verify MessageInput integrates properly with feedback tracking.
+    it('shows loading indicator when isGeneratingDraft is true', () => {
+      const { getByTestId } = render(
+        <MessageInput
+          {...defaultProps}
+          canGenerateDraft={true}
+          isGeneratingDraft={true}
+        />
+      );
 
-    it('provides correct props to ResponseSuggestions component', async () => {
-      const { queryByTestId } = render(<MessageInput {...defaultProps} />);
+      const draftButton = getByTestId('generate-draft-button');
+      expect(draftButton).toBeTruthy();
+      // The ActivityIndicator should be rendered
+      expect(draftButton.props.accessibilityState.disabled).toBe(true);
+    });
 
-      // Trigger suggestions by simulating incoming message
-      const mockSnapshot = {
-        empty: false,
-        docs: [
-          {
-            id: 'msg456',
-            data: () => ({
-              senderId: 'other-user',
-              text: 'Hello!',
-              timestamp: { toMillis: () => Date.now() },
-            }),
-          },
-        ],
-      };
+    it('disables draft button when isGeneratingDraft is true', () => {
+      const mockOnGenerateDraft = jest.fn();
+      const { getByTestId } = render(
+        <MessageInput
+          {...defaultProps}
+          canGenerateDraft={true}
+          isGeneratingDraft={true}
+          onGenerateDraft={mockOnGenerateDraft}
+        />
+      );
 
-      if (mockOnSnapshotCallback) {
-        mockOnSnapshotCallback(mockSnapshot);
-      }
+      const draftButton = getByTestId('generate-draft-button');
+      fireEvent.press(draftButton);
 
-      // Wait for suggestions to appear
-      await waitFor(() => {
-        expect(queryByTestId('response-suggestions-container')).toBeTruthy();
-      });
+      // Should not call the callback when disabled
+      expect(mockOnGenerateDraft).not.toHaveBeenCalled();
+    });
 
-      // Verify the component is rendered
-      expect(queryByTestId('response-suggestions-container')).toBeTruthy();
+    it('disables draft button when component is disabled', () => {
+      const mockOnGenerateDraft = jest.fn();
+      const { getByTestId } = render(
+        <MessageInput
+          {...defaultProps}
+          disabled={true}
+          canGenerateDraft={true}
+          onGenerateDraft={mockOnGenerateDraft}
+        />
+      );
+
+      const draftButton = getByTestId('generate-draft-button');
+      fireEvent.press(draftButton);
+
+      // Should not call the callback when disabled
+      expect(mockOnGenerateDraft).not.toHaveBeenCalled();
     });
   });
 });

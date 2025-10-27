@@ -25,6 +25,7 @@ import { OfflineBanner } from '@/components/common/OfflineBanner';
 import { SyncBanner } from '@/components/common/SyncBanner';
 import { NotificationBanner } from '@/components/common/NotificationBanner';
 import { refreshConversations } from '@/services/conversationService';
+import { ThemeProvider } from '@/contexts/ThemeContext';
 
 // Initialize Firebase before React renders
 // This is safe because initializeFirebase checks if it's already initialized
@@ -119,22 +120,24 @@ export default function RootLayout() {
   }, [user?.uid]);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <OfflineBanner isOffline={!connected} />
-      <SyncBanner isSyncing={isSyncing} />
-      <Stack>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      </Stack>
-      <NotificationBanner
-        notification={lastNotification}
-        onPress={() => {
-          // Navigation handled by notification hook
-          clearLastNotification();
-        }}
-        onClose={clearLastNotification}
-      />
-    </GestureHandlerRootView>
+    <ThemeProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <OfflineBanner isOffline={!connected} />
+        <SyncBanner isSyncing={isSyncing} />
+        <Stack>
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        </Stack>
+        <NotificationBanner
+          notification={lastNotification}
+          onPress={() => {
+            // Navigation handled by notification hook
+            clearLastNotification();
+          }}
+          onClose={clearLastNotification}
+        />
+      </GestureHandlerRootView>
+    </ThemeProvider>
   );
 }

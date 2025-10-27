@@ -14,7 +14,10 @@ import {
   RefreshControl,
   StyleSheet,
   ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/contexts/ThemeContext';
 import { OpportunityCard } from './OpportunityCard';
 import type { Message } from '@/types/models';
 
@@ -36,6 +39,12 @@ interface OpportunityFeedProps {
 
   /** Set of opportunity IDs that should be animated (Story 5.6 - Task 13.4) */
   newOpportunityIds?: Set<string>;
+
+  /** Preview mode - show only top 3 items (default: true) */
+  previewMode?: boolean;
+
+  /** Callback when "View All" is pressed (only in preview mode) */
+  onViewAll?: () => void;
 }
 
 /**
@@ -56,8 +65,27 @@ export function OpportunityFeed({
   loading = false,
   emptyMessage = 'No business opportunities yet',
   newOpportunityIds = new Set(),
+  previewMode = true,
+  onViewAll,
 }: OpportunityFeedProps) {
+  const { theme } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
+
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    loadingText: {
+      color: theme.colors.textSecondary,
+    },
+    emptyText: {
+      color: theme.colors.textPrimary,
+    },
+    emptySubtext: {
+      color: theme.colors.textSecondary,
+    },
+    viewAllText: {
+      color: theme.colors.accent,
+    },
+  });
 
   const handleRefresh = useCallback(async () => {
     if (!onRefresh) return;
@@ -76,8 +104,8 @@ export function OpportunityFeed({
   if (loading && opportunities.length === 0) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
-        <Text style={styles.loadingText}>Loading opportunities...</Text>
+        <ActivityIndicator size="large" color={theme.colors.accent} />
+        <Text style={[styles.loadingText, dynamicStyles.loadingText]}>Loading opportunities...</Text>
       </View>
     );
   }
@@ -87,15 +115,41 @@ export function OpportunityFeed({
     return (
       <View style={styles.centerContainer}>
         <Text style={styles.emptyIcon}>📊</Text>
-        <Text style={styles.emptyText}>{emptyMessage}</Text>
-        <Text style={styles.emptySubtext}>
+        <Text style={[styles.emptyText, dynamicStyles.emptyText]}>{emptyMessage}</Text>
+        <Text style={[styles.emptySubtext, dynamicStyles.emptySubtext]}>
           New business opportunities will appear here when detected
         </Text>
       </View>
     );
   }
 
-  return (
+  // Get preview or full list
+  const displayOpportunities = previewMode ? opportunities.slice(0, 3) : opportunities;
+  const hasMore = opportunities.length > 3;
+
+  return previewMode ? (
+    <View style={styles.previewContainer}>
+      {/* Preview List (no scrolling) */}
+      {displayOpportunities.map((item) => (
+        <OpportunityCard key={item.id} message={item} animated={newOpportunityIds.has(item.id)} />
+      ))}
+
+      {/* View All Button */}
+      {hasMore && onViewAll && (
+        <TouchableOpacity
+          style={styles.viewAllButton}
+          onPress={onViewAll}
+          accessibilityRole="button"
+          accessibilityLabel={`View all ${opportunities.length} opportunities`}
+        >
+          <Text style={[styles.viewAllText, dynamicStyles.viewAllText]}>
+            View All {opportunities.length} Opportunities
+          </Text>
+          <Ionicons name="arrow-forward" size={16} color={theme.colors.accent} />
+        </TouchableOpacity>
+      )}
+    </View>
+  ) : (
     <FlatList
       data={opportunities}
       keyExtractor={(item) => item.id}
@@ -108,8 +162,8 @@ export function OpportunityFeed({
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#3B82F6"
-            colors={['#3B82F6']}
+            tintColor={theme.colors.accent}
+            colors={[theme.colors.accent]}
           />
         ) : undefined
       }
@@ -123,6 +177,7 @@ export function OpportunityFeed({
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
   listContent: {
     padding: 16,
@@ -134,8 +189,7 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   loadingText: {
-    fontSize: 16,
-    color: '#6B7280',
+    fontSize: 14,
     marginTop: 12,
   },
   emptyIcon: {
@@ -145,14 +199,29 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#374151',
     marginBottom: 8,
     textAlign: 'center',
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#9CA3AF',
     textAlign: 'center',
     maxWidth: 280,
+  },
+
+  // Preview mode styles
+  previewContainer: {
+    padding: 16,
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 8,
+    marginTop: 8,
+  },
+  viewAllText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

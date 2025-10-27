@@ -33,8 +33,9 @@ This is the **DEFINITIVE technology selection** for the entire yipyap project. A
 
 | Category          | Technology                    | Version | Purpose                         | Rationale                                                            |
 | ----------------- | ----------------------------- | ------- | ------------------------------- | -------------------------------------------------------------------- |
-| Edge Functions    | Vercel Edge Functions         | latest  | Low-latency AI processing       | Global edge network, <100ms cold starts, WebAssembly support         |
-| AI SDK            | Vercel AI SDK                 | latest  | Unified AI provider interface   | Provider abstraction, streaming responses, built-in token management |
+| AI SDK            | OpenAI SDK                    | ^6.7.0  | Direct OpenAI API integration   | Official SDK, all AI features (Stories 6.8-6.11)                     |
+| ~AI SDK (Legacy)~ | ~Vercel AI SDK~               | N/A     | ~~Unified AI provider~~         | **Removed (Oct 2025, Story 6.11)** - Replaced with OpenAI SDK       |
+| ~Edge Functions~  | ~Vercel Edge Functions~       | N/A     | ~~FAQ detection endpoint~~      | **Removed (Oct 2025, Story 6.10)** - Migrated to Cloud Functions    |
 | Quality LLM       | OpenAI GPT-4 Turbo            | latest  | Advanced text generation        | Best-in-class performance for complex tasks, JSON mode support       |
 | Speed/Cost LLM    | OpenAI GPT-4o-mini            | latest  | Fast, cost-effective processing | Rapid categorization, competitive pricing at $0.15/$0.60 per 1M tokens |
 | Embeddings        | OpenAI text-embedding-3-small | latest  | Semantic search & similarity    | Efficient vector representations for FAQ matching                    |
@@ -44,12 +45,27 @@ This is the **DEFINITIVE technology selection** for the entire yipyap project. A
 | Queue Service     | Firebase Cloud Tasks          | latest  | Async AI job processing         | Reliable task execution for batch operations                         |
 | AI Data Storage   | Firestore + Cloud Storage     | latest  | AI metadata and training data   | Consistent with Phase 1 stack, supports large training datasets      |
 | Rate Limiting     | Upstash Redis                 | latest  | API rate limiting for AI        | Serverless Redis for distributed rate limiting                       |
-| Secret Management | Vercel Environment Variables  | latest  | API key management              | Secure storage for AI provider keys, per-environment configs         |
+| Secret Management | Firebase Functions Config     | latest  | API key management              | Secure storage for AI provider keys                                  |
 
 ### AI Provider Selection Strategy
 
 **Note**: yipyap uses an OpenAI-only approach for simplicity and competitive pricing. Multi-provider support can be added later if needed.
 
+**Architecture (Stories 6.8-6.11 - Oct 2025):**
+- **All AI Features**: Use OpenAI SDK directly in Firebase Cloud Functions
+  - Daily Agent Workflow (Story 6.8):
+    - Categorization: GPT-4o-mini via direct SDK call
+    - Sentiment analysis: GPT-4o-mini via direct SDK call
+    - Opportunity scoring: GPT-4 Turbo via direct SDK call
+  - Voice Training/Matching (Story 6.9):
+    - Voice profile generation: GPT-4 Turbo via direct SDK call
+    - Response suggestions: GPT-4 Turbo via direct SDK call
+  - FAQ Detection (Story 6.10):
+    - FAQ embeddings: OpenAI Embeddings via direct SDK call
+    - Vector search: Pinecone client in Cloud Functions
+- **Benefits**: No HTTP overhead, simplified architecture, single SDK dependency
+
+**Model Usage:**
 - **Real-time categorization**: GPT-4o-mini (speed priority, $0.15/$0.60 per 1M tokens)
 - **Response generation**: GPT-4 Turbo (quality priority, $10.00/$30.00 per 1M tokens)
 - **FAQ matching**: OpenAI Embeddings + Pinecone (semantic search)

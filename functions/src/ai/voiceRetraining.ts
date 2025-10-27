@@ -1,17 +1,22 @@
 /**
- * Scheduled Voice Profile Retraining Cloud Function (Story 5.5)
+ * Scheduled Voice Profile Retraining Cloud Function (Story 5.5, migrated to OpenAI SDK in Story 6.9)
  * @module functions/src/ai/voiceRetraining
  *
  * @remarks
  * Automatically retrains voice profiles on a weekly schedule to keep them
  * up-to-date as creators' communication styles evolve over time.
  * Runs every Monday at 2 AM UTC via Cloud Scheduler.
+ * Uses direct OpenAI SDK calls for voice analysis via GPT-4 Turbo.
+ *
+ * **Migration Notes (Story 6.9):**
+ * - Migrated from Vercel AI SDK to official OpenAI SDK
+ * - All prompts and parsing logic remain identical
+ * - Output parity maintained with original implementation
  */
 
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
-import { openai } from '@ai-sdk/openai';
-import { generateText } from 'ai';
+import OpenAI from 'openai';
 
 /**
  * Minimum number of messages required for retraining
@@ -165,11 +170,32 @@ Focus on:
 
 Return ONLY valid JSON, no additional text.`;
 
-    const { text: aiResponse } = await generateText({
-      model: openai(VOICE_ANALYSIS_MODEL),
-      prompt: analysisPrompt,
+    // Initialize OpenAI SDK
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+
+    // Call GPT-4 Turbo using OpenAI SDK (Story 6.9)
+    const completion = await openai.chat.completions.create({
+      model: VOICE_ANALYSIS_MODEL,
+      messages: [{ role: 'user', content: analysisPrompt }],
       temperature: 0.3, // Lower temperature for consistent analysis
     });
+
+    const aiResponse = completion.choices[0]?.message?.content;
+
+    if (!aiResponse) {
+      return {
+        userId,
+        success: false,
+        durationMs: Date.now() - startTime,
+        messageFetchMs,
+        aiAnalysisMs: Date.now() - aiAnalysisStart,
+        firestoreUpdateMs: 0,
+        error: 'No response from OpenAI API',
+      };
+    }
+
     const aiAnalysisMs = Date.now() - aiAnalysisStart;
 
     // Parse AI response

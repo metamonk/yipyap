@@ -17,16 +17,17 @@ import testFunctions from 'firebase-functions-test';
 // Initialize test environment
 const testEnv = testFunctions();
 
-// Mock dependencies
-jest.mock('ai', () => ({
-  embed: jest.fn(),
-}));
-
-jest.mock('@ai-sdk/openai', () => ({
-  openai: {
-    embedding: jest.fn(() => 'text-embedding-3-small'),
-  },
-}));
+// Mock dependencies (Story 6.11: Updated to mock OpenAI SDK instead of Vercel AI SDK)
+jest.mock('openai', () => {
+  return {
+    __esModule: true,
+    default: jest.fn().mockImplementation(() => ({
+      embeddings: {
+        create: jest.fn(),
+      },
+    })),
+  };
+});
 
 jest.mock('@pinecone-database/pinecone', () => ({
   Pinecone: jest.fn().mockImplementation(() => ({
@@ -36,7 +37,7 @@ jest.mock('@pinecone-database/pinecone', () => ({
   })),
 }));
 
-import { embed } from 'ai';
+import OpenAI from 'openai';
 import { Pinecone } from '@pinecone-database/pinecone';
 
 // Import the function to test
@@ -191,44 +192,50 @@ describe('generateFAQEmbedding Cloud Function', () => {
     });
   });
 
-  describe('Embedding Generation', () => {
+  describe('Embedding Generation (Story 6.11: Updated for OpenAI SDK)', () => {
     it('should generate embedding with correct dimension (1536)', async () => {
       const mockEmbedding = new Array(1536).fill(0.1);
+      const mockOpenAI = new OpenAI({ apiKey: 'test-key' });
 
-      (embed as jest.Mock).mockResolvedValue({
-        embedding: mockEmbedding,
+      (mockOpenAI.embeddings.create as jest.Mock).mockResolvedValue({
+        data: [{ embedding: mockEmbedding }],
       });
 
-      const result = await embed({
+      const result = await mockOpenAI.embeddings.create({
         model: 'text-embedding-3-small',
-        value: 'What are your rates?',
+        input: 'What are your rates?',
       });
 
-      expect(result.embedding).toHaveLength(1536);
+      expect(result.data[0].embedding).toHaveLength(1536);
     });
 
     it('should throw error for invalid embedding dimension', async () => {
       const invalidEmbedding = new Array(768).fill(0.1); // Wrong dimension
+      const mockOpenAI = new OpenAI({ apiKey: 'test-key' });
 
-      (embed as jest.Mock).mockResolvedValue({
-        embedding: invalidEmbedding,
+      (mockOpenAI.embeddings.create as jest.Mock).mockResolvedValue({
+        data: [{ embedding: invalidEmbedding }],
       });
 
-      const result = await embed({
+      const result = await mockOpenAI.embeddings.create({
         model: 'text-embedding-3-small',
-        value: 'What are your rates?',
+        input: 'What are your rates?',
       });
 
-      expect(result.embedding).not.toHaveLength(1536);
+      expect(result.data[0].embedding).not.toHaveLength(1536);
     });
 
     it('should handle OpenAI API errors', async () => {
-      (embed as jest.Mock).mockRejectedValue(new Error('OpenAI API rate limit exceeded'));
+      const mockOpenAI = new OpenAI({ apiKey: 'test-key' });
+
+      (mockOpenAI.embeddings.create as jest.Mock).mockRejectedValue(
+        new Error('OpenAI API rate limit exceeded')
+      );
 
       await expect(
-        embed({
+        mockOpenAI.embeddings.create({
           model: 'text-embedding-3-small',
-          value: 'What are your rates?',
+          input: 'What are your rates?',
         })
       ).rejects.toThrow('OpenAI API rate limit exceeded');
     });
@@ -307,15 +314,16 @@ describe('generateFAQEmbedding Cloud Function', () => {
     });
   });
 
-  describe('Retry Logic', () => {
+  describe('Retry Logic (Story 6.11: Updated for OpenAI SDK)', () => {
     it('should retry up to 3 times on transient failures', async () => {
-      const embedMock = embed as jest.Mock;
+      const mockOpenAI = new OpenAI({ apiKey: 'test-key' });
+      const embedMock = mockOpenAI.embeddings.create as jest.Mock;
 
       // Fail twice, succeed on third attempt
       embedMock
         .mockRejectedValueOnce(new Error('Network error'))
         .mockRejectedValueOnce(new Error('Timeout'))
-        .mockResolvedValueOnce({ embedding: new Array(1536).fill(0.1) });
+        .mockResolvedValueOnce({ data: [{ embedding: new Array(1536).fill(0.1) }] });
 
       // First attempt - fail
       await expect(embedMock()).rejects.toThrow('Network error');
@@ -325,7 +333,7 @@ describe('generateFAQEmbedding Cloud Function', () => {
 
       // Third attempt - succeed
       const result = await embedMock();
-      expect(result.embedding).toHaveLength(1536);
+      expect(result.data[0].embedding).toHaveLength(1536);
     });
 
     it('should use exponential backoff delays (1s, 2s, 4s)', () => {

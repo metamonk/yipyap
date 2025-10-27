@@ -20,6 +20,8 @@
 
 import * as functions from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { categorizeMessage } from './categorization';
+import { scoreOpportunity } from './opportunity-scoring';
 
 // Initialize Firebase Admin if not already initialized
 if (!admin.apps.length) {
@@ -507,10 +509,16 @@ async function fetchUnprocessedMessages(
 
     console.log(`[DEBUG] Found ${conversationsSnap.size} total conversations`);
 
-    const messages: admin.firestore.QueryDocumentSnapshot[] = [];
-    let conversationsProcessed = 0;
+    // PERFORMANCE OPTIMIZATION: Filter conversations first, then fetch messages in parallel
+    // This reduces sequential Firestore queries from N to 1 batch operation
+    const eligibleConversations: Array<{
+      doc: admin.firestore.QueryDocumentSnapshot;
+      data: admin.firestore.DocumentData;
+    }> = [];
+    const conversationContexts = new Map();
     let conversationsSkipped = 0;
 
+    // Pre-filter conversations and cache context data
     for (const convDoc of conversationsSnap.docs) {
       const convData = convDoc.data();
       const lastMsgTime = convData.lastMessageTimestamp?.toDate?.() || 'N/A';
@@ -528,38 +536,76 @@ async function fetchUnprocessedMessages(
         continue;
       }
 
-      conversationsProcessed++;
-      console.log(`[DEBUG]   Processing messages...`);
+      eligibleConversations.push({ doc: convDoc, data: convData });
 
-      // Fetch messages from this conversation
-      // Note: We can't use both >= and != filters in Firestore, so we filter senderId in code
-      const messagesSnap = await db
-        .collection('conversations')
-        .doc(convDoc.id)
-        .collection('messages')
-        .where('timestamp', '>=', twelveHoursAgo)
-        .orderBy('timestamp', 'desc')
-        .get();
+      // Cache conversation context for later use (avoids duplicate fetching in scoring)
+      const createdAt = convData.createdAt || now;
+      const messageCount = convData.messageCount || 0;
+      const conversationAge = (now.toMillis() - createdAt.toMillis()) / (1000 * 60 * 60 * 24);
+      const isVIP = messageCount > 10 && conversationAge > 30;
 
-      console.log(`[DEBUG]   Found ${messagesSnap.size} messages in subcollection`);
+      conversationContexts.set(convDoc.id, {
+        conversationAge,
+        lastInteraction: convData.lastMessageTimestamp || createdAt,
+        messageCount,
+        isVIP,
+      });
+    }
 
+    console.log(`[DEBUG] Eligible conversations: ${eligibleConversations.length}`);
+    console.log(`[DEBUG] Skipped conversations (recent activity): ${conversationsSkipped}`);
+
+    // PERFORMANCE OPTIMIZATION: Fetch messages from all conversations in parallel
+    // Expected improvement: 15-25s → 3-5s for 50 conversations
+    const messageResults = await Promise.all(
+      eligibleConversations.map(async ({ doc: convDoc }) => {
+        console.log(`[DEBUG]   Processing messages for conversation ${convDoc.id}...`);
+
+        // Fetch messages from this conversation
+        // Note: We can't use both >= and != filters in Firestore, so we filter senderId in code
+        const messagesSnap = await db
+          .collection('conversations')
+          .doc(convDoc.id)
+          .collection('messages')
+          .where('timestamp', '>=', twelveHoursAgo)
+          .orderBy('timestamp', 'desc')
+          .get();
+
+        console.log(`[DEBUG]   Found ${messagesSnap.size} messages in conversation ${convDoc.id}`);
+
+        return {
+          conversationId: convDoc.id,
+          messages: messagesSnap.docs,
+        };
+      })
+    );
+
+    // Process and filter messages
+    const messages: admin.firestore.QueryDocumentSnapshot[] = [];
+    let totalMessagesSkippedOwnMessages = 0;
+    let totalMessagesSkippedProcessed = 0;
+    let totalMessagesSkippedCrisis = 0;
+
+    for (const result of messageResults) {
       let messagesAdded = 0;
+      let messagesSkippedOwnMessages = 0;
       let messagesSkippedProcessed = 0;
       let messagesSkippedCrisis = 0;
-      let messagesSkippedOwnMessages = 0;
 
-      for (const msgDoc of messagesSnap.docs) {
+      for (const msgDoc of result.messages) {
         const msgData = msgDoc.data();
 
         // Skip messages from the user themselves
         if (msgData.senderId === userId) {
           messagesSkippedOwnMessages++;
+          totalMessagesSkippedOwnMessages++;
           continue;
         }
 
         // Skip if already processed (unless pending review)
         if (msgData.metadata?.aiProcessed && !msgData.metadata?.pendingReview) {
           messagesSkippedProcessed++;
+          totalMessagesSkippedProcessed++;
           continue;
         }
 
@@ -570,6 +616,7 @@ async function fetchUnprocessedMessages(
           msgData.metadata.sentimentScore < ctx.config.escalationThreshold
         ) {
           messagesSkippedCrisis++;
+          totalMessagesSkippedCrisis++;
           continue;
         }
 
@@ -577,16 +624,19 @@ async function fetchUnprocessedMessages(
         messagesAdded++;
       }
 
-      console.log(`[DEBUG]   Added ${messagesAdded} messages to processing queue`);
-      console.log(`[DEBUG]   Skipped ${messagesSkippedOwnMessages} own messages`);
-      console.log(`[DEBUG]   Skipped ${messagesSkippedProcessed} already processed`);
-      console.log(`[DEBUG]   Skipped ${messagesSkippedCrisis} crisis messages`);
+      console.log(`[DEBUG]   Conversation ${result.conversationId}: Added ${messagesAdded}, Skipped ${messagesSkippedOwnMessages} own, ${messagesSkippedProcessed} processed, ${messagesSkippedCrisis} crisis`);
     }
 
+    // Store conversation contexts in workflow context for reuse
+    (ctx as any).conversationContexts = conversationContexts;
+
     console.log(`[DEBUG] Summary:`);
-    console.log(`[DEBUG]   Conversations processed: ${conversationsProcessed}`);
+    console.log(`[DEBUG]   Conversations processed: ${eligibleConversations.length}`);
     console.log(`[DEBUG]   Conversations skipped (recent activity): ${conversationsSkipped}`);
     console.log(`[DEBUG]   Total messages to process: ${messages.length}`);
+    console.log(`[DEBUG]   Skipped ${totalMessagesSkippedOwnMessages} own messages`);
+    console.log(`[DEBUG]   Skipped ${totalMessagesSkippedProcessed} already processed`);
+    console.log(`[DEBUG]   Skipped ${totalMessagesSkippedCrisis} crisis messages`);
 
     ctx.results.messagesFetched = messages.length;
 
@@ -618,30 +668,33 @@ async function fetchUnprocessedMessages(
 }
 
 /**
- * Step 2: Categorize messages using Edge Function
+ * Step 2: Categorize messages using local AI functions
  *
  * @param messages - Message documents to categorize
  * @param ctx - Workflow execution context
  * @returns Updated context with categorization results
  *
  * @remarks
- * - Calls POST /api/categorize-message Edge Function
+ * - Calls local categorization function (no HTTP overhead)
  * - Batch processes 50 messages at a time
  * - Uses GPT-4o-mini for cost efficiency
- * - Updates message metadata with category
+ * - Updates message metadata with category and sentiment
  */
 async function categorizeMessages(
   messages: admin.firestore.QueryDocumentSnapshot[],
-  ctx: WorkflowContext
+  ctx: WorkflowContext,
+  sentimentAnalysisEnabled: boolean = true
 ): Promise<void> {
   const stepStart = Date.now(); // Performance tracking
   try {
     await logWorkflowStep(ctx, 'categorize', 'running', 'Categorizing messages...');
 
     const batchSize = 50;
-    const edgeFunctionUrl = process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}/api/categorize-message`
-      : 'http://localhost:3000/api/categorize-message';
+    const apiKey = process.env.OPENAI_API_KEY;
+
+    if (!apiKey) {
+      throw new Error('OPENAI_API_KEY environment variable is not set');
+    }
 
     let categorized = 0;
     let categoryCost = 0;
@@ -655,43 +708,56 @@ async function categorizeMessages(
           const msgData = msgDoc.data();
 
           try {
-            const response = await fetch(edgeFunctionUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                // Service-to-service authentication (Cloud Functions to Edge Function)
-                // Using OpenAI API key as a shared secret for MVP
-                'Authorization': `Bearer ${process.env.OPENAI_API_KEY || 'service-token'}`,
-              },
-              body: JSON.stringify({
-                messageText: msgData.text,
-                messageId: msgDoc.id,
-                conversationId: msgData.conversationId,
-                senderId: msgData.senderId,
-              }),
-            });
+            // Call local categorization function (replaces HTTP call to Edge Function)
+            const result = await categorizeMessage(msgData.text, apiKey);
 
-            console.log(`[DEBUG] Categorization request to ${edgeFunctionUrl}`);
-            console.log(`[DEBUG] Response status: ${response.status} ${response.statusText}`);
+            console.log(`[DEBUG] Categorization result for message ${msgDoc.id}:`, result);
 
-            if (!response.ok) {
-              const errorText = await response.text();
-              console.error(`[DEBUG] Edge Function error response: ${errorText}`);
-              throw new Error(`Edge Function returned ${response.status}: ${errorText}`);
+            // Determine if message is a business opportunity that needs scoring
+            const needsOpportunityScore = result.category === 'business_opportunity';
+
+            let opportunityScore: any = null;
+            if (needsOpportunityScore) {
+              try {
+                // Call local opportunity scoring function
+                opportunityScore = await scoreOpportunity(msgData.text, apiKey);
+                console.log(`[DEBUG] Opportunity score for message ${msgDoc.id}:`, opportunityScore);
+              } catch (error) {
+                console.error(`[DEBUG] Error scoring opportunity for message ${msgDoc.id}:`, error);
+                // Continue without opportunity score (non-critical)
+              }
             }
 
-            const result = await response.json();
-            console.log(`[DEBUG] Categorization result:`, result);
-
-            // Update message metadata with category
-            await msgDoc.ref.update({
+            // Update message metadata with categorization results
+            const updates: any = {
               'metadata.category': result.category,
+              'metadata.confidence': result.confidence,
               'metadata.aiProcessed': true,
               'metadata.aiProcessedAt': admin.firestore.FieldValue.serverTimestamp(),
-            });
+            };
+
+            // P1 FIX: Conditionally add sentiment fields if sentiment analysis is enabled
+            if (sentimentAnalysisEnabled) {
+              updates['metadata.sentiment'] = result.sentiment;
+              updates['metadata.sentimentScore'] = result.sentimentScore;
+              updates['metadata.emotionalTone'] = result.emotionalTone;
+              updates['metadata.crisisDetected'] = result.crisisDetected;
+            }
+
+            // Add opportunity score if available
+            if (opportunityScore) {
+              updates['metadata.opportunityScore'] = opportunityScore.score;
+              updates['metadata.opportunityType'] = opportunityScore.type;
+              updates['metadata.opportunityIndicators'] = opportunityScore.indicators;
+              updates['metadata.opportunityAnalysis'] = opportunityScore.analysis;
+            }
+
+            await msgDoc.ref.update(updates);
 
             categorized++;
-            categoryCost += result.cost || 0.05; // Estimate $0.05 per categorization
+            // Cost estimate: $0.05 per categorization (GPT-4o-mini)
+            // + $1.50 per opportunity score (GPT-4 Turbo, if business opportunity)
+            categoryCost += 0.05 + (opportunityScore ? 1.5 : 0);
           } catch (error) {
             console.error(`[DEBUG] Error categorizing message ${msgDoc.id}:`, error);
             console.error(`[DEBUG] Error details:`, (error as Error).message);
@@ -717,7 +783,7 @@ async function categorizeMessages(
   } catch (error) {
     const stepDuration = Date.now() - stepStart;
     trackStepPerformance(ctx, 'categorize', stepDuration);
-    
+
     await logWorkflowStep(
       ctx,
       'categorize',
@@ -761,12 +827,14 @@ async function detectAndRespondFAQs(
     let autoResponsesSent = 0;
     let faqCost = 0;
 
-    // OPTIMIZATION: Process FAQ detection in batches of 20 (smaller than categorization due to cost)
+    // PERFORMANCE OPTIMIZATION: Process FAQ detection in batches of 50 (matches categorization)
     // Batch size rationale:
-    // - Categorization uses batch size 50 (cheaper per message: $0.05)
-    // - FAQ detection uses batch size 20 (more expensive: $0.03 + embedding search)
-    // - Smaller batches prevent memory issues and allow early termination
-    const batchSize = 20;
+    // - Previously: batch size 20 (conservative, caused artificial bottleneck)
+    // - Now: batch size 50 (matches categorization, better parallelism)
+    // - FAQ detection cost is minimal ($0.03 + embedding search)
+    // - Early termination still works (check maxAutoResponses per batch)
+    // Expected improvement: 5-12 seconds for 100 messages
+    const batchSize = 50;
 
     // Process messages in batches, with early termination if maxAutoResponses reached
     for (let i = 0; i < messages.length; i += batchSize) {
@@ -1254,44 +1322,54 @@ async function generateMeaningful10Digest(
       recent_interaction: 15,
     };
 
-    // Batch fetch conversation contexts
+    // PERFORMANCE OPTIMIZATION: Use cached conversation contexts from fetchUnprocessedMessages
+    // This avoids duplicate Firestore queries (saves 2-5 seconds)
     // IMPORTANT: Must use .data() to access document fields on QueryDocumentSnapshot objects
     // Common bug: m.conversationId returns undefined (snapshot property, not data field)
     // Correct: m.data().conversationId (accesses document data)
     const conversationIds = [...new Set(messages.map(m => m.data().conversationId))];
-    const conversationContexts = new Map();
+
+    // Retrieve cached contexts (populated during message fetching)
+    let conversationContexts = (ctx as any).conversationContexts || new Map();
 
     console.log(`[SCORING] Found ${conversationIds.length} unique conversations for ${messages.length} messages`);
+    console.log(`[SCORING] Using ${conversationContexts.size} cached conversation contexts`);
     await logWorkflowStep(ctx, 'scoring_prep', 'info',
-      `Preparing to score ${messages.length} messages from ${conversationIds.length} conversations`);
+      `Preparing to score ${messages.length} messages from ${conversationIds.length} conversations (${conversationContexts.size} cached)`);
 
-    await Promise.all(
-      conversationIds.map(async (convId) => {
-        try {
-          const convDoc = await db.collection('conversations').doc(convId).get();
-          console.log(`[SCORING] Conversation ${convId}: exists=${convDoc.exists}`);
-          if (convDoc.exists) {
-            const convData = convDoc.data();
-            const now = admin.firestore.Timestamp.now();
-            const createdAt = convData?.createdAt || now;
-            const lastMessageTimestamp = convData?.lastMessageTimestamp || createdAt;
-            const messageCount = convData?.messageCount || 0;
+    // If contexts weren't cached (shouldn't happen), fetch them as fallback
+    if (conversationContexts.size === 0) {
+      console.warn(`[SCORING] No cached contexts found, fetching from Firestore (performance degraded)`);
+      conversationContexts = new Map();
 
-            const conversationAge = (now.toMillis() - createdAt.toMillis()) / (1000 * 60 * 60 * 24);
-            const isVIP = messageCount > 10 && conversationAge > 30;
+      await Promise.all(
+        conversationIds.map(async (convId) => {
+          try {
+            const convDoc = await db.collection('conversations').doc(convId).get();
+            console.log(`[SCORING] Conversation ${convId}: exists=${convDoc.exists}`);
+            if (convDoc.exists) {
+              const convData = convDoc.data();
+              const now = admin.firestore.Timestamp.now();
+              const createdAt = convData?.createdAt || now;
+              const lastMessageTimestamp = convData?.lastMessageTimestamp || createdAt;
+              const messageCount = convData?.messageCount || 0;
 
-            conversationContexts.set(convId, {
-              conversationAge,
-              lastInteraction: lastMessageTimestamp,
-              messageCount,
-              isVIP,
-            });
+              const conversationAge = (now.toMillis() - createdAt.toMillis()) / (1000 * 60 * 60 * 24);
+              const isVIP = messageCount > 10 && conversationAge > 30;
+
+              conversationContexts.set(convId, {
+                conversationAge,
+                lastInteraction: lastMessageTimestamp,
+                messageCount,
+                isVIP,
+              });
+            }
+          } catch (error) {
+            console.warn(`Error fetching conversation ${convId}:`, error);
           }
-        } catch (error) {
-          console.warn(`Error fetching conversation ${convId}:`, error);
-        }
-      })
-    );
+        })
+      );
+    }
 
     // Score each message AND write to Firestore
     const scoredMessages = [];
@@ -1461,8 +1539,26 @@ async function generateMeaningful10Digest(
     }
 
     // Build Meaningful 10 digest structure with capacity-aware selection
-    const highPriority = meaningful.filter(m => m.priority === 'high').slice(0, 3);
-    const mediumPriority = meaningful.filter(m => m.priority === 'medium').slice(0, 7);
+    // Map to Meaningful10DigestMessage format (relationshipScore instead of score)
+    const mapToDigestMessage = (m: any) => ({
+      id: m.id,
+      conversationId: m.conversationId,
+      content: m.content,
+      timestamp: m.timestamp,
+      relationshipScore: m.score, // Map score -> relationshipScore
+      relationshipContext: m.relationshipContext,
+      category: m.breakdown?.category || 'general',
+      estimatedResponseTime: m.estimatedResponseTime || 10,
+    });
+
+    const highPriority = meaningful
+      .filter(m => m.priority === 'high')
+      .slice(0, 3)
+      .map(mapToDigestMessage);
+    const mediumPriority = meaningful
+      .filter(m => m.priority === 'medium')
+      .slice(0, 7)
+      .map(mapToDigestMessage);
 
     // Count auto-handled messages (FAQ auto-responses from Story 5.8 + Auto-archived from Story 6.4)
     const autoHandledCount = messages.filter(m => m.metadata?.autoResponseSent === true).length;
@@ -1928,6 +2024,22 @@ export async function orchestrateWorkflow(
       escalationThreshold: 0.3,
       activeThresholdMinutes: 30, // Default: 30 minutes
     },
+    features: {
+      dailyWorkflowEnabled: false,
+      categorizationEnabled: true,
+      faqDetectionEnabled: true,
+      voiceMatchingEnabled: true,
+      sentimentAnalysisEnabled: true,
+    },
+  };
+
+  // Apply defaults for missing feature flags (backward compatibility)
+  const features = {
+    dailyWorkflowEnabled: config.features?.dailyWorkflowEnabled ?? false,
+    categorizationEnabled: config.features?.categorizationEnabled ?? true,
+    faqDetectionEnabled: config.features?.faqDetectionEnabled ?? true,
+    voiceMatchingEnabled: config.features?.voiceMatchingEnabled ?? true,
+    sentimentAnalysisEnabled: config.features?.sentimentAnalysisEnabled ?? true,
   };
 
   // IV3: Check if user is online/active before starting workflow
@@ -2052,26 +2164,41 @@ export async function orchestrateWorkflow(
       };
     }
 
-    // Step 2: Categorize messages
-    await categorizeMessages(messages, ctx);
+    // Step 2: Categorize messages (P1 FIX: Check feature toggle)
+    if (features.categorizationEnabled) {
+      await categorizeMessages(messages, ctx, features.sentimentAnalysisEnabled);
 
-    // Check timeout after categorization (Task 15: Timeout handling)
-    // If workflow has been running > 5 minutes, abort with error
-    // This check prevents Cloud Function from hitting the 9-minute hard limit
-    if (isWorkflowTimedOut(ctx)) {
-      throw new Error('Workflow timeout: exceeded 5 minute limit after categorization');
+      // Check timeout after categorization (Task 15: Timeout handling)
+      // If workflow has been running > 5 minutes, abort with error
+      // This check prevents Cloud Function from hitting the 9-minute hard limit
+      if (isWorkflowTimedOut(ctx)) {
+        throw new Error('Workflow timeout: exceeded 5 minute limit after categorization');
+      }
+    } else {
+      console.log('[Categorization] Skipped - categorizationEnabled=false');
+      await logWorkflowStep(ctx, 'categorize', 'info', 'Categorization disabled by user settings');
     }
 
-    // Step 3: Detect FAQs and auto-respond
-    await detectAndRespondFAQs(messages, ctx);
+    // Step 3: Detect FAQs and auto-respond (P1 FIX: Check feature toggle)
+    if (features.faqDetectionEnabled) {
+      await detectAndRespondFAQs(messages, ctx);
 
-    // Check timeout after FAQ detection
-    if (isWorkflowTimedOut(ctx)) {
-      throw new Error('Workflow timeout: exceeded 5 minute limit after FAQ detection');
+      // Check timeout after FAQ detection
+      if (isWorkflowTimedOut(ctx)) {
+        throw new Error('Workflow timeout: exceeded 5 minute limit after FAQ detection');
+      }
+    } else {
+      console.log('[FAQ Detection] Skipped - faqDetectionEnabled=false');
+      await logWorkflowStep(ctx, 'faq_detect', 'info', 'FAQ detection disabled by user settings');
     }
 
-    // Step 4: Draft voice-matched responses
-    await draftVoiceMatchedResponses(messages, ctx);
+    // Step 4: Draft voice-matched responses (P1 FIX: Check feature toggle)
+    if (features.voiceMatchingEnabled) {
+      await draftVoiceMatchedResponses(messages, ctx);
+    } else {
+      console.log('[Voice Matching] Skipped - voiceMatchingEnabled=false');
+      await logWorkflowStep(ctx, 'draft_responses', 'info', 'Voice matching disabled by user settings');
+    }
 
     // Check timeout after response drafting
     if (isWorkflowTimedOut(ctx)) {

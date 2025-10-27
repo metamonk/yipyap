@@ -1,11 +1,16 @@
 /**
- * Cloud Functions for FAQ Template Embedding Generation
+ * Cloud Functions for FAQ Template Embedding Generation (Story 5.4, migrated to OpenAI SDK in Story 6.10)
  * @module functions/ai/faqEmbeddings
  *
  * @remarks
  * Story 5.4 - FAQ Detection & Auto-Response
  * Generates vector embeddings for FAQ templates using OpenAI text-embedding-3-small
  * and stores them in Pinecone for semantic search during FAQ detection.
+ *
+ * **Migration Notes (Story 6.10):**
+ * - Migrated from Vercel AI SDK to official OpenAI SDK
+ * - All embedding logic and retry patterns remain identical
+ * - Output parity maintained with original implementation
  *
  * Features:
  * - Generates 1536-dimension embeddings from FAQ question text
@@ -16,8 +21,7 @@
 
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
-import { embed } from 'ai';
-import { openai } from '@ai-sdk/openai';
+import OpenAI from 'openai';
 import { Pinecone } from '@pinecone-database/pinecone';
 
 // Initialize Firebase Admin if not already initialized
@@ -120,10 +124,18 @@ function sleep(ms: number): Promise<void> {
  */
 async function generateEmbedding(question: string): Promise<number[]> {
   try {
-    const { embedding } = await embed({
-      model: openai.embedding('text-embedding-3-small'),
-      value: question,
+    // Initialize OpenAI SDK
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
     });
+
+    // Generate embedding using OpenAI SDK (Story 6.10)
+    const response = await openai.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: question,
+    });
+
+    const embedding = response.data[0]?.embedding;
 
     if (!embedding || embedding.length !== 1536) {
       throw new Error(`Invalid embedding dimension: expected 1536, got ${embedding?.length || 0}`);

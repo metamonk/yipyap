@@ -16,28 +16,29 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
   ActivityIndicator,
   Alert,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/contexts/ThemeContext';
+import { Button } from '@/components/common/Button';
+import { Input } from '@/components/common/Input';
 
 /**
  * Login screen with Email/Password authentication
  */
 const LoginScreen = memo(function LoginScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
   const { user, isLoading, signInWithEmailPassword, error, clearError } = useAuth();
 
   // Form state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
 
   // Navigate to main app when user is authenticated
@@ -89,93 +90,126 @@ const LoginScreen = memo(function LoginScreen() {
 
   const isButtonDisabled = isLoading || formLoading || !email || !password;
 
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    title: {
+      fontSize: theme.typography.fontSize['3xl'],
+      fontWeight: theme.typography.fontWeight.bold,
+      color: theme.colors.textPrimary,
+      textAlign: 'center',
+      marginBottom: theme.spacing.md,
+    },
+    subtitle: {
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.textSecondary,
+      textAlign: 'center',
+      marginBottom: theme.spacing['3xl'],
+    },
+    dividerText: {
+      marginHorizontal: theme.spacing.base,
+      color: theme.colors.textTertiary,
+      fontSize: theme.typography.fontSize.sm,
+    },
+    loadingOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: theme.colors.overlay,
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: theme.spacing.base,
+    },
+    loadingText: {
+      color: theme.colors.textInverse,
+      fontSize: theme.typography.fontSize.base,
+      fontWeight: theme.typography.fontWeight.medium,
+    },
+  });
+
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={dynamicStyles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.formContainer}>
-          <Text style={styles.title}>Welcome to yipyap</Text>
-          <Text style={styles.subtitle}>Your encrypted messaging app</Text>
+          <Text style={dynamicStyles.title}>Welcome to yipyap</Text>
+          <Text style={dynamicStyles.subtitle}>Your encrypted messaging app</Text>
 
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor="#999"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              editable={!formLoading}
-            />
-          </View>
+          <Input
+            label="Email"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="your@email.com"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            textContentType="emailAddress"
+            disabled={formLoading}
+          />
 
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="#999"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-              autoCorrect={false}
-              textContentType="password"
-              editable={!formLoading}
-            />
-            <Pressable
-              style={styles.passwordToggle}
-              onPress={() => setShowPassword(!showPassword)}
-              disabled={formLoading}
-            >
-              <Text style={styles.passwordToggleText}>{showPassword ? 'Hide' : 'Show'}</Text>
-            </Pressable>
-          </View>
+          <Input
+            label="Password"
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Enter your password"
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            textContentType="password"
+            disabled={formLoading}
+          />
 
-          <Pressable
-            style={[styles.signInButton, isButtonDisabled && styles.buttonDisabled]}
+          <Button
+            variant="primary"
+            size="lg"
+            fullWidth
             onPress={handleSignIn}
             disabled={isButtonDisabled}
+            loading={formLoading}
           >
-            {formLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.signInButtonText}>Sign In</Text>
-            )}
-          </Pressable>
+            Sign In
+          </Button>
 
-          <Pressable
-            style={styles.forgotPasswordButton}
+          <Button
+            variant="ghost"
+            size="md"
+            fullWidth
             onPress={handleForgotPassword}
             disabled={formLoading}
+            style={{ marginTop: theme.spacing.base }}
           >
-            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-          </Pressable>
+            Forgot Password?
+          </Button>
 
           <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
-            <View style={styles.dividerLine} />
+            <View style={[styles.dividerLine, { backgroundColor: theme.colors.divider }]} />
+            <Text style={dynamicStyles.dividerText}>OR</Text>
+            <View style={[styles.dividerLine, { backgroundColor: theme.colors.divider }]} />
           </View>
 
-          <Pressable
-            style={styles.createAccountButton}
+          <Button
+            variant="secondary"
+            size="lg"
+            fullWidth
             onPress={handleCreateAccount}
             disabled={formLoading}
           >
-            <Text style={styles.createAccountText}>Create Account</Text>
-          </Pressable>
+            Create Account
+          </Button>
         </View>
       </ScrollView>
 
       {isLoading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#4285F4" />
-          <Text style={styles.loadingText}>Loading...</Text>
+        <View style={dynamicStyles.loadingOverlay}>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={dynamicStyles.loadingText}>Loading...</Text>
         </View>
       )}
     </KeyboardAvoidingView>
@@ -184,11 +218,8 @@ const LoginScreen = memo(function LoginScreen() {
 
 export default LoginScreen;
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
@@ -196,70 +227,6 @@ const styles = StyleSheet.create({
   formContainer: {
     paddingHorizontal: 32,
     paddingVertical: 48,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 48,
-  },
-  inputContainer: {
-    marginBottom: 16,
-    position: 'relative',
-  },
-  input: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 8,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    color: '#333',
-  },
-  passwordToggle: {
-    position: 'absolute',
-    right: 16,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
-  },
-  passwordToggleText: {
-    color: '#4285F4',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  signInButton: {
-    backgroundColor: '#4285F4',
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  signInButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  forgotPasswordButton: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  forgotPasswordText: {
-    color: '#4285F4',
-    fontSize: 14,
-    fontWeight: '500',
   },
   divider: {
     flexDirection: 'row',
@@ -269,39 +236,5 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#ddd',
-  },
-  dividerText: {
-    marginHorizontal: 16,
-    color: '#999',
-    fontSize: 14,
-  },
-  createAccountButton: {
-    borderWidth: 1,
-    borderColor: '#4285F4',
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  createAccountText: {
-    color: '#4285F4',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16,
-  },
-  loadingText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '500',
   },
 });

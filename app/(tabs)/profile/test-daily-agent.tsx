@@ -15,6 +15,7 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTheme } from '@/contexts/ThemeContext';
 import { NavigationHeader } from '../../_components/NavigationHeader';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getFirebaseAuth } from '@/services/firebase';
@@ -25,6 +26,7 @@ import { getFirebaseAuth } from '@/services/firebase';
  */
 export default function TestDailyAgentScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
   const auth = getFirebaseAuth();
   const functions = getFunctions();
 
@@ -38,6 +40,117 @@ export default function TestDailyAgentScreen() {
     conversationCount: number;
     messageCount: number;
   } | null>(null);
+
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    title: {
+      color: theme.colors.textPrimary,
+    },
+    subtitle: {
+      color: theme.colors.textSecondary,
+    },
+    sectionHeader: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: theme.colors.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 12,
+      marginTop: 8,
+    },
+    card: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.borderLight,
+      borderWidth: 1,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 24,
+      ...theme.shadows.sm,
+    },
+    infoTitle: {
+      color: theme.colors.textPrimary,
+    },
+    infoText: {
+      color: theme.colors.textSecondary,
+    },
+    button: {
+      backgroundColor: theme.colors.accent,
+    },
+    buttonDisabled: {
+      backgroundColor: theme.colors.disabled || '#CCCCCC',
+    },
+    userInfoLabel: {
+      color: theme.colors.textSecondary,
+    },
+    userInfoValue: {
+      color: theme.colors.textPrimary,
+    },
+    errorCard: {
+      backgroundColor: theme.colors.surface,
+      borderLeftColor: theme.colors.error,
+      borderWidth: 1,
+      borderColor: theme.colors.borderLight,
+    },
+    errorTitle: {
+      color: theme.colors.error,
+    },
+    errorText: {
+      color: theme.colors.textSecondary,
+    },
+    resultCard: {
+      backgroundColor: theme.colors.surface,
+      borderLeftColor: theme.colors.success || '#34C759',
+      borderWidth: 1,
+      borderColor: theme.colors.borderLight,
+    },
+    resultTitle: {
+      color: theme.colors.success || '#34C759',
+    },
+    resultSectionTitle: {
+      color: theme.colors.textPrimary,
+    },
+    resultLabel: {
+      color: theme.colors.textSecondary,
+    },
+    resultValue: {
+      color: theme.colors.textPrimary,
+    },
+    resultValueSmall: {
+      color: theme.colors.textSecondary,
+    },
+    firestoreInfo: {
+      borderTopColor: theme.colors.borderLight,
+    },
+    firestoreTitle: {
+      color: theme.colors.textPrimary,
+    },
+    firestoreText: {
+      color: theme.colors.textSecondary,
+    },
+    dataStatusCard: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.borderLight,
+    },
+    dataStatusSuccess: {
+      borderLeftColor: theme.colors.success || '#34C759',
+    },
+    dataStatusWarning: {
+      borderLeftColor: theme.colors.warning || '#FFC107',
+    },
+    dataStatusTitle: {
+      color: theme.colors.textPrimary,
+    },
+    dataStatusText: {
+      color: theme.colors.textSecondary,
+    },
+    dataStatusWarningText: {
+      color: theme.colors.warning || '#FFC107',
+    },
+  });
 
   /**
    * Checks if user has conversations to process
@@ -123,10 +236,11 @@ export default function TestDailyAgentScreen() {
     setResult(null);
 
     try {
-      console.log('Triggering daily agent workflow V2 (Gen2 cache workaround)...');
+      console.log('Triggering daily agent workflow V3 (Gen2 cache workaround #2)...');
 
-      // Using V2 function as workaround for Firebase Gen2 caching bug
-      const trigger = httpsCallable(functions, 'triggerDailyAgentManualV2');
+      // Using V3 function as workaround for Firebase Gen2 caching bug (hit twice!)
+      // V2 deployment succeeded but continued serving cached code
+      const trigger = httpsCallable(functions, 'triggerDailyAgentManualV3');
       const response = await trigger({ userId: auth.currentUser!.uid });
 
       console.log('Workflow response:', response.data);
@@ -159,7 +273,7 @@ export default function TestDailyAgentScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={dynamicStyles.container}>
       <NavigationHeader
         title="Test Daily Agent"
         leftAction={{
@@ -168,132 +282,148 @@ export default function TestDailyAgentScreen() {
         }}
       />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
-        <View style={styles.section}>
-          <Text style={styles.title}>Daily Agent Workflow Tester</Text>
-          <Text style={styles.description}>
-            This will manually trigger the daily agent workflow for your account.
-          </Text>
+        <Text style={[styles.title, dynamicStyles.title]}>Daily Agent Workflow Tester</Text>
+        <Text style={[styles.subtitle, dynamicStyles.subtitle]}>
+          This will manually trigger the daily agent workflow for your account.
+        </Text>
 
-          <View style={styles.infoBox}>
-            <Text style={styles.infoTitle}>What it does:</Text>
-            <Text style={styles.infoText}>• Fetches unprocessed messages</Text>
-            <Text style={styles.infoText}>• Categorizes messages with AI</Text>
-            <Text style={styles.infoText}>• Detects FAQs and auto-responds</Text>
-            <Text style={styles.infoText}>• Drafts voice-matched responses</Text>
-            <Text style={styles.infoText}>• Generates daily digest</Text>
-          </View>
-
-          {/* Data Status */}
-          {checkingData ? (
-            <View style={styles.dataStatusBox}>
-              <ActivityIndicator size="small" color="#007AFF" />
-              <Text style={styles.dataStatusText}>Checking your data...</Text>
-            </View>
-          ) : dataStatus ? (
-            <View
-              style={[
-                styles.dataStatusBox,
-                !dataStatus.hasConversations || !dataStatus.hasMessages
-                  ? styles.dataStatusWarning
-                  : styles.dataStatusSuccess,
-              ]}
-            >
-              <Text style={styles.dataStatusTitle}>Your Data Status</Text>
-              <Text style={styles.dataStatusText}>
-                Conversations: {dataStatus.conversationCount}
-              </Text>
-              <Text style={styles.dataStatusText}>Messages: {dataStatus.messageCount}</Text>
-              {(!dataStatus.hasConversations || !dataStatus.hasMessages) && (
-                <Text style={styles.dataStatusWarningText}>
-                  ⚠️ You have no data to process. The workflow will complete with empty results.
-                </Text>
-              )}
-            </View>
-          ) : null}
-
-          <TouchableOpacity
-            style={[styles.button, (isLoading || checkingData) && styles.buttonDisabled]}
-            onPress={handleTriggerWorkflow}
-            disabled={isLoading || checkingData}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.buttonText}>Trigger Workflow</Text>
-            )}
-          </TouchableOpacity>
-
-          {auth.currentUser && (
-            <View style={styles.userInfo}>
-              <Text style={styles.userInfoLabel}>User ID:</Text>
-              <Text style={styles.userInfoValue}>{auth.currentUser.uid}</Text>
-            </View>
-          )}
+        {/* WORKFLOW INFO CARD */}
+        <Text style={dynamicStyles.sectionHeader}>WORKFLOW</Text>
+        <View style={dynamicStyles.card}>
+          <Text style={[styles.infoTitle, dynamicStyles.infoTitle]}>What it does:</Text>
+          <Text style={[styles.infoText, dynamicStyles.infoText]}>• Fetches unprocessed messages</Text>
+          <Text style={[styles.infoText, dynamicStyles.infoText]}>• Categorizes messages with AI</Text>
+          <Text style={[styles.infoText, dynamicStyles.infoText]}>• Detects FAQs and auto-responds</Text>
+          <Text style={[styles.infoText, dynamicStyles.infoText]}>• Drafts voice-matched responses</Text>
+          <Text style={[styles.infoText, dynamicStyles.infoText]}>• Generates daily digest</Text>
         </View>
 
-        {error && (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorTitle}>❌ Error</Text>
-            <Text style={styles.errorText}>{error}</Text>
+        {/* DATA STATUS CARD */}
+        <Text style={dynamicStyles.sectionHeader}>YOUR DATA</Text>
+        {checkingData ? (
+          <View style={[dynamicStyles.card, styles.loadingCard]}>
+            <ActivityIndicator size="small" color={theme.colors.accent} />
+            <Text style={[styles.dataStatusText, dynamicStyles.dataStatusText]}>Checking your data...</Text>
+          </View>
+        ) : dataStatus ? (
+          <View
+            style={[
+              dynamicStyles.card,
+              styles.dataStatusCard,
+              !dataStatus.hasConversations || !dataStatus.hasMessages
+                ? dynamicStyles.dataStatusWarning
+                : dynamicStyles.dataStatusSuccess,
+            ]}
+          >
+            <View style={styles.dataRow}>
+              <Text style={[styles.dataLabel, dynamicStyles.dataStatusText]}>Conversations</Text>
+              <Text style={[styles.dataValue, dynamicStyles.dataStatusTitle]}>{dataStatus.conversationCount}</Text>
+            </View>
+            <View style={styles.dataRow}>
+              <Text style={[styles.dataLabel, dynamicStyles.dataStatusText]}>Messages</Text>
+              <Text style={[styles.dataValue, dynamicStyles.dataStatusTitle]}>{dataStatus.messageCount}</Text>
+            </View>
+            {(!dataStatus.hasConversations || !dataStatus.hasMessages) && (
+              <View style={styles.warningRow}>
+                <Text style={[styles.dataStatusWarningText, dynamicStyles.dataStatusWarningText]}>
+                  ⚠️ No data to process. The workflow will complete with empty results.
+                </Text>
+              </View>
+            )}
+          </View>
+        ) : null}
+
+        {/* TRIGGER BUTTON */}
+        <TouchableOpacity
+          style={[styles.button, dynamicStyles.button, (isLoading || checkingData) && dynamicStyles.buttonDisabled]}
+          onPress={handleTriggerWorkflow}
+          disabled={isLoading || checkingData}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.buttonText}>Trigger Workflow</Text>
+          )}
+        </TouchableOpacity>
+
+        {/* USER INFO */}
+        {auth.currentUser && (
+          <View style={[dynamicStyles.card, styles.userInfoCard]}>
+            <Text style={[styles.userInfoLabel, dynamicStyles.userInfoLabel]}>User ID</Text>
+            <Text style={[styles.userInfoValue, dynamicStyles.userInfoValue]}>{auth.currentUser.uid}</Text>
           </View>
         )}
 
+        {/* ERROR CARD */}
+        {error && (
+          <View>
+            <Text style={dynamicStyles.sectionHeader}>ERROR</Text>
+            <View style={[dynamicStyles.card, dynamicStyles.errorCard, styles.errorCard]}>
+              <Text style={[styles.errorTitle, dynamicStyles.errorTitle]}>❌ Error</Text>
+              <Text style={[styles.errorText, dynamicStyles.errorText]}>{error}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* RESULTS CARD */}
         {result && (
-          <View style={styles.resultBox}>
-            <Text style={styles.resultTitle}>✅ Results</Text>
+          <View>
+            <Text style={dynamicStyles.sectionHeader}>RESULTS</Text>
+            <View style={[dynamicStyles.card, dynamicStyles.resultCard, styles.resultCard]}>
+              <Text style={[styles.resultTitle, dynamicStyles.resultTitle]}>✅ Success</Text>
 
             <View style={styles.resultRow}>
-              <Text style={styles.resultLabel}>Status:</Text>
-              <Text style={styles.resultValue}>
+              <Text style={[styles.resultLabel, dynamicStyles.resultLabel]}>Status:</Text>
+              <Text style={[styles.resultValue, dynamicStyles.resultValue]}>
                 {result.success ? 'Success' : 'Failed'}
               </Text>
             </View>
 
             <View style={styles.resultRow}>
-              <Text style={styles.resultLabel}>Execution ID:</Text>
-              <Text style={styles.resultValueSmall}>{result.executionId}</Text>
+              <Text style={[styles.resultLabel, dynamicStyles.resultLabel]}>Execution ID:</Text>
+              <Text style={[styles.resultValueSmall, dynamicStyles.resultValueSmall]}>{result.executionId}</Text>
             </View>
 
-            <Text style={styles.resultSectionTitle}>📊 Statistics</Text>
+            <Text style={[styles.resultSectionTitle, dynamicStyles.resultSectionTitle]}>📊 Statistics</Text>
             {result.results ? (
               <>
                 <View style={styles.resultRow}>
-                  <Text style={styles.resultLabel}>Messages Fetched:</Text>
-                  <Text style={styles.resultValue}>{result.results.messagesFetched || 0}</Text>
+                  <Text style={[styles.resultLabel, dynamicStyles.resultLabel]}>Messages Fetched:</Text>
+                  <Text style={[styles.resultValue, dynamicStyles.resultValue]}>{result.results.messagesFetched || 0}</Text>
                 </View>
                 <View style={styles.resultRow}>
-                  <Text style={styles.resultLabel}>Messages Categorized:</Text>
-                  <Text style={styles.resultValue}>
+                  <Text style={[styles.resultLabel, dynamicStyles.resultLabel]}>Messages Categorized:</Text>
+                  <Text style={[styles.resultValue, dynamicStyles.resultValue]}>
                     {result.results.messagesCategorized || 0}
                   </Text>
                 </View>
                 <View style={styles.resultRow}>
-                  <Text style={styles.resultLabel}>FAQs Detected:</Text>
-                  <Text style={styles.resultValue}>{result.results.faqsDetected || 0}</Text>
+                  <Text style={[styles.resultLabel, dynamicStyles.resultLabel]}>FAQs Detected:</Text>
+                  <Text style={[styles.resultValue, dynamicStyles.resultValue]}>{result.results.faqsDetected || 0}</Text>
                 </View>
                 <View style={styles.resultRow}>
-                  <Text style={styles.resultLabel}>Auto-Responses Sent:</Text>
-                  <Text style={styles.resultValue}>
+                  <Text style={[styles.resultLabel, dynamicStyles.resultLabel]}>Auto-Responses Sent:</Text>
+                  <Text style={[styles.resultValue, dynamicStyles.resultValue]}>
                     {result.results.autoResponsesSent || 0}
                   </Text>
                 </View>
                 <View style={styles.resultRow}>
-                  <Text style={styles.resultLabel}>Responses Drafted:</Text>
-                  <Text style={styles.resultValue}>
+                  <Text style={[styles.resultLabel, dynamicStyles.resultLabel]}>Responses Drafted:</Text>
+                  <Text style={[styles.resultValue, dynamicStyles.resultValue]}>
                     {result.results.responsesDrafted || 0}
                   </Text>
                 </View>
                 <View style={styles.resultRow}>
-                  <Text style={styles.resultLabel}>Needing Review:</Text>
-                  <Text style={styles.resultValue}>
+                  <Text style={[styles.resultLabel, dynamicStyles.resultLabel]}>Needing Review:</Text>
+                  <Text style={[styles.resultValue, dynamicStyles.resultValue]}>
                     {result.results.messagesNeedingReview || 0}
                   </Text>
                 </View>
               </>
             ) : (
               <View style={styles.resultRow}>
-                <Text style={styles.resultLabel}>Raw Response:</Text>
-                <Text style={styles.resultValueSmall}>
+                <Text style={[styles.resultLabel, dynamicStyles.resultLabel]}>Raw Response:</Text>
+                <Text style={[styles.resultValueSmall, dynamicStyles.resultValueSmall]}>
                   {JSON.stringify(result, null, 2)}
                 </Text>
               </View>
@@ -301,28 +431,29 @@ export default function TestDailyAgentScreen() {
 
             {result.metrics && (
               <>
-                <Text style={styles.resultSectionTitle}>⏱️ Performance</Text>
+                <Text style={[styles.resultSectionTitle, dynamicStyles.resultSectionTitle]}>⏱️ Performance</Text>
                 <View style={styles.resultRow}>
-                  <Text style={styles.resultLabel}>Duration:</Text>
-                  <Text style={styles.resultValue}>{result.metrics.duration}ms</Text>
+                  <Text style={[styles.resultLabel, dynamicStyles.resultLabel]}>Duration:</Text>
+                  <Text style={[styles.resultValue, dynamicStyles.resultValue]}>{result.metrics.duration}ms</Text>
                 </View>
                 <View style={styles.resultRow}>
-                  <Text style={styles.resultLabel}>Cost:</Text>
-                  <Text style={styles.resultValue}>
+                  <Text style={[styles.resultLabel, dynamicStyles.resultLabel]}>Cost:</Text>
+                  <Text style={[styles.resultValue, dynamicStyles.resultValue]}>
                     ${result.metrics.costIncurred?.toFixed(4) || '0.0000'}
                   </Text>
                 </View>
               </>
             )}
 
-            <View style={styles.firestoreInfo}>
-              <Text style={styles.firestoreTitle}>📍 View in Firestore:</Text>
-              <Text style={styles.firestoreText}>
+            <View style={[styles.firestoreInfo, dynamicStyles.firestoreInfo]}>
+              <Text style={[styles.firestoreTitle, dynamicStyles.firestoreTitle]}>📍 View in Firestore:</Text>
+              <Text style={[styles.firestoreText, dynamicStyles.firestoreText]}>
                 /users/{'{'}your-id{'}'}/daily_executions
               </Text>
-              <Text style={styles.firestoreText}>
+              <Text style={[styles.firestoreText, dynamicStyles.firestoreText]}>
                 /users/{'{'}your-id{'}'}/daily_digests
               </Text>
+              </View>
             </View>
           </View>
         )}
@@ -331,116 +462,89 @@ export default function TestDailyAgentScreen() {
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
   scrollView: {
     flex: 1,
   },
   content: {
-    padding: 16,
-  },
-  section: {
-    marginBottom: 24,
+    padding: 24,
   },
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#000000',
     marginBottom: 8,
   },
-  description: {
-    fontSize: 16,
-    color: '#666666',
-    marginBottom: 16,
-    lineHeight: 22,
-  },
-  infoBox: {
-    backgroundColor: '#F5F5F5',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 16,
+  subtitle: {
+    fontSize: 15,
+    marginBottom: 32,
+    lineHeight: 20,
   },
   infoTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#000000',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   infoText: {
     fontSize: 14,
-    color: '#666666',
-    marginBottom: 4,
+    marginBottom: 6,
+    lineHeight: 20,
   },
   button: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 16,
-    borderRadius: 8,
+    paddingVertical: 18,
+    borderRadius: 12,
     alignItems: 'center',
-    minHeight: 52,
+    minHeight: 56,
     justifyContent: 'center',
-  },
-  buttonDisabled: {
-    backgroundColor: '#CCCCCC',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   buttonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
   },
-  userInfo: {
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: '#F9F9F9',
-    borderRadius: 6,
+  userInfoCard: {
+    marginTop: 0,
   },
   userInfoLabel: {
     fontSize: 12,
-    color: '#999999',
-    marginBottom: 4,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
   },
   userInfoValue: {
-    fontSize: 12,
-    color: '#333333',
+    fontSize: 13,
     fontFamily: 'monospace',
   },
-  errorBox: {
-    backgroundColor: '#FFF5F5',
-    padding: 16,
-    borderRadius: 8,
+  errorCard: {
     borderLeftWidth: 4,
-    borderLeftColor: '#FF3B30',
-    marginBottom: 16,
   },
   errorTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FF3B30',
     marginBottom: 8,
   },
   errorText: {
     fontSize: 14,
-    color: '#666666',
+    lineHeight: 20,
   },
-  resultBox: {
-    backgroundColor: '#F0FFF4',
-    padding: 16,
-    borderRadius: 8,
+  resultCard: {
     borderLeftWidth: 4,
-    borderLeftColor: '#34C759',
   },
   resultTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#34C759',
+    fontWeight: '700',
     marginBottom: 16,
   },
   resultSectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#000000',
     marginTop: 16,
     marginBottom: 8,
   },
@@ -448,20 +552,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 8,
+    alignItems: 'flex-start',
   },
   resultLabel: {
     fontSize: 14,
-    color: '#666666',
   },
   resultValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#000000',
   },
   resultValueSmall: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '500',
-    color: '#666666',
     fontFamily: 'monospace',
     maxWidth: '60%',
   },
@@ -469,51 +571,51 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#E5E5E5',
   },
   firestoreTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#000000',
     marginBottom: 8,
   },
   firestoreText: {
     fontSize: 12,
-    color: '#666666',
     fontFamily: 'monospace',
     marginBottom: 4,
   },
-  dataStatusBox: {
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 16,
-    borderWidth: 1,
+  dataStatusCard: {
+    borderLeftWidth: 4,
+  },
+  loadingCard: {
     alignItems: 'center',
+    paddingVertical: 24,
   },
-  dataStatusSuccess: {
-    backgroundColor: '#F0FFF4',
-    borderColor: '#34C759',
+  dataRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
   },
-  dataStatusWarning: {
-    backgroundColor: '#FFF3CD',
-    borderColor: '#FFC107',
-  },
-  dataStatusTitle: {
+  dataLabel: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#000000',
-    marginBottom: 8,
+  },
+  dataValue: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  warningRow: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 193, 7, 0.2)',
   },
   dataStatusText: {
     fontSize: 14,
-    color: '#666666',
-    marginBottom: 4,
+    marginTop: 8,
   },
   dataStatusWarningText: {
     fontSize: 13,
-    color: '#856404',
     fontWeight: '500',
-    marginTop: 8,
     textAlign: 'center',
+    lineHeight: 18,
   },
 });

@@ -211,10 +211,66 @@ service cloud.firestore {
         );
 
         // Update: User must be participant (for read receipts, status updates)
-        allow update: if isConversationParticipant();
+        // Epic 6: Block deprecated Epic 5 field writes
+        allow update: if isConversationParticipant() &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['metadata']) ||
+           !request.resource.data.metadata.keys().hasAny(['approved', 'bulkOperationId', 'approvalStatus']));
 
         // Delete: Not allowed (messages are immutable)
         allow delete: if false;
+      }
+
+      // Message Drafts (Story 6.2) - AI-generated response drafts with edit history
+      match /message_drafts/{draftId} {
+        // Helper function to safely check conversation participant
+        function isConversationParticipant() {
+          return request.auth != null &&
+                 exists(/databases/$(database)/documents/conversations/$(conversationId)) &&
+                 request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+        }
+
+        // Read: User must be participant in parent conversation
+        allow read: if isConversationParticipant();
+
+        // Create: User must be participant AND draft must be for valid message
+        allow create: if isConversationParticipant() &&
+                        request.resource.data.keys().hasAll(['messageId', 'conversationId', 'draftText', 'confidence', 'createdAt', 'version', 'isActive', 'expiresAt']) &&
+                        request.resource.data.conversationId == conversationId &&
+                        request.resource.data.messageId is string &&
+                        request.resource.data.draftText is string &&
+                        request.resource.data.draftText.size() > 0 &&
+                        request.resource.data.draftText.size() <= 2000 &&
+                        request.resource.data.confidence is number &&
+                        request.resource.data.confidence >= 0 &&
+                        request.resource.data.confidence <= 100 &&
+                        request.resource.data.version is number &&
+                        request.resource.data.version >= 1 &&
+                        request.resource.data.isActive is bool &&
+                        request.resource.data.createdAt is timestamp &&
+                        request.resource.data.expiresAt is timestamp;
+
+        // Update: User must be participant (for updating draft text or deactivating)
+        allow update: if isConversationParticipant() &&
+                        // Ensure conversationId and messageId cannot be changed
+                        request.resource.data.conversationId == resource.data.conversationId &&
+                        request.resource.data.messageId == resource.data.messageId &&
+                        // Validate draftText if being updated
+                        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['draftText']) ||
+                         (request.resource.data.draftText is string &&
+                          request.resource.data.draftText.size() > 0 &&
+                          request.resource.data.draftText.size() <= 2000)) &&
+                        // Validate other fields if being updated
+                        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['confidence']) ||
+                         (request.resource.data.confidence is number &&
+                          request.resource.data.confidence >= 0 &&
+                          request.resource.data.confidence <= 100)) &&
+                        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['isActive']) ||
+                         request.resource.data.isActive is bool) &&
+                        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['updatedAt']) ||
+                         request.resource.data.updatedAt is timestamp);
+
+        // Delete: User must be participant (for clearing drafts after send)
+        allow delete: if isConversationParticipant();
       }
     }
 
@@ -486,6 +542,32 @@ service cloud.firestore {
                             request.auth.uid == userId;
     }
 
+    // AI Optimization Recommendations - users can read, only Cloud Functions can write
+    match /users/{userId}/ai_optimization_recommendations/{recommendationId} {
+      // Read: Users can only read their own optimization recommendations
+      allow read: if request.auth != null &&
+                    request.auth.uid == userId;
+
+      // Write: Only Cloud Functions can write (no client writes allowed)
+      allow write: if false;
+    }
+
+    // Draft Edit Events (Story 6.2) - analytics for draft editing behavior
+    match /users/{userId}/draft_edit_events/{eventId} {
+      // Read and Write: Users can access their own draft edit analytics
+      // Used to track how users interact with AI-generated drafts
+      allow read, write: if request.auth != null &&
+                            request.auth.uid == userId;
+    }
+
+    // Draft Metrics (Story 6.2) - aggregate analytics for draft editing behavior
+    match /users/{userId}/draft_metrics/{metricId} {
+      // Read and Write: Users can access their own aggregate draft metrics
+      // Used to track aggregate statistics on draft usage and editing patterns
+      allow read, write: if request.auth != null &&
+                            request.auth.uid == userId;
+    }
+
     // AI Rate Limits - users can read and write their own rate limit data
     match /rate_limits/{limitId} {
       // Read and Write: Users can access rate limits for their own operations
@@ -495,6 +577,49 @@ service cloud.firestore {
       // Extract userId from the limitId by splitting on underscore and verify ownership
       allow read, write: if request.auth != null &&
                             limitId.split('_')[0] == request.auth.uid;
+
+      // Boundary Message Rate Limits (Story 6.4) - nested collection
+      match /boundary_messages/limits/{rateKeyId} {
+        // Read: Allow authenticated users (needed for checking if boundary was recently sent)
+        allow read: if request.auth != null;
+
+        // Write: Only Cloud Functions should write (client reads only)
+        // However, for testing and edge cases, allow creator to write their own limits
+        allow write: if request.auth != null &&
+                       request.resource.data.creatorId == request.auth.uid;
+      }
+    }
+
+    // Undo Archive Records (Story 6.4) - users can undo auto-archived messages within 24 hours
+    match /undo_archive/{undoId} {
+      // Read: Users can only read their own undo records
+      allow read: if request.auth != null &&
+                    resource.data.userId == request.auth.uid;
+
+      // Create: Only Cloud Functions should create (no client creates)
+      allow create: if false;
+
+      // Update: Users can update their own undo records (for undoing archive)
+      allow update: if request.auth != null &&
+                      resource.data.userId == request.auth.uid &&
+                      // Ensure userId cannot be changed
+                      request.resource.data.userId == resource.data.userId &&
+                      // Only allow updating canUndo and undoneAt fields
+                      request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['canUndo', 'undoneAt']);
+
+      // Delete: Only Cloud Functions should delete (TTL cleanup)
+      allow delete: if false;
+    }
+
+    // Engagement Metrics (Story 6.6) - health scoring and analytics
+    match /engagement_metrics/{metricId} {
+      // Read: Users can only read their own engagement metrics
+      allow read: if request.auth != null &&
+                    resource.data.userId == request.auth.uid;
+
+      // Write: Only Cloud Functions can write (scheduled aggregation job)
+      allow write: if false;
     }
 
     // Default deny all other access

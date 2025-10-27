@@ -1,8 +1,8 @@
 /**
- * Home screen component - Creator Command Center Dashboard (Story 5.7)
+ * Home screen component - Creator Dashboard (Story 5.7)
  * @component
  * @remarks
- * Comprehensive dashboard aggregating all AI features into a unified Command Center.
+ * Comprehensive dashboard aggregating all AI features into a unified view.
  * Uses dynamic widget system for customizable layout with real-time updates.
  */
 
@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationHeader } from '../_components/NavigationHeader';
 import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/contexts/ThemeContext';
 import { DashboardWidgetContainer } from '@/components/dashboard/DashboardWidgetContainer';
 import { opportunityService } from '@/services/opportunityService';
 import { dashboardService } from '@/services/dashboardService';
@@ -27,12 +28,13 @@ import type { Message } from '@/types/models';
 import type { DashboardSummary } from '@/types/dashboard';
 
 /**
- * Creator Command Center - Main home screen
+ * Creator Dashboard - Main home screen
  * Story 5.7 - Task 8: Transform home screen into comprehensive dashboard
  * @component
  */
 export default function HomeScreen() {
-  const { signOut, isLoading: authLoading, user } = useAuth();
+  const { isLoading: authLoading, user } = useAuth();
+  const { theme } = useTheme();
   const router = useRouter();
   const [opportunities, setOpportunities] = useState<Message[]>([]);
   const [dailySummary, setDailySummary] = useState<DashboardSummary | null>(null);
@@ -75,7 +77,7 @@ export default function HomeScreen() {
 
   /**
    * Load dashboard data (opportunities and summary)
-   * Story 5.7 - Task 8: Fetch data for Command Center widgets
+   * Story 5.7 - Task 8: Fetch data for Dashboard widgets
    * Story 5.7 - Task 10: Cache fetched data for instant load
    */
   const loadDashboardData = useCallback(async () => {
@@ -108,7 +110,7 @@ export default function HomeScreen() {
 
   /**
    * Handle pull-to-refresh
-   * Story 5.7 - Task 8: Pull-to-refresh for Command Center
+   * Story 5.7 - Task 8: Pull-to-refresh for Dashboard
    * Story 5.7 - Task 10: Clear cache on manual refresh
    */
   const handleRefresh = useCallback(async () => {
@@ -127,7 +129,7 @@ export default function HomeScreen() {
    */
   const handleMessagePress = useCallback(
     (conversationId: string) => {
-      router.push(`/conversations/${conversationId}`);
+      router.push(`/(tabs)/conversations/${conversationId}`);
     },
     [router]
   );
@@ -255,46 +257,51 @@ export default function HomeScreen() {
     }
   }, [loadDashboardData]);
 
-  const handleLogout = async () => {
-    try {
-      // Clear cache on logout (Story 5.7 - Task 10)
-      if (user?.uid) {
-        await clearCache(user.uid);
-      }
-
-      // Call signOut from auth service
-      // RootLayout's reactive routing will handle redirect to login after auth state changes
-      await signOut();
-    } catch (logoutError) {
-      console.error('Logout error:', logoutError);
-    }
-  };
-
   // Don't render if no user
   if (!user?.uid) {
     return null;
   }
 
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    degradedText: {
+      flex: 1,
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.error,
+      fontWeight: theme.typography.fontWeight.medium,
+    },
+    retryButton: {
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.xs,
+      backgroundColor: theme.colors.error,
+      borderRadius: theme.borderRadius.md,
+    },
+    retryText: {
+      fontSize: theme.typography.fontSize.sm,
+      color: '#FFFFFF',
+      fontWeight: theme.typography.fontWeight.bold,
+    },
+  });
+
   return (
-    <View style={styles.container}>
+    <View style={dynamicStyles.container}>
       <NavigationHeader
-        title="Command Center"
-        rightAction={{
-          icon: 'log-out-outline',
-          onPress: handleLogout,
-          disabled: authLoading,
-        }}
+        title="Dashboard"
       />
 
-      {/* Degraded State Banner (Story 5.7 - Task 11) */}
+      {/* Degraded State Banner (Story 5.7 - Task 11) - Robinhood style */}
       {!aiAvailable && (
         <View style={styles.degradedBanner}>
-          <Ionicons name="alert-circle" size={20} color="#E53E3E" />
-          <Text style={styles.degradedText}>
+          <Ionicons name="alert-circle" size={20} color={theme.colors.error} />
+          <Text style={dynamicStyles.degradedText}>
             AI features temporarily unavailable. Showing cached data.
           </Text>
-          <TouchableOpacity onPress={handleRetryAI} style={styles.retryButton}>
-            <Text style={styles.retryText}>Retry</Text>
+          <TouchableOpacity onPress={handleRetryAI} style={dynamicStyles.retryButton}>
+            <Text style={dynamicStyles.retryText}>Retry</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -303,6 +310,7 @@ export default function HomeScreen() {
         <DashboardWidgetContainer
           userId={user.uid}
           onMessagePress={handleMessagePress}
+          onViewDigestDetails={() => router.push('/(tabs)/daily-digest')}
           dashboardSummary={dailySummary || undefined}
           opportunities={opportunities}
           loading={loading}
@@ -316,11 +324,8 @@ export default function HomeScreen() {
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
   dashboardContainer: {
     flex: 1,
   },
@@ -333,22 +338,5 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     gap: 8,
-  },
-  degradedText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#991B1B',
-    fontWeight: '500',
-  },
-  retryButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#E53E3E',
-    borderRadius: 6,
-  },
-  retryText: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    fontWeight: '600',
   },
 });

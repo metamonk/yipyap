@@ -364,3 +364,54 @@ export const triggerDailyAgentManualV2 = https.onCall(
     }
   }
 );
+
+// WORKAROUND V3 - Caching bug struck again!
+// V2 deployment succeeded but continued serving old code without relationship score fix
+// This V3 trigger uses fresh deployment with the fix
+export const triggerDailyAgentManualV3 = https.onCall(
+  {
+    timeoutSeconds: 540,
+    memory: '1GiB',
+  },
+  async (request: https.CallableRequest<{ userId?: string }>) => {
+    // Verify authentication
+    if (!request.auth) {
+      throw new https.HttpsError(
+        'unauthenticated',
+        'User must be authenticated to trigger workflow'
+      );
+    }
+
+    const userId = request.data.userId || request.auth.uid;
+
+    // Verify user is triggering their own workflow or is admin
+    if (userId !== request.auth.uid) {
+      // TODO: Check if user is admin
+      throw new https.HttpsError(
+        'permission-denied',
+        'Users can only trigger their own workflow'
+      );
+    }
+
+    try {
+      console.log(`[V3] Manual trigger requested for user ${userId}`);
+
+      const result = await orchestrateWorkflow(userId, { bypassOnlineCheck: true });
+
+      return {
+        success: result.success,
+        executionId: result.executionId,
+        results: result.results,
+        metrics: result.metrics,
+        message: '[V3] Workflow triggered successfully with relationship score fix',
+      };
+    } catch (error) {
+      console.error(`[V3] Manual trigger failed for user ${userId}:`, error);
+      throw new https.HttpsError(
+        'internal',
+        'Failed to trigger workflow',
+        (error as Error).message
+      );
+    }
+  }
+);

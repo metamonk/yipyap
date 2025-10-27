@@ -12,6 +12,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { NavigationHeader } from '../../_components/NavigationHeader';
+import { useTheme } from '@/contexts/ThemeContext';
 import { FAQAnalytics } from '@/components/faq/FAQAnalytics';
 import { getFAQAnalytics } from '@/services/faqService';
 import { getFirebaseAuth } from '@/services/firebase';
@@ -34,12 +35,27 @@ import type { FAQAnalytics as FAQAnalyticsData } from '@/types/faq';
  */
 export default function FAQAnalyticsScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
   const auth = getFirebaseAuth();
   const currentUser = auth.currentUser;
 
   const [analytics, setAnalytics] = useState<FAQAnalyticsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    loadingText: {
+      color: theme.colors.textSecondary,
+    },
+    errorText: {
+      color: theme.colors.error,
+    },
+  });
 
   useEffect(() => {
     loadAnalytics();
@@ -66,7 +82,7 @@ export default function FAQAnalyticsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={dynamicStyles.container}>
       <NavigationHeader
         title="FAQ Analytics"
         leftAction={{
@@ -77,14 +93,14 @@ export default function FAQAnalyticsScreen() {
 
       {isLoading && (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading analytics...</Text>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={[styles.loadingText, dynamicStyles.loadingText]}>Loading analytics...</Text>
         </View>
       )}
 
       {error && (
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
+          <Text style={[styles.errorText, dynamicStyles.errorText]}>{error}</Text>
         </View>
       )}
 
@@ -93,11 +109,8 @@ export default function FAQAnalyticsScreen() {
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F2F2F7',
-  },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
@@ -106,7 +119,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: '#8E8E93',
     marginTop: 16,
   },
   errorContainer: {
@@ -117,7 +129,6 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: '#FF3B30',
     textAlign: 'center',
   },
 });

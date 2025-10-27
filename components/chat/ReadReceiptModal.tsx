@@ -21,6 +21,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/contexts/ThemeContext';
 import { Avatar } from '@/components/common/Avatar';
 import { getUserProfiles } from '@/services/userService';
 import type { Message, User } from '@/types/models';
@@ -87,6 +88,7 @@ export const ReadReceiptModal: FC<ReadReceiptModalProps> = ({
   message,
   participantIds,
 }) => {
+  const { theme } = useTheme();
   const [participants, setParticipants] = useState<ParticipantWithStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -138,6 +140,40 @@ export const ReadReceiptModal: FC<ReadReceiptModalProps> = ({
   const readParticipants = participants.filter((p) => p.hasRead);
   const unreadParticipants = participants.filter((p) => !p.hasRead);
 
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    modalContainer: {
+      backgroundColor: theme.colors.background,
+    },
+    modalContent: {
+      backgroundColor: theme.colors.surface,
+    },
+    header: {
+      borderBottomColor: theme.colors.borderLight,
+    },
+    headerTitle: {
+      color: theme.colors.textPrimary,
+    },
+    sectionTitle: {
+      color: theme.colors.textSecondary,
+    },
+    participantName: {
+      color: theme.colors.textPrimary,
+    },
+    loadingText: {
+      color: theme.colors.textSecondary,
+    },
+    errorText: {
+      color: theme.colors.error,
+    },
+    retryButton: {
+      backgroundColor: theme.colors.accent,
+    },
+    emptyText: {
+      color: theme.colors.textSecondary,
+    },
+  });
+
   /**
    * Renders a single participant item
    */
@@ -145,34 +181,34 @@ export const ReadReceiptModal: FC<ReadReceiptModalProps> = ({
     <View style={styles.participantItem}>
       <Avatar photoURL={item.photoURL || null} displayName={item.displayName} size={40} />
       <View style={styles.participantInfo}>
-        <Text style={styles.participantName}>{item.displayName}</Text>
+        <Text style={[styles.participantName, dynamicStyles.participantName]}>{item.displayName}</Text>
       </View>
     </View>
   );
 
   return (
-    <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={[styles.modalContainer, dynamicStyles.modalContainer]}>
+        <View style={[styles.modalContent, dynamicStyles.modalContent]}>
           {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>Read Receipts</Text>
+          <View style={[styles.header, dynamicStyles.header]}>
+            <Text style={[styles.headerTitle, dynamicStyles.headerTitle]}>Read Receipts</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="#000" />
+              <Ionicons name="close" size={24} color={theme.colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
           {/* Content */}
           {loading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#007AFF" />
-              <Text style={styles.loadingText}>Loading participants...</Text>
+              <ActivityIndicator size="large" color={theme.colors.accent} />
+              <Text style={[styles.loadingText, dynamicStyles.loadingText]}>Loading participants...</Text>
             </View>
           ) : error ? (
             <View style={styles.errorContainer}>
-              <Ionicons name="alert-circle" size={48} color="#FF3B30" />
-              <Text style={styles.errorText}>{error}</Text>
-              <TouchableOpacity onPress={loadParticipants} style={styles.retryButton}>
+              <Ionicons name="alert-circle" size={48} color={theme.colors.error} />
+              <Text style={[styles.errorText, dynamicStyles.errorText]}>{error}</Text>
+              <TouchableOpacity onPress={loadParticipants} style={[styles.retryButton, dynamicStyles.retryButton]}>
                 <Text style={styles.retryButtonText}>Retry</Text>
               </TouchableOpacity>
             </View>
@@ -181,7 +217,7 @@ export const ReadReceiptModal: FC<ReadReceiptModalProps> = ({
               {/* Read by section */}
               {readParticipants.length > 0 && (
                 <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Read by {readParticipants.length}</Text>
+                  <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>READ BY {readParticipants.length}</Text>
                   <FlatList
                     data={readParticipants}
                     renderItem={renderParticipant}
@@ -194,7 +230,7 @@ export const ReadReceiptModal: FC<ReadReceiptModalProps> = ({
               {/* Delivered to section */}
               {unreadParticipants.length > 0 && (
                 <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Delivered to {unreadParticipants.length}</Text>
+                  <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>DELIVERED TO {unreadParticipants.length}</Text>
                   <FlatList
                     data={unreadParticipants}
                     renderItem={renderParticipant}
@@ -207,7 +243,7 @@ export const ReadReceiptModal: FC<ReadReceiptModalProps> = ({
               {/* No participants message */}
               {participants.length === 0 && (
                 <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>No participants to display</Text>
+                  <Text style={[styles.emptyText, dynamicStyles.emptyText]}>No participants to display</Text>
                 </View>
               )}
             </ScrollView>
@@ -218,31 +254,24 @@ export const ReadReceiptModal: FC<ReadReceiptModalProps> = ({
   );
 };
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
-  modalOverlay: {
+  modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '80%',
-    minHeight: 300,
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    padding: 20,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#000',
   },
   closeButton: {
     padding: 4,
@@ -254,17 +283,16 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   sectionTitle: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#8E8E93',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingBottom: 12,
-    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   participantItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 12,
   },
   participantInfo: {
@@ -272,9 +300,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   participantName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '500',
-    color: '#000',
   },
   loadingContainer: {
     flex: 1,
@@ -284,8 +311,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 16,
-    fontSize: 16,
-    color: '#8E8E93',
+    fontSize: 17,
   },
   errorContainer: {
     flex: 1,
@@ -295,19 +321,17 @@ const styles = StyleSheet.create({
   },
   errorText: {
     marginTop: 16,
-    fontSize: 16,
-    color: '#FF3B30',
+    fontSize: 17,
     textAlign: 'center',
   },
   retryButton: {
     marginTop: 16,
     paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: '#007AFF',
     borderRadius: 8,
   },
   retryButtonText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
     color: '#FFFFFF',
   },
@@ -318,7 +342,6 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   emptyText: {
-    fontSize: 16,
-    color: '#8E8E93',
+    fontSize: 17,
   },
 });

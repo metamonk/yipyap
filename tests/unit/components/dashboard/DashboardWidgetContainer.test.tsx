@@ -45,7 +45,6 @@ jest.mock('@/services/bulkOperationsService', () => ({
   bulkOperationsService: {
     archiveAllRead: jest.fn(),
     markAllAsRead: jest.fn(),
-    batchApproveSuggestions: jest.fn(),
   },
 }));
 

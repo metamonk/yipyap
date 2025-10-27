@@ -14,10 +14,15 @@ import {
   Alert,
   ScrollView,
   TextInput,
+  TouchableOpacity,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { NavigationHeader } from '../../_components/NavigationHeader';
+import { ThemeSelector } from '@/components/common/ThemeSelector';
+import { useTheme } from '@/contexts/ThemeContext';
+import { useAuth } from '@/hooks/useAuth';
 import { getFirebaseAuth } from '@/services/firebase';
 import {
   getNotificationPreferences,
@@ -25,6 +30,7 @@ import {
   getOpportunityNotificationSettings,
   updateOpportunityNotificationSettings,
 } from '@/services/userService';
+import { clearCache } from '@/services/dashboardService';
 import { NotificationPreferences, User } from '@/types/user';
 
 /**
@@ -33,6 +39,8 @@ import { NotificationPreferences, User } from '@/types/user';
  */
 export default function SettingsScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
+  const { signOut } = useAuth();
   const auth = getFirebaseAuth();
   const currentUser = auth.currentUser;
 
@@ -158,16 +166,171 @@ export default function SettingsScreen() {
     }
   };
 
+  /**
+   * Handles sign out
+   */
+  const handleSignOut = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Clear cache on logout
+              if (currentUser?.uid) {
+                await clearCache(currentUser.uid);
+              }
+              // Sign out - RootLayout will handle redirect to login
+              await signOut();
+            } catch (error) {
+              console.error('Sign out error:', error);
+              Alert.alert('Error', 'Failed to sign out. Please try again.');
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    title: {
+      color: theme.colors.textPrimary,
+    },
+    subtitle: {
+      color: theme.colors.textSecondary,
+    },
+    sectionHeader: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: theme.colors.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 12,
+      marginTop: 24,
+    },
+    centerContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: theme.colors.background,
+    },
+    section: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.borderLight,
+      marginBottom: theme.spacing.base,
+      paddingVertical: theme.spacing.sm,
+      borderRadius: 12,
+      borderWidth: 1,
+      ...theme.shadows.sm,
+    },
+    sectionTitle: {
+      fontSize: theme.typography.fontSize.xs,
+      fontWeight: theme.typography.fontWeight.semibold,
+      color: theme.colors.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      paddingHorizontal: theme.spacing.base,
+      paddingTop: theme.spacing.sm,
+      paddingBottom: theme.spacing.sm,
+    },
+    settingRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: theme.spacing.base,
+      paddingVertical: theme.spacing.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    settingLabel: {
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.textPrimary,
+      marginBottom: 4,
+    },
+    settingDescription: {
+      fontSize: theme.typography.fontSize.xs,
+      color: theme.colors.textSecondary,
+    },
+    subsectionTitle: {
+      fontSize: theme.typography.fontSize.xs,
+      fontWeight: theme.typography.fontWeight.semibold,
+      color: theme.colors.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      paddingHorizontal: theme.spacing.base,
+      paddingTop: theme.spacing.base,
+      paddingBottom: theme.spacing.sm,
+    },
+    sliderRow: {
+      paddingHorizontal: theme.spacing.base,
+      paddingVertical: theme.spacing.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    sliderValue: {
+      fontSize: theme.typography.fontSize.base,
+      fontWeight: theme.typography.fontWeight.semibold,
+      color: theme.colors.accent,
+      textAlign: 'center',
+      marginTop: theme.spacing.sm,
+    },
+    timeInputLabel: {
+      fontSize: theme.typography.fontSize.xs,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.sm,
+    },
+    timeInput: {
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.textPrimary,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+      borderWidth: 1,
+      borderColor: theme.colors.borderLight,
+      borderRadius: theme.borderRadius.md,
+      backgroundColor: theme.colors.surface,
+    },
+    savingText: {
+      marginLeft: theme.spacing.sm,
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.textSecondary,
+    },
+    signOutButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: theme.spacing.md,
+      gap: 8,
+    },
+    signOutText: {
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.error,
+      fontWeight: theme.typography.fontWeight.semibold,
+    },
+  });
+
   if (isLoading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+      <View style={dynamicStyles.centerContainer}>
+        <ActivityIndicator size="large" color={theme.colors.accent} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={dynamicStyles.container}>
       <NavigationHeader
         title="Settings"
         leftAction={{
@@ -176,15 +339,27 @@ export default function SettingsScreen() {
         }}
       />
 
-      <ScrollView style={styles.content}>
-        {/* Global Notifications Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Notifications</Text>
+      <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
+        {/* Page Header */}
+        <Text style={[styles.title, dynamicStyles.title]}>Settings</Text>
+        <Text style={[styles.subtitle, dynamicStyles.subtitle]}>
+          Configure app preferences, notifications, and opportunity alerts
+        </Text>
 
-          <View style={styles.settingRow}>
+        {/* Theme Selection Section */}
+        <Text style={dynamicStyles.sectionHeader}>APPEARANCE</Text>
+        <View style={dynamicStyles.section}>
+          <ThemeSelector />
+        </View>
+
+        {/* Global Notifications Section */}
+        <Text style={dynamicStyles.sectionHeader}>NOTIFICATIONS</Text>
+        <View style={dynamicStyles.section}>
+
+          <View style={dynamicStyles.settingRow}>
             <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Enable Notifications</Text>
-              <Text style={styles.settingDescription}>
+              <Text style={dynamicStyles.settingLabel}>Enable Notifications</Text>
+              <Text style={dynamicStyles.settingDescription}>
                 Receive push notifications for new messages
               </Text>
             </View>
@@ -192,17 +367,18 @@ export default function SettingsScreen() {
               value={preferences.enabled}
               onValueChange={(value) => handleToggle('enabled', value)}
               disabled={isSaving}
-              trackColor={{ false: '#D1D1D6', true: '#34C759' }}
-              ios_backgroundColor="#D1D1D6"
+              trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+              thumbColor="#FFFFFF"
+              ios_backgroundColor={theme.colors.borderLight}
             />
           </View>
 
           {preferences.enabled && (
             <>
-              <View style={styles.settingRow}>
+              <View style={dynamicStyles.settingRow}>
                 <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>Show Message Preview</Text>
-                  <Text style={styles.settingDescription}>
+                  <Text style={dynamicStyles.settingLabel}>Show Message Preview</Text>
+                  <Text style={dynamicStyles.settingDescription}>
                     Display message content in notifications
                   </Text>
                 </View>
@@ -210,36 +386,39 @@ export default function SettingsScreen() {
                   value={preferences.showPreview}
                   onValueChange={(value) => handleToggle('showPreview', value)}
                   disabled={isSaving}
-                  trackColor={{ false: '#D1D1D6', true: '#34C759' }}
-                  ios_backgroundColor="#D1D1D6"
+                  trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+                  thumbColor="#FFFFFF"
+                  ios_backgroundColor={theme.colors.borderLight}
                 />
               </View>
 
-              <View style={styles.settingRow}>
+              <View style={dynamicStyles.settingRow}>
                 <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>Sound</Text>
-                  <Text style={styles.settingDescription}>Play notification sound</Text>
+                  <Text style={dynamicStyles.settingLabel}>Sound</Text>
+                  <Text style={dynamicStyles.settingDescription}>Play notification sound</Text>
                 </View>
                 <Switch
                   value={preferences.sound}
                   onValueChange={(value) => handleToggle('sound', value)}
                   disabled={isSaving}
-                  trackColor={{ false: '#D1D1D6', true: '#34C759' }}
-                  ios_backgroundColor="#D1D1D6"
+                  trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+                  thumbColor="#FFFFFF"
+                  ios_backgroundColor={theme.colors.borderLight}
                 />
               </View>
 
-              <View style={styles.settingRow}>
+              <View style={dynamicStyles.settingRow}>
                 <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>Vibration</Text>
-                  <Text style={styles.settingDescription}>Vibrate on notification</Text>
+                  <Text style={dynamicStyles.settingLabel}>Vibration</Text>
+                  <Text style={dynamicStyles.settingDescription}>Vibrate on notification</Text>
                 </View>
                 <Switch
                   value={preferences.vibration}
                   onValueChange={(value) => handleToggle('vibration', value)}
                   disabled={isSaving}
-                  trackColor={{ false: '#D1D1D6', true: '#34C759' }}
-                  ios_backgroundColor="#D1D1D6"
+                  trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+                  thumbColor="#FFFFFF"
+                  ios_backgroundColor={theme.colors.borderLight}
                 />
               </View>
             </>
@@ -248,13 +427,14 @@ export default function SettingsScreen() {
 
         {/* Notification Types Section */}
         {preferences.enabled && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Notification Types</Text>
+          <>
+            <Text style={dynamicStyles.sectionHeader}>NOTIFICATION TYPES</Text>
+            <View style={dynamicStyles.section}>
 
-            <View style={styles.settingRow}>
+            <View style={dynamicStyles.settingRow}>
               <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>Direct Messages</Text>
-                <Text style={styles.settingDescription}>
+                <Text style={dynamicStyles.settingLabel}>Direct Messages</Text>
+                <Text style={dynamicStyles.settingDescription}>
                   Notifications for 1-on-1 conversations
                 </Text>
               </View>
@@ -262,29 +442,31 @@ export default function SettingsScreen() {
                 value={preferences.directMessages}
                 onValueChange={(value) => handleToggle('directMessages', value)}
                 disabled={isSaving}
-                trackColor={{ false: '#D1D1D6', true: '#34C759' }}
-                ios_backgroundColor="#D1D1D6"
+                trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+                thumbColor="#FFFFFF"
+                ios_backgroundColor={theme.colors.borderLight}
               />
             </View>
 
-            <View style={styles.settingRow}>
+            <View style={dynamicStyles.settingRow}>
               <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>Group Messages</Text>
-                <Text style={styles.settingDescription}>Notifications for group conversations</Text>
+                <Text style={dynamicStyles.settingLabel}>Group Messages</Text>
+                <Text style={dynamicStyles.settingDescription}>Notifications for group conversations</Text>
               </View>
               <Switch
                 value={preferences.groupMessages}
                 onValueChange={(value) => handleToggle('groupMessages', value)}
                 disabled={isSaving}
-                trackColor={{ false: '#D1D1D6', true: '#34C759' }}
-                ios_backgroundColor="#D1D1D6"
+                trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+                thumbColor="#FFFFFF"
+                ios_backgroundColor={theme.colors.borderLight}
               />
             </View>
 
-            <View style={styles.settingRow}>
+            <View style={dynamicStyles.settingRow}>
               <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>System Messages</Text>
-                <Text style={styles.settingDescription}>
+                <Text style={dynamicStyles.settingLabel}>System Messages</Text>
+                <Text style={dynamicStyles.settingDescription}>
                   Notifications for system announcements
                 </Text>
               </View>
@@ -292,21 +474,22 @@ export default function SettingsScreen() {
                 value={preferences.systemMessages}
                 onValueChange={(value) => handleToggle('systemMessages', value)}
                 disabled={isSaving}
-                trackColor={{ false: '#D1D1D6', true: '#34C759' }}
-                ios_backgroundColor="#D1D1D6"
+                trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+                thumbColor="#FFFFFF"
+                ios_backgroundColor={theme.colors.borderLight}
               />
             </View>
-          </View>
+            </View>
+          </>
         )}
 
         {/* Opportunity Notifications Section (Story 5.6 - Task 9) */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Business Opportunities</Text>
-
-          <View style={styles.settingRow}>
+        <Text style={dynamicStyles.sectionHeader}>BUSINESS OPPORTUNITIES</Text>
+        <View style={dynamicStyles.section}>
+          <View style={dynamicStyles.settingRow}>
             <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Opportunity Notifications</Text>
-              <Text style={styles.settingDescription}>
+              <Text style={dynamicStyles.settingLabel}>Opportunity Notifications</Text>
+              <Text style={dynamicStyles.settingDescription}>
                 Get notified about high-value business opportunities
               </Text>
             </View>
@@ -314,18 +497,19 @@ export default function SettingsScreen() {
               value={opportunitySettings.enabled}
               onValueChange={(value) => handleOpportunitySettingsUpdate({ enabled: value })}
               disabled={isSaving}
-              trackColor={{ false: '#D1D1D6', true: '#34C759' }}
-              ios_backgroundColor="#D1D1D6"
+              trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+              thumbColor="#FFFFFF"
+              ios_backgroundColor={theme.colors.borderLight}
             />
           </View>
 
           {opportunitySettings.enabled && (
             <>
               {/* Minimum Score Slider */}
-              <View style={styles.sliderRow}>
+              <View style={dynamicStyles.sliderRow}>
                 <View style={styles.sliderInfo}>
-                  <Text style={styles.settingLabel}>Minimum Score Threshold</Text>
-                  <Text style={styles.settingDescription}>
+                  <Text style={dynamicStyles.settingLabel}>Minimum Score Threshold</Text>
+                  <Text style={dynamicStyles.settingDescription}>
                     Only notify for opportunities scoring {opportunitySettings.minimumScore} or
                     higher
                   </Text>
@@ -339,21 +523,21 @@ export default function SettingsScreen() {
                   onValueChange={(value: number) =>
                     handleOpportunitySettingsUpdate({ minimumScore: value })
                   }
-                  minimumTrackTintColor="#007AFF"
-                  maximumTrackTintColor="#D1D1D6"
-                  thumbTintColor="#007AFF"
+                  minimumTrackTintColor={theme.colors.accent}
+                  maximumTrackTintColor={theme.colors.borderLight}
+                  thumbTintColor={theme.colors.accent}
                   disabled={isSaving}
                 />
-                <Text style={styles.sliderValue}>{opportunitySettings.minimumScore}</Text>
+                <Text style={dynamicStyles.sliderValue}>{opportunitySettings.minimumScore}</Text>
               </View>
 
               {/* Opportunity Types */}
-              <Text style={styles.subsectionTitle}>Notify By Type</Text>
+              <Text style={dynamicStyles.subsectionTitle}>Notify By Type</Text>
 
-              <View style={styles.settingRow}>
+              <View style={dynamicStyles.settingRow}>
                 <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>Sponsorships</Text>
-                  <Text style={styles.settingDescription}>Brand deals and sponsorship offers</Text>
+                  <Text style={dynamicStyles.settingLabel}>Sponsorships</Text>
+                  <Text style={dynamicStyles.settingDescription}>Brand deals and sponsorship offers</Text>
                 </View>
                 <Switch
                   value={opportunitySettings.notifyByType.sponsorship}
@@ -363,15 +547,16 @@ export default function SettingsScreen() {
                     })
                   }
                   disabled={isSaving}
-                  trackColor={{ false: '#D1D1D6', true: '#34C759' }}
-                  ios_backgroundColor="#D1D1D6"
+                  trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+                  thumbColor="#FFFFFF"
+                  ios_backgroundColor={theme.colors.borderLight}
                 />
               </View>
 
-              <View style={styles.settingRow}>
+              <View style={dynamicStyles.settingRow}>
                 <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>Collaborations</Text>
-                  <Text style={styles.settingDescription}>Creative partnerships and collabs</Text>
+                  <Text style={dynamicStyles.settingLabel}>Collaborations</Text>
+                  <Text style={dynamicStyles.settingDescription}>Creative partnerships and collabs</Text>
                 </View>
                 <Switch
                   value={opportunitySettings.notifyByType.collaboration}
@@ -381,15 +566,16 @@ export default function SettingsScreen() {
                     })
                   }
                   disabled={isSaving}
-                  trackColor={{ false: '#D1D1D6', true: '#34C759' }}
-                  ios_backgroundColor="#D1D1D6"
+                  trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+                  thumbColor="#FFFFFF"
+                  ios_backgroundColor={theme.colors.borderLight}
                 />
               </View>
 
-              <View style={styles.settingRow}>
+              <View style={dynamicStyles.settingRow}>
                 <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>Partnerships</Text>
-                  <Text style={styles.settingDescription}>Long-term business partnerships</Text>
+                  <Text style={dynamicStyles.settingLabel}>Partnerships</Text>
+                  <Text style={dynamicStyles.settingDescription}>Long-term business partnerships</Text>
                 </View>
                 <Switch
                   value={opportunitySettings.notifyByType.partnership}
@@ -399,15 +585,16 @@ export default function SettingsScreen() {
                     })
                   }
                   disabled={isSaving}
-                  trackColor={{ false: '#D1D1D6', true: '#34C759' }}
-                  ios_backgroundColor="#D1D1D6"
+                  trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+                  thumbColor="#FFFFFF"
+                  ios_backgroundColor={theme.colors.borderLight}
                 />
               </View>
 
-              <View style={styles.settingRow}>
+              <View style={dynamicStyles.settingRow}>
                 <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>Sales & Products</Text>
-                  <Text style={styles.settingDescription}>
+                  <Text style={dynamicStyles.settingLabel}>Sales & Products</Text>
+                  <Text style={dynamicStyles.settingDescription}>
                     Product purchases and sales inquiries
                   </Text>
                 </View>
@@ -419,18 +606,19 @@ export default function SettingsScreen() {
                     })
                   }
                   disabled={isSaving}
-                  trackColor={{ false: '#D1D1D6', true: '#34C759' }}
-                  ios_backgroundColor="#D1D1D6"
+                  trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+                  thumbColor="#FFFFFF"
+                  ios_backgroundColor={theme.colors.borderLight}
                 />
               </View>
 
               {/* Quiet Hours */}
-              <Text style={styles.subsectionTitle}>Quiet Hours</Text>
+              <Text style={dynamicStyles.subsectionTitle}>Quiet Hours</Text>
 
-              <View style={styles.settingRow}>
+              <View style={dynamicStyles.settingRow}>
                 <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>Enable Quiet Hours</Text>
-                  <Text style={styles.settingDescription}>
+                  <Text style={dynamicStyles.settingLabel}>Enable Quiet Hours</Text>
+                  <Text style={dynamicStyles.settingDescription}>
                     Pause opportunity notifications during quiet hours
                   </Text>
                 </View>
@@ -442,8 +630,9 @@ export default function SettingsScreen() {
                     })
                   }
                   disabled={isSaving}
-                  trackColor={{ false: '#D1D1D6', true: '#34C759' }}
-                  ios_backgroundColor="#D1D1D6"
+                  trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+                  thumbColor="#FFFFFF"
+                  ios_backgroundColor={theme.colors.borderLight}
                 />
               </View>
 
@@ -451,9 +640,9 @@ export default function SettingsScreen() {
                 <>
                   <View style={styles.timeInputRow}>
                     <View style={styles.timeInputContainer}>
-                      <Text style={styles.timeInputLabel}>Start Time</Text>
+                      <Text style={dynamicStyles.timeInputLabel}>Start Time</Text>
                       <TextInput
-                        style={styles.timeInput}
+                        style={dynamicStyles.timeInput}
                         value={opportunitySettings.quietHours?.start || '22:00'}
                         onChangeText={(value) =>
                           handleOpportunitySettingsUpdate({
@@ -461,14 +650,14 @@ export default function SettingsScreen() {
                           })
                         }
                         placeholder="22:00"
-                        placeholderTextColor="#C7C7CC"
+                        placeholderTextColor={theme.colors.textTertiary}
                         editable={!isSaving}
                       />
                     </View>
                     <View style={styles.timeInputContainer}>
-                      <Text style={styles.timeInputLabel}>End Time</Text>
+                      <Text style={dynamicStyles.timeInputLabel}>End Time</Text>
                       <TextInput
-                        style={styles.timeInput}
+                        style={dynamicStyles.timeInput}
                         value={opportunitySettings.quietHours?.end || '08:00'}
                         onChangeText={(value) =>
                           handleOpportunitySettingsUpdate({
@@ -476,7 +665,7 @@ export default function SettingsScreen() {
                           })
                         }
                         placeholder="08:00"
-                        placeholderTextColor="#C7C7CC"
+                        placeholderTextColor={theme.colors.textTertiary}
                         editable={!isSaving}
                       />
                     </View>
@@ -487,10 +676,23 @@ export default function SettingsScreen() {
           )}
         </View>
 
+        {/* Account Section */}
+        <Text style={dynamicStyles.sectionHeader}>ACCOUNT</Text>
+        <View style={dynamicStyles.section}>
+          <TouchableOpacity
+            style={dynamicStyles.signOutButton}
+            onPress={handleSignOut}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="log-out-outline" size={20} color={theme.colors.error} />
+            <Text style={dynamicStyles.signOutText}>Sign Out</Text>
+          </TouchableOpacity>
+        </View>
+
         {isSaving && (
           <View style={styles.savingIndicator}>
-            <ActivityIndicator size="small" color="#007AFF" />
-            <Text style={styles.savingText}>Saving...</Text>
+            <ActivityIndicator size="small" color={theme.colors.accent} />
+            <Text style={dynamicStyles.savingText}>Saving...</Text>
           </View>
         )}
       </ScrollView>
@@ -498,56 +700,28 @@ export default function SettingsScreen() {
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F2F2F7',
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F2F2F7',
-  },
   content: {
     flex: 1,
   },
-  section: {
-    backgroundColor: '#FFFFFF',
-    marginTop: 20,
-    paddingVertical: 8,
+  scrollContent: {
+    padding: 24,
+    paddingBottom: 32,
   },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#8E8E93',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 8,
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 8,
   },
-  settingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#C6C6C8',
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    marginBottom: 16,
   },
   settingInfo: {
     flex: 1,
     marginRight: 16,
-  },
-  settingLabel: {
-    fontSize: 17,
-    color: '#000000',
-    marginBottom: 4,
-  },
-  settingDescription: {
-    fontSize: 13,
-    color: '#8E8E93',
   },
   savingIndicator: {
     flexDirection: 'row',
@@ -555,41 +729,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
   },
-  savingText: {
-    marginLeft: 8,
-    fontSize: 15,
-    color: '#8E8E93',
-  },
-  // Opportunity settings styles (Story 5.6 - Task 9)
-  subsectionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#8E8E93',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
-  sliderRow: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#C6C6C8',
-  },
   sliderInfo: {
     marginBottom: 12,
   },
   slider: {
     width: '100%',
     height: 40,
-  },
-  sliderValue: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#007AFF',
-    textAlign: 'center',
-    marginTop: 8,
   },
   timeInputRow: {
     flexDirection: 'row',
@@ -600,20 +745,5 @@ const styles = StyleSheet.create({
   },
   timeInputContainer: {
     flex: 1,
-  },
-  timeInputLabel: {
-    fontSize: 13,
-    color: '#8E8E93',
-    marginBottom: 8,
-  },
-  timeInput: {
-    fontSize: 17,
-    color: '#000000',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: '#C6C6C8',
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
   },
 });

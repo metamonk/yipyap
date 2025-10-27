@@ -359,6 +359,16 @@ export interface Message {
     autoResponseId?: string;
 
     /**
+     * Display name of the message sender (Fallback for auto-responses)
+     * @remarks
+     * Used as a fallback when the sender's user profile cannot be loaded.
+     * Primarily set for auto-response messages to ensure the recipient
+     * always sees the sender's name even if the profile is missing.
+     * Added to fix issue where auto-responses showed "Unknown" sender.
+     */
+    senderDisplayName?: string;
+
+    /**
      * Suggested FAQ for creator approval (Story 5.4)
      * @remarks
      * Set when FAQ match has medium confidence (0.70-0.84)

@@ -23,6 +23,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/contexts/ThemeContext';
 import type { FAQTemplate } from '@/types/faq';
 import { toggleFAQActive } from '@/services/faqService';
 
@@ -67,8 +68,39 @@ export const FAQTemplateCard: FC<FAQTemplateCardProps> = ({
   onPress,
   onUpdate,
 }) => {
+  const { theme } = useTheme();
   const [isTogglingActive, setIsTogglingActive] = useState(false);
   const [isActive, setIsActive] = useState(template.isActive);
+
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.borderLight,
+      ...theme.shadows.sm,
+    },
+    question: {
+      color: theme.colors.textPrimary,
+    },
+    answer: {
+      color: theme.colors.textSecondary,
+    },
+    statsIcon: {
+      color: theme.colors.textSecondary,
+    },
+    statsText: {
+      color: theme.colors.textSecondary,
+    },
+    chevronIcon: {
+      color: theme.colors.disabled || '#C7C7CC',
+    },
+    inactiveOverlayIcon: {
+      color: theme.colors.textSecondary,
+    },
+    inactiveText: {
+      color: theme.colors.textSecondary,
+    },
+  });
 
   /**
    * Handles toggling the active status of the FAQ template
@@ -122,7 +154,7 @@ export const FAQTemplateCard: FC<FAQTemplateCardProps> = ({
 
   return (
     <TouchableOpacity
-      style={[styles.container, !isActive && styles.containerInactive]}
+      style={[styles.container, dynamicStyles.container, !isActive && styles.containerInactive]}
       onPress={() => onPress(template)}
       activeOpacity={0.7}
     >
@@ -141,65 +173,59 @@ export const FAQTemplateCard: FC<FAQTemplateCardProps> = ({
 
         <View style={styles.toggleContainer}>
           {isTogglingActive ? (
-            <ActivityIndicator size="small" color="#007AFF" />
+            <ActivityIndicator size="small" color={theme.colors.accent} />
           ) : (
             <Switch
               value={isActive}
               onValueChange={handleToggleActive}
-              trackColor={{ false: '#E5E5EA', true: '#34C759' }}
+              trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
               thumbColor="#FFFFFF"
-              ios_backgroundColor="#E5E5EA"
+              ios_backgroundColor={theme.colors.borderLight}
             />
           )}
         </View>
       </View>
 
       {/* Question */}
-      <Text style={styles.question} numberOfLines={2} ellipsizeMode="tail">
+      <Text style={[styles.question, dynamicStyles.question]} numberOfLines={2} ellipsizeMode="tail">
         {template.question}
       </Text>
 
       {/* Answer Preview */}
-      <Text style={styles.answer} numberOfLines={1} ellipsizeMode="tail">
+      <Text style={[styles.answer, dynamicStyles.answer]} numberOfLines={1} ellipsizeMode="tail">
         {template.answer}
       </Text>
 
       {/* Footer: Stats and Edit Icon */}
       <View style={styles.footer}>
         <View style={styles.stats}>
-          <Ionicons name="repeat-outline" size={16} color="#8E8E93" />
-          <Text style={styles.statsText}>
+          <Ionicons name="repeat-outline" size={16} color={dynamicStyles.statsIcon.color} />
+          <Text style={[styles.statsText, dynamicStyles.statsText]}>
             Used {template.useCount} {template.useCount === 1 ? 'time' : 'times'}
           </Text>
         </View>
 
-        <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+        <Ionicons name="chevron-forward" size={20} color={dynamicStyles.chevronIcon.color} />
       </View>
 
       {/* Inactive Overlay */}
       {!isActive && (
         <View style={styles.inactiveOverlay}>
-          <Ionicons name="pause-circle-outline" size={24} color="#8E8E93" />
-          <Text style={styles.inactiveText}>Inactive</Text>
+          <Ionicons name="pause-circle-outline" size={24} color={dynamicStyles.inactiveOverlayIcon.color} />
+          <Text style={[styles.inactiveText, dynamicStyles.inactiveText]}>Inactive</Text>
         </View>
       )}
     </TouchableOpacity>
   );
 };
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
   },
   containerInactive: {
     opacity: 0.6,
@@ -228,13 +254,11 @@ const styles = StyleSheet.create({
   question: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#000000',
     marginBottom: 8,
     lineHeight: 22,
   },
   answer: {
     fontSize: 15,
-    color: '#8E8E93',
     marginBottom: 12,
     lineHeight: 20,
   },
@@ -249,7 +273,6 @@ const styles = StyleSheet.create({
   },
   statsText: {
     fontSize: 14,
-    color: '#8E8E93',
     marginLeft: 6,
   },
   inactiveOverlay: {
@@ -262,7 +285,6 @@ const styles = StyleSheet.create({
   inactiveText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#8E8E93',
     marginTop: 4,
   },
 });

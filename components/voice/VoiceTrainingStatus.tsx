@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { getFirebaseDb } from '@/services/firebase';
+import { useTheme } from '@/contexts/ThemeContext';
 import type { VoiceProfile } from '@/types/ai';
 
 /**
@@ -73,6 +74,7 @@ export const VoiceTrainingStatus: FC<VoiceTrainingStatusProps> = ({
   userId,
   retrainingSchedule = 'weekly',
 }) => {
+  const { theme } = useTheme();
   const [voiceProfile, setVoiceProfile] = useState<VoiceProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -142,10 +144,73 @@ export const VoiceTrainingStatus: FC<VoiceTrainingStatusProps> = ({
     }
   }, [voiceProfile, userId]);
 
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    statusCard: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.borderLight,
+    },
+    statusLabel: {
+      color: theme.colors.textSecondary,
+    },
+    statusValue: {
+      color: theme.colors.textPrimary,
+    },
+    statusReady: {
+      color: theme.colors.success || '#34C759',
+    },
+    statusNotTrained: {
+      color: theme.colors.warning || '#FF9500',
+    },
+    helpText: {
+      color: theme.colors.textSecondary,
+    },
+    detailLabel: {
+      color: theme.colors.textSecondary,
+    },
+    detailValue: {
+      color: theme.colors.textPrimary,
+    },
+    detailRow: {
+      borderTopColor: theme.colors.borderLight,
+    },
+    progressLabel: {
+      color: theme.colors.textSecondary,
+    },
+    progressText: {
+      color: theme.colors.textPrimary,
+    },
+    progressBarContainer: {
+      backgroundColor: theme.colors.borderLight,
+    },
+    progressBarFill: {
+      backgroundColor: theme.colors.accent,
+    },
+    metricsHeader: {
+      borderTopColor: theme.colors.accent,
+    },
+    metricsHeaderText: {
+      color: theme.colors.accent,
+    },
+    alertContainer: {
+      backgroundColor: theme.colors.warningBackground || '#FFF3CD',
+      borderColor: theme.colors.warning || '#FFC107',
+    },
+    alertTitle: {
+      color: theme.colors.warningText || '#856404',
+    },
+    alertMessage: {
+      color: theme.colors.warningText || '#856404',
+    },
+    alertAction: {
+      color: theme.colors.warningText || '#856404',
+    },
+  });
+
   if (loading) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="small" color="#6C63FF" />
+        <ActivityIndicator size="small" color={theme.colors.accent} />
       </View>
     );
   }
@@ -157,26 +222,26 @@ export const VoiceTrainingStatus: FC<VoiceTrainingStatusProps> = ({
 
     return (
       <View style={styles.container}>
-        <View style={styles.statusCard}>
-          <Text style={styles.statusLabel}>Voice Profile Status</Text>
-          <Text style={[styles.statusValue, styles.statusNotTrained]}>
+        <View style={[styles.statusCard, dynamicStyles.statusCard]}>
+          <Text style={[styles.statusLabel, dynamicStyles.statusLabel]}>Voice Profile Status</Text>
+          <Text style={[styles.statusValue, dynamicStyles.statusValue, dynamicStyles.statusNotTrained]}>
             {sampleCount === 0 ? 'Not Trained' : 'In Progress'}
           </Text>
 
           {/* Training Progress */}
           <View style={styles.progressSection}>
-            <Text style={styles.progressLabel}>Training Progress</Text>
-            <Text style={styles.progressText}>
+            <Text style={[styles.progressLabel, dynamicStyles.progressLabel]}>Training Progress</Text>
+            <Text style={[styles.progressText, dynamicStyles.progressText]}>
               {sampleCount} / 50 messages
             </Text>
 
             {/* Progress Bar */}
-            <View style={styles.progressBarContainer}>
-              <View style={[styles.progressBarFill, { width: `${progress}%` }]} />
+            <View style={[styles.progressBarContainer, dynamicStyles.progressBarContainer]}>
+              <View style={[styles.progressBarFill, dynamicStyles.progressBarFill, { width: `${progress}%` }]} />
             </View>
           </View>
 
-          <Text style={styles.helpText}>
+          <Text style={[styles.helpText, dynamicStyles.helpText]}>
             {sampleCount === 0
               ? 'Send at least 50 messages to train your voice profile'
               : `Send ${50 - sampleCount} more messages to enable voice matching`}
@@ -204,43 +269,43 @@ export const VoiceTrainingStatus: FC<VoiceTrainingStatusProps> = ({
 
   return (
     <View style={styles.container}>
-      <View style={styles.statusCard}>
-        <Text style={styles.statusLabel}>Voice Profile Status</Text>
-        <Text style={[styles.statusValue, styles.statusReady]}>Ready</Text>
+      <View style={[styles.statusCard, dynamicStyles.statusCard]}>
+        <Text style={[styles.statusLabel, dynamicStyles.statusLabel]}>Voice Profile Status</Text>
+        <Text style={[styles.statusValue, dynamicStyles.statusValue, dynamicStyles.statusReady]}>Ready</Text>
 
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Last Trained</Text>
-          <Text style={styles.detailValue}>{formattedDate}</Text>
+        <View style={[styles.detailRow, dynamicStyles.detailRow]}>
+          <Text style={[styles.detailLabel, dynamicStyles.detailLabel]}>Last Trained</Text>
+          <Text style={[styles.detailValue, dynamicStyles.detailValue]}>{formattedDate}</Text>
         </View>
 
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Next Retraining</Text>
-          <Text style={styles.detailValue}>{formattedNextDate}</Text>
+        <View style={[styles.detailRow, dynamicStyles.detailRow]}>
+          <Text style={[styles.detailLabel, dynamicStyles.detailLabel]}>Next Retraining</Text>
+          <Text style={[styles.detailValue, dynamicStyles.detailValue]}>{formattedNextDate}</Text>
         </View>
 
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Training Samples</Text>
-          <Text style={styles.detailValue}>{voiceProfile.trainingSampleCount}</Text>
+        <View style={[styles.detailRow, dynamicStyles.detailRow]}>
+          <Text style={[styles.detailLabel, dynamicStyles.detailLabel]}>Training Samples</Text>
+          <Text style={[styles.detailValue, dynamicStyles.detailValue]}>{voiceProfile.trainingSampleCount}</Text>
         </View>
 
         {voiceProfile.metrics && (
           <>
             {/* Satisfaction Metrics Section Header */}
-            <View style={styles.metricsHeader}>
-              <Text style={styles.metricsHeaderText}>Satisfaction Metrics</Text>
+            <View style={[styles.metricsHeader, dynamicStyles.metricsHeader]}>
+              <Text style={[styles.metricsHeaderText, dynamicStyles.metricsHeaderText]}>Satisfaction Metrics</Text>
             </View>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Total Suggestions Generated</Text>
-              <Text style={styles.detailValue}>{voiceProfile.metrics.totalSuggestionsGenerated || 0}</Text>
+            <View style={[styles.detailRow, dynamicStyles.detailRow]}>
+              <Text style={[styles.detailLabel, dynamicStyles.detailLabel]}>Total Suggestions Generated</Text>
+              <Text style={[styles.detailValue, dynamicStyles.detailValue]}>{voiceProfile.metrics.totalSuggestionsGenerated || 0}</Text>
             </View>
 
             {voiceProfile.metrics.totalSuggestionsGenerated > 0 && (
               <>
                 {/* Acceptance Rate (Subtask 16.1) */}
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Acceptance Rate</Text>
-                  <Text style={styles.detailValue}>
+                <View style={[styles.detailRow, dynamicStyles.detailRow]}>
+                  <Text style={[styles.detailLabel, dynamicStyles.detailLabel]}>Acceptance Rate</Text>
+                  <Text style={[styles.detailValue, dynamicStyles.detailValue]}>
                     {Math.round(
                       (voiceProfile.metrics.acceptedSuggestions /
                         voiceProfile.metrics.totalSuggestionsGenerated) *
@@ -252,9 +317,9 @@ export const VoiceTrainingStatus: FC<VoiceTrainingStatusProps> = ({
 
                 {/* Edit Rate (Subtask 16.2) */}
                 {voiceProfile.metrics.acceptedSuggestions > 0 && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Edit Rate</Text>
-                    <Text style={styles.detailValue}>
+                  <View style={[styles.detailRow, dynamicStyles.detailRow]}>
+                    <Text style={[styles.detailLabel, dynamicStyles.detailLabel]}>Edit Rate</Text>
+                    <Text style={[styles.detailValue, dynamicStyles.detailValue]}>
                       {Math.round(
                         (voiceProfile.metrics.editedSuggestions /
                           voiceProfile.metrics.acceptedSuggestions) *
@@ -267,9 +332,9 @@ export const VoiceTrainingStatus: FC<VoiceTrainingStatusProps> = ({
 
                 {/* Satisfaction Rating (Subtask 16.3) */}
                 {voiceProfile.metrics.averageSatisfactionRating > 0 && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Satisfaction Rating</Text>
-                    <Text style={styles.detailValue}>
+                  <View style={[styles.detailRow, dynamicStyles.detailRow]}>
+                    <Text style={[styles.detailLabel, dynamicStyles.detailLabel]}>Satisfaction Rating</Text>
+                    <Text style={[styles.detailValue, dynamicStyles.detailValue]}>
                       {voiceProfile.metrics.averageSatisfactionRating.toFixed(1)} / 5.0
                     </Text>
                   </View>
@@ -290,12 +355,12 @@ export const VoiceTrainingStatus: FC<VoiceTrainingStatusProps> = ({
 
                   if (isBelowThreshold) {
                     return (
-                      <View style={styles.alertContainer}>
+                      <View style={[styles.alertContainer, dynamicStyles.alertContainer]}>
                         <View style={styles.alertHeader}>
                           <Text style={styles.alertIcon}>⚠️</Text>
-                          <Text style={styles.alertTitle}>Satisfaction Below Target</Text>
+                          <Text style={[styles.alertTitle, dynamicStyles.alertTitle]}>Satisfaction Below Target</Text>
                         </View>
-                        <Text style={styles.alertMessage}>
+                        <Text style={[styles.alertMessage, dynamicStyles.alertMessage]}>
                           {acceptanceRate < 80
                             ? `Your acceptance rate (${Math.round(acceptanceRate)}%) is below our 80% target. `
                             : ''}
@@ -304,7 +369,7 @@ export const VoiceTrainingStatus: FC<VoiceTrainingStatusProps> = ({
                             : ''}
                           Consider retraining your voice profile to improve suggestion quality.
                         </Text>
-                        <Text style={styles.alertAction}>
+                        <Text style={[styles.alertAction, dynamicStyles.alertAction]}>
                           Tap "Train Voice Profile Now" above to update your profile.
                         </Text>
                       </View>
@@ -321,20 +386,18 @@ export const VoiceTrainingStatus: FC<VoiceTrainingStatusProps> = ({
   );
 };
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
   container: {
     marginTop: 24,
   },
   statusCard: {
-    backgroundColor: '#F5F5FF',
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
   },
   statusLabel: {
     fontSize: 12,
-    color: '#666',
     marginBottom: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -345,15 +408,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 12,
   },
-  statusNotTrained: {
-    color: '#FF9500',
-  },
-  statusReady: {
-    color: '#34C759',
-  },
   helpText: {
     fontSize: 14,
-    color: '#666',
     lineHeight: 20,
   },
   detailRow: {
@@ -362,16 +418,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     borderTopWidth: 1,
-    borderTopColor: '#E5E5EA',
     marginTop: 8,
   },
   detailLabel: {
     fontSize: 14,
-    color: '#666',
   },
   detailValue: {
     fontSize: 14,
-    color: '#000',
     fontWeight: '500',
   },
   progressSection: {
@@ -380,7 +433,6 @@ const styles = StyleSheet.create({
   },
   progressLabel: {
     fontSize: 12,
-    color: '#666',
     marginBottom: 4,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -388,30 +440,25 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 16,
-    color: '#000',
     fontWeight: '600',
     marginBottom: 8,
   },
   progressBarContainer: {
     height: 8,
-    backgroundColor: '#E5E5EA',
     borderRadius: 4,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: '#6C63FF',
     borderRadius: 4,
   },
   metricsHeader: {
     marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 2,
-    borderTopColor: '#6C63FF',
   },
   metricsHeaderText: {
     fontSize: 14,
-    color: '#6C63FF',
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -419,11 +466,9 @@ const styles = StyleSheet.create({
   },
   alertContainer: {
     marginTop: 16,
-    backgroundColor: '#FFF3CD',
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#FFC107',
   },
   alertHeader: {
     flexDirection: 'row',
@@ -437,17 +482,14 @@ const styles = StyleSheet.create({
   alertTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#856404',
   },
   alertMessage: {
     fontSize: 14,
-    color: '#856404',
     lineHeight: 20,
     marginBottom: 8,
   },
   alertAction: {
     fontSize: 13,
-    color: '#856404',
     fontWeight: '600',
     fontStyle: 'italic',
   },

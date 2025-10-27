@@ -19,6 +19,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/contexts/ThemeContext';
 import { Avatar } from '@/components/common/Avatar';
 import { getPaginatedUsers } from '@/services/userService';
 import { useAuth } from '@/hooks/useAuth';
@@ -61,6 +62,7 @@ export const ContactPickerModal: React.FC<ContactPickerModalProps> = memo(({
   maxSelection = 10,
   testID,
 }) => {
+  const { theme } = useTheme();
   const { user } = useAuth();
   const currentUserId = user?.uid;
 
@@ -172,25 +174,94 @@ export const ContactPickerModal: React.FC<ContactPickerModalProps> = memo(({
     onClose();
   };
 
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      backgroundColor: theme.colors.background,
+    },
+    header: {
+      backgroundColor: theme.colors.surface,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    headerTitle: {
+      color: theme.colors.textPrimary,
+    },
+    badge: {
+      backgroundColor: theme.colors.accent,
+    },
+    cancelText: {
+      color: theme.colors.accent,
+    },
+    doneText: {
+      color: theme.colors.accent,
+    },
+    doneTextDisabled: {
+      color: theme.colors.textTertiary,
+    },
+    searchContainer: {
+      backgroundColor: theme.colors.surface,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    searchInput: {
+      color: theme.colors.textPrimary,
+    },
+    maxSelectionBanner: {
+      backgroundColor: theme.colors.warningBackground || '#FFF3CD',
+    },
+    maxSelectionText: {
+      color: theme.colors.warning || '#856404',
+    },
+    userItem: {
+      backgroundColor: theme.colors.surface,
+    },
+    displayName: {
+      color: theme.colors.textPrimary,
+    },
+    username: {
+      color: theme.colors.textSecondary,
+    },
+    textDisabled: {
+      color: theme.colors.textTertiary,
+    },
+    sectionHeader: {
+      backgroundColor: theme.colors.background,
+    },
+    sectionTitle: {
+      color: theme.colors.textSecondary,
+    },
+    separator: {
+      backgroundColor: theme.colors.borderLight,
+    },
+    loadingText: {
+      color: theme.colors.textSecondary,
+    },
+    emptyText: {
+      color: theme.colors.textSecondary,
+    },
+    emptySubtext: {
+      color: theme.colors.textTertiary,
+    },
+  });
+
   const renderUserItem = ({ item }: { item: User }) => {
     const isSelected = selectedUserIds.has(item.uid);
     const isDisabled = !isSelected && selectedUserIds.size >= maxSelection;
 
     return (
       <TouchableOpacity
-        style={[styles.userItem, isDisabled && styles.userItemDisabled]}
+        style={[styles.userItem, dynamicStyles.userItem, isDisabled && styles.userItemDisabled]}
         onPress={() => !isDisabled && toggleUserSelection(item)}
         disabled={isDisabled}
         testID={`${testID}-user-${item.uid}`}
       >
         <View style={styles.checkbox}>
           {isSelected ? (
-            <Ionicons name="checkmark-circle" size={24} color="#007AFF" />
+            <Ionicons name="checkmark-circle" size={24} color={theme.colors.accent} />
           ) : (
             <Ionicons
               name="ellipse-outline"
               size={24}
-              color={isDisabled ? '#C7C7CC' : '#8E8E93'}
+              color={isDisabled ? theme.colors.disabled : theme.colors.textSecondary}
             />
           )}
         </View>
@@ -202,22 +273,20 @@ export const ContactPickerModal: React.FC<ContactPickerModalProps> = memo(({
         />
 
         <View style={styles.userInfo}>
-          <Text style={[styles.displayName, isDisabled && styles.textDisabled]}>
+          <Text style={[styles.displayName, dynamicStyles.displayName, isDisabled && dynamicStyles.textDisabled]}>
             {item.displayName}
           </Text>
-          <Text style={[styles.username, isDisabled && styles.textDisabled]}>
+          <Text style={[styles.username, dynamicStyles.username, isDisabled && dynamicStyles.textDisabled]}>
             @{item.username}
           </Text>
         </View>
-
-        {/* TODO: Add online status when available */}
       </TouchableOpacity>
     );
   };
 
   const renderSectionHeader = ({ section }: { section: SectionData }) => (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{section.title}</Text>
+    <View style={[styles.sectionHeader, dynamicStyles.sectionHeader]}>
+      <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>{section.title}</Text>
     </View>
   );
 
@@ -225,8 +294,8 @@ export const ContactPickerModal: React.FC<ContactPickerModalProps> = memo(({
     if (loading) {
       return (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading contacts...</Text>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={[styles.loadingText, dynamicStyles.loadingText]}>Loading contacts...</Text>
         </View>
       );
     }
@@ -234,8 +303,8 @@ export const ContactPickerModal: React.FC<ContactPickerModalProps> = memo(({
     if (searchQuery && filteredUsers.length === 0) {
       return (
         <View style={styles.centerContainer}>
-          <Text style={styles.emptyText}>No contacts found</Text>
-          <Text style={styles.emptySubtext}>
+          <Text style={[styles.emptyText, dynamicStyles.emptyText]}>No contacts found</Text>
+          <Text style={[styles.emptySubtext, dynamicStyles.emptySubtext]}>
             Try a different search term
           </Text>
         </View>
@@ -244,7 +313,7 @@ export const ContactPickerModal: React.FC<ContactPickerModalProps> = memo(({
 
     return (
       <View style={styles.centerContainer}>
-        <Text style={styles.emptyText}>No contacts available</Text>
+        <Text style={[styles.emptyText, dynamicStyles.emptyText]}>No contacts available</Text>
       </View>
     );
   };
@@ -257,21 +326,21 @@ export const ContactPickerModal: React.FC<ContactPickerModalProps> = memo(({
       onRequestClose={handleCancel}
       testID={testID}
     >
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, dynamicStyles.container]}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, dynamicStyles.header]}>
           <TouchableOpacity
             onPress={handleCancel}
             style={styles.headerButton}
             testID={`${testID}-cancel`}
           >
-            <Text style={styles.cancelText}>Cancel</Text>
+            <Text style={[styles.cancelText, dynamicStyles.cancelText]}>Cancel</Text>
           </TouchableOpacity>
 
           <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitle}>Select Contacts</Text>
+            <Text style={[styles.headerTitle, dynamicStyles.headerTitle]}>Select Contacts</Text>
             {selectedUserIds.size > 0 && (
-              <View style={styles.badge}>
+              <View style={[styles.badge, dynamicStyles.badge]}>
                 <Text style={styles.badgeText}>{selectedUserIds.size}</Text>
               </View>
             )}
@@ -286,7 +355,8 @@ export const ContactPickerModal: React.FC<ContactPickerModalProps> = memo(({
             <Text
               style={[
                 styles.doneText,
-                selectedUserIds.size === 0 && styles.doneTextDisabled,
+                dynamicStyles.doneText,
+                selectedUserIds.size === 0 && dynamicStyles.doneTextDisabled,
               ]}
             >
               Done
@@ -295,11 +365,12 @@ export const ContactPickerModal: React.FC<ContactPickerModalProps> = memo(({
         </View>
 
         {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="#8E8E93" />
+        <View style={[styles.searchContainer, dynamicStyles.searchContainer]}>
+          <Ionicons name="search" size={20} color={theme.colors.textSecondary} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, dynamicStyles.searchInput]}
             placeholder="Search contacts..."
+            placeholderTextColor={theme.colors.textTertiary}
             value={searchQuery}
             onChangeText={setSearchQuery}
             autoCapitalize="none"
@@ -309,15 +380,15 @@ export const ContactPickerModal: React.FC<ContactPickerModalProps> = memo(({
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color="#8E8E93" />
+              <Ionicons name="close-circle" size={20} color={theme.colors.textSecondary} />
             </TouchableOpacity>
           )}
         </View>
 
         {/* Selection Info */}
         {selectedUserIds.size >= maxSelection && (
-          <View style={styles.maxSelectionBanner}>
-            <Text style={styles.maxSelectionText}>
+          <View style={[styles.maxSelectionBanner, dynamicStyles.maxSelectionBanner]}>
+            <Text style={[styles.maxSelectionText, dynamicStyles.maxSelectionText]}>
               Maximum {maxSelection} contacts can be selected
             </Text>
           </View>
@@ -333,7 +404,7 @@ export const ContactPickerModal: React.FC<ContactPickerModalProps> = memo(({
           contentContainerStyle={sections.length === 0 && styles.emptyListContent}
           stickySectionHeadersEnabled={true}
           keyboardShouldPersistTaps="handled"
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          ItemSeparatorComponent={() => <View style={[styles.separator, dynamicStyles.separator]} />}
         />
       </SafeAreaView>
     </Modal>
@@ -342,23 +413,22 @@ export const ContactPickerModal: React.FC<ContactPickerModalProps> = memo(({
 
 ContactPickerModal.displayName = 'ContactPickerModal';
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E5E5E5',
   },
   headerButton: {
     padding: 4,
+    minWidth: 60,
   },
   headerTitleContainer: {
     flexDirection: 'row',
@@ -367,11 +437,9 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#000000',
   },
   badge: {
     marginLeft: 8,
-    backgroundColor: '#007AFF',
     borderRadius: 10,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -383,7 +451,6 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     fontSize: 17,
-    color: '#007AFF',
   },
   doneText: {
     fontSize: 17,

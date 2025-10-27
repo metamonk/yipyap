@@ -21,6 +21,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationHeader } from '../../_components/NavigationHeader';
 import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/contexts/ThemeContext';
 import { ConversationListItem } from '@/components/conversation/ConversationListItem';
 import {
   subscribeToArchivedConversations,
@@ -34,12 +35,16 @@ import type { Conversation, User } from '@/types/models';
  *
  * @component
  */
-const EmptyState: React.FC = () => {
+const EmptyState: React.FC<{ theme: any }> = ({ theme }) => {
   return (
     <View style={styles.emptyState}>
-      <Ionicons name="archive-outline" size={64} color="#C7C7CC" />
-      <Text style={styles.emptyTitle}>No archived conversations</Text>
-      <Text style={styles.emptySubtitle}>Archived conversations will appear here</Text>
+      <Ionicons name="archive-outline" size={80} color={theme.colors.textTertiary} />
+      <Text style={[styles.emptyTitle, { color: theme.colors.textPrimary }]}>
+        No archived conversations
+      </Text>
+      <Text style={[styles.emptySubtitle, { color: theme.colors.textSecondary }]}>
+        Archived conversations will appear here
+      </Text>
     </View>
   );
 };
@@ -63,6 +68,7 @@ const EmptyState: React.FC = () => {
 export default function ArchivedConversationsScreen() {
   // Get current user from auth context
   const { user } = useAuth();
+  const { theme } = useTheme();
   const currentUserId = user?.uid || '';
 
   // State for conversations and loading
@@ -247,11 +253,42 @@ export default function ArchivedConversationsScreen() {
    */
   const keyExtractor = (item: Conversation) => item.id;
 
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    centerContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: theme.colors.background,
+    },
+    errorText: {
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.error,
+      marginBottom: theme.spacing.base,
+      textAlign: 'center',
+    },
+    retryButton: {
+      backgroundColor: theme.colors.accent,
+      paddingHorizontal: theme.spacing.xl,
+      paddingVertical: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+    },
+    retryButtonText: {
+      color: '#FFFFFF',
+      fontSize: theme.typography.fontSize.base,
+      fontWeight: theme.typography.fontWeight.semibold,
+    },
+  });
+
   // Show loading spinner on initial load or when no user is authenticated
   if ((loading && !refreshing) || !currentUserId) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+      <View style={dynamicStyles.centerContainer}>
+        <ActivityIndicator size="large" color={theme.colors.accent} />
       </View>
     );
   }
@@ -259,17 +296,17 @@ export default function ArchivedConversationsScreen() {
   // Show error message
   if (error) {
     return (
-      <View style={styles.centerContainer}>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
-          <Text style={styles.retryButtonText}>Retry</Text>
+      <View style={dynamicStyles.centerContainer}>
+        <Text style={dynamicStyles.errorText}>{error}</Text>
+        <TouchableOpacity style={dynamicStyles.retryButton} onPress={handleRefresh}>
+          <Text style={dynamicStyles.retryButtonText}>Retry</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={dynamicStyles.container}>
       <NavigationHeader
         title="Archived"
         leftAction={{
@@ -290,27 +327,18 @@ export default function ArchivedConversationsScreen() {
         windowSize={10}
         // Pull to refresh
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#007AFF" />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.colors.accent} />
         }
         // Empty state
-        ListEmptyComponent={<EmptyState />}
+        ListEmptyComponent={<EmptyState theme={theme} />}
         contentContainerStyle={conversations.length === 0 && styles.emptyListContent}
       />
     </View>
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-  },
   emptyListContent: {
     flexGrow: 1,
   },
@@ -325,28 +353,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 8,
     marginTop: 16,
-    color: '#000000',
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#8E8E93',
     textAlign: 'center',
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#FF3B30',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  retryButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

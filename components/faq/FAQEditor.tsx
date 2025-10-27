@@ -30,6 +30,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/contexts/ThemeContext';
 import { createFAQTemplate, updateFAQTemplate } from '@/services/faqService';
 import type { FAQTemplate, CreateFAQTemplateInput, UpdateFAQTemplateInput } from '@/types/faq';
 import { FAQ_CATEGORIES, type FAQCategory } from '@/types/faq';
@@ -88,6 +89,7 @@ export const FAQEditor: FC<FAQEditorProps> = ({
   onSave,
   template,
 }) => {
+  const { theme } = useTheme();
   const isEditMode = !!template;
 
   const [activeTab, setActiveTab] = useState<EditorTab>('edit');
@@ -98,6 +100,124 @@ export const FAQEditor: FC<FAQEditorProps> = ({
   const [isActive, setIsActive] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      backgroundColor: theme.colors.background,
+    },
+    header: {
+      backgroundColor: theme.colors.surface,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    closeIcon: {
+      color: theme.colors.accent,
+    },
+    title: {
+      color: theme.colors.textPrimary,
+    },
+    saveButtonText: {
+      color: theme.colors.accent,
+    },
+    tabContainer: {
+      backgroundColor: theme.colors.surface,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    tabActive: {
+      borderBottomColor: theme.colors.accent,
+    },
+    tabIconActive: {
+      color: theme.colors.accent,
+    },
+    tabIconInactive: {
+      color: theme.colors.textSecondary,
+    },
+    tabText: {
+      color: theme.colors.textSecondary,
+    },
+    tabTextActive: {
+      color: theme.colors.accent,
+    },
+    label: {
+      color: theme.colors.textPrimary,
+    },
+    hint: {
+      color: theme.colors.textSecondary,
+    },
+    input: {
+      backgroundColor: theme.colors.surface,
+      color: theme.colors.textPrimary,
+      borderColor: theme.colors.borderLight,
+    },
+    inputError: {
+      borderColor: theme.colors.error,
+    },
+    errorText: {
+      color: theme.colors.error,
+    },
+    charCount: {
+      color: theme.colors.textSecondary,
+    },
+    categoryChip: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.borderLight,
+    },
+    categoryChipActive: {
+      backgroundColor: theme.colors.accent,
+      borderColor: theme.colors.accent,
+    },
+    categoryChipText: {
+      color: theme.colors.accent,
+    },
+    categoryChipTextActive: {
+      color: '#FFFFFF',
+    },
+    toggle: {
+      backgroundColor: theme.colors.borderLight,
+    },
+    toggleActive: {
+      backgroundColor: theme.colors.success || '#34C759',
+    },
+    previewCard: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.borderLight,
+      ...theme.shadows.sm,
+    },
+    previewCategoryBadge: {
+      backgroundColor: theme.colors.accent,
+    },
+    activeText: {
+      color: theme.colors.success || '#34C759',
+    },
+    inactiveText: {
+      color: theme.colors.textSecondary,
+    },
+    previewQuestion: {
+      color: theme.colors.textPrimary,
+    },
+    previewAnswer: {
+      color: theme.colors.textSecondary,
+    },
+    previewKeywordsBorder: {
+      borderTopColor: theme.colors.borderLight,
+    },
+    previewKeywordsLabel: {
+      color: theme.colors.textSecondary,
+    },
+    previewKeywordsText: {
+      color: theme.colors.accent,
+    },
+    previewInfo: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.borderLight,
+    },
+    previewInfoIcon: {
+      color: theme.colors.textSecondary,
+    },
+    previewInfoText: {
+      color: theme.colors.textSecondary,
+    },
+  });
 
   /**
    * Load template data when editing
@@ -215,12 +335,12 @@ export const FAQEditor: FC<FAQEditorProps> = ({
    * Renders the header with tabs
    */
   const renderHeader = () => (
-    <View style={styles.header}>
+    <View style={[styles.header, dynamicStyles.header]}>
       <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-        <Ionicons name="close" size={28} color="#007AFF" />
+        <Ionicons name="close" size={28} color={dynamicStyles.closeIcon.color} />
       </TouchableOpacity>
 
-      <Text style={styles.title}>
+      <Text style={[styles.title, dynamicStyles.title]}>
         {isEditMode ? 'Edit FAQ' : 'New FAQ'}
       </Text>
 
@@ -230,9 +350,9 @@ export const FAQEditor: FC<FAQEditorProps> = ({
         style={styles.saveButton}
       >
         {isSaving ? (
-          <ActivityIndicator size="small" color="#007AFF" />
+          <ActivityIndicator size="small" color={theme.colors.accent} />
         ) : (
-          <Text style={styles.saveButtonText}>Save</Text>
+          <Text style={[styles.saveButtonText, dynamicStyles.saveButtonText]}>Save</Text>
         )}
       </TouchableOpacity>
     </View>
@@ -242,36 +362,37 @@ export const FAQEditor: FC<FAQEditorProps> = ({
    * Renders the tab selector
    */
   const renderTabs = () => (
-    <View style={styles.tabContainer}>
+    <View style={[styles.tabContainer, dynamicStyles.tabContainer]}>
       <TouchableOpacity
-        style={[styles.tab, activeTab === 'edit' && styles.tabActive]}
+        style={[styles.tab, activeTab === 'edit' && dynamicStyles.tabActive]}
         onPress={() => setActiveTab('edit')}
       >
         <Ionicons
           name="create-outline"
           size={20}
-          color={activeTab === 'edit' ? '#007AFF' : '#8E8E93'}
+          color={activeTab === 'edit' ? dynamicStyles.tabIconActive.color : dynamicStyles.tabIconInactive.color}
         />
         <Text
-          style={[styles.tabText, activeTab === 'edit' && styles.tabTextActive]}
+          style={[styles.tabText, dynamicStyles.tabText, activeTab === 'edit' && dynamicStyles.tabTextActive]}
         >
           Edit
         </Text>
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={[styles.tab, activeTab === 'preview' && styles.tabActive]}
+        style={[styles.tab, activeTab === 'preview' && dynamicStyles.tabActive]}
         onPress={() => setActiveTab('preview')}
       >
         <Ionicons
           name="eye-outline"
           size={20}
-          color={activeTab === 'preview' ? '#007AFF' : '#8E8E93'}
+          color={activeTab === 'preview' ? dynamicStyles.tabIconActive.color : dynamicStyles.tabIconInactive.color}
         />
         <Text
           style={[
             styles.tabText,
-            activeTab === 'preview' && styles.tabTextActive,
+            dynamicStyles.tabText,
+            activeTab === 'preview' && dynamicStyles.tabTextActive,
           ]}
         >
           Preview
@@ -287,11 +408,11 @@ export const FAQEditor: FC<FAQEditorProps> = ({
     <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
       {/* Question Input */}
       <View style={styles.fieldContainer}>
-        <Text style={styles.label}>Question *</Text>
+        <Text style={[styles.label, dynamicStyles.label]}>Question *</Text>
         <TextInput
-          style={[styles.input, styles.textArea, errors.question && styles.inputError]}
+          style={[styles.input, dynamicStyles.input, styles.textArea, errors.question && dynamicStyles.inputError]}
           placeholder="What question do your fans frequently ask?"
-          placeholderTextColor="#C7C7CC"
+          placeholderTextColor={theme.colors.disabled || '#C7C7CC'}
           value={question}
           onChangeText={(text) => {
             setQuestion(text);
@@ -305,9 +426,9 @@ export const FAQEditor: FC<FAQEditorProps> = ({
         />
         <View style={styles.fieldFooter}>
           {errors.question && (
-            <Text style={styles.errorText}>{errors.question}</Text>
+            <Text style={[styles.errorText, dynamicStyles.errorText]}>{errors.question}</Text>
           )}
-          <Text style={styles.charCount}>
+          <Text style={[styles.charCount, dynamicStyles.charCount]}>
             {question.length}/500
           </Text>
         </View>
@@ -315,11 +436,11 @@ export const FAQEditor: FC<FAQEditorProps> = ({
 
       {/* Answer Input */}
       <View style={styles.fieldContainer}>
-        <Text style={styles.label}>Answer *</Text>
+        <Text style={[styles.label, dynamicStyles.label]}>Answer *</Text>
         <TextInput
-          style={[styles.input, styles.textArea, styles.answerInput, errors.answer && styles.inputError]}
+          style={[styles.input, dynamicStyles.input, styles.textArea, styles.answerInput, errors.answer && dynamicStyles.inputError]}
           placeholder="Write the response you want to automatically send..."
-          placeholderTextColor="#C7C7CC"
+          placeholderTextColor={theme.colors.disabled || '#C7C7CC'}
           value={answer}
           onChangeText={(text) => {
             setAnswer(text);
@@ -333,9 +454,9 @@ export const FAQEditor: FC<FAQEditorProps> = ({
         />
         <View style={styles.fieldFooter}>
           {errors.answer && (
-            <Text style={styles.errorText}>{errors.answer}</Text>
+            <Text style={[styles.errorText, dynamicStyles.errorText]}>{errors.answer}</Text>
           )}
-          <Text style={styles.charCount}>
+          <Text style={[styles.charCount, dynamicStyles.charCount]}>
             {answer.length}/2000
           </Text>
         </View>
@@ -343,12 +464,12 @@ export const FAQEditor: FC<FAQEditorProps> = ({
 
       {/* Keywords Input */}
       <View style={styles.fieldContainer}>
-        <Text style={styles.label}>Keywords (Optional)</Text>
-        <Text style={styles.hint}>Comma-separated keywords for better matching</Text>
+        <Text style={[styles.label, dynamicStyles.label]}>Keywords (Optional)</Text>
+        <Text style={[styles.hint, dynamicStyles.hint]}>Comma-separated keywords for better matching</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, dynamicStyles.input]}
           placeholder="e.g. pricing, rates, cost, fees"
-          placeholderTextColor="#C7C7CC"
+          placeholderTextColor={theme.colors.disabled || '#C7C7CC'}
           value={keywords}
           onChangeText={setKeywords}
         />
@@ -356,21 +477,23 @@ export const FAQEditor: FC<FAQEditorProps> = ({
 
       {/* Category Picker */}
       <View style={styles.fieldContainer}>
-        <Text style={styles.label}>Category *</Text>
+        <Text style={[styles.label, dynamicStyles.label]}>Category *</Text>
         <View style={styles.categoryGrid}>
           {FAQ_CATEGORIES.map((cat) => (
             <TouchableOpacity
               key={cat}
               style={[
                 styles.categoryChip,
-                category === cat && styles.categoryChipActive,
+                dynamicStyles.categoryChip,
+                category === cat && dynamicStyles.categoryChipActive,
               ]}
               onPress={() => setCategory(cat)}
             >
               <Text
                 style={[
                   styles.categoryChipText,
-                  category === cat && styles.categoryChipTextActive,
+                  dynamicStyles.categoryChipText,
+                  category === cat && dynamicStyles.categoryChipTextActive,
                 ]}
               >
                 {cat.charAt(0).toUpperCase() + cat.slice(1)}
@@ -379,7 +502,7 @@ export const FAQEditor: FC<FAQEditorProps> = ({
           ))}
         </View>
         {errors.category && (
-          <Text style={styles.errorText}>{errors.category}</Text>
+          <Text style={[styles.errorText, dynamicStyles.errorText]}>{errors.category}</Text>
         )}
       </View>
 
@@ -387,13 +510,13 @@ export const FAQEditor: FC<FAQEditorProps> = ({
       <View style={styles.fieldContainer}>
         <View style={styles.toggleRow}>
           <View>
-            <Text style={styles.label}>Active</Text>
-            <Text style={styles.hint}>
+            <Text style={[styles.label, dynamicStyles.label]}>Active</Text>
+            <Text style={[styles.hint, dynamicStyles.hint]}>
               Enable this FAQ for automatic responses
             </Text>
           </View>
           <TouchableOpacity
-            style={[styles.toggle, isActive && styles.toggleActive]}
+            style={[styles.toggle, dynamicStyles.toggle, isActive && dynamicStyles.toggleActive]}
             onPress={() => setIsActive(!isActive)}
           >
             <View
@@ -413,40 +536,40 @@ export const FAQEditor: FC<FAQEditorProps> = ({
    */
   const renderPreview = () => (
     <ScrollView style={styles.previewContainer} showsVerticalScrollIndicator={false}>
-      <View style={styles.previewCard}>
+      <View style={[styles.previewCard, dynamicStyles.previewCard]}>
         <View style={styles.previewHeader}>
-          <View style={styles.previewCategoryBadge}>
+          <View style={[styles.previewCategoryBadge, dynamicStyles.previewCategoryBadge]}>
             <Text style={styles.previewCategoryText}>
               {category.toUpperCase()}
             </Text>
           </View>
           {isActive ? (
             <View style={styles.activeIndicator}>
-              <Ionicons name="checkmark-circle" size={20} color="#34C759" />
-              <Text style={styles.activeText}>Active</Text>
+              <Ionicons name="checkmark-circle" size={20} color={theme.colors.success || '#34C759'} />
+              <Text style={[styles.activeText, dynamicStyles.activeText]}>Active</Text>
             </View>
           ) : (
             <View style={styles.inactiveIndicator}>
-              <Ionicons name="pause-circle-outline" size={20} color="#8E8E93" />
-              <Text style={styles.inactiveText}>Inactive</Text>
+              <Ionicons name="pause-circle-outline" size={20} color={dynamicStyles.inactiveText.color} />
+              <Text style={[styles.inactiveText, dynamicStyles.inactiveText]}>Inactive</Text>
             </View>
           )}
         </View>
 
-        <Text style={styles.previewQuestion}>{question || 'Your question will appear here...'}</Text>
-        <Text style={styles.previewAnswer}>{answer || 'Your answer will appear here...'}</Text>
+        <Text style={[styles.previewQuestion, dynamicStyles.previewQuestion]}>{question || 'Your question will appear here...'}</Text>
+        <Text style={[styles.previewAnswer, dynamicStyles.previewAnswer]}>{answer || 'Your answer will appear here...'}</Text>
 
         {keywords.trim() && (
-          <View style={styles.previewKeywords}>
-            <Text style={styles.previewKeywordsLabel}>Keywords:</Text>
-            <Text style={styles.previewKeywordsText}>{keywords}</Text>
+          <View style={[styles.previewKeywords, dynamicStyles.previewKeywordsBorder]}>
+            <Text style={[styles.previewKeywordsLabel, dynamicStyles.previewKeywordsLabel]}>Keywords:</Text>
+            <Text style={[styles.previewKeywordsText, dynamicStyles.previewKeywordsText]}>{keywords}</Text>
           </View>
         )}
       </View>
 
-      <View style={styles.previewInfo}>
-        <Ionicons name="information-circle-outline" size={20} color="#8E8E93" />
-        <Text style={styles.previewInfoText}>
+      <View style={[styles.previewInfo, dynamicStyles.previewInfo]}>
+        <Ionicons name="information-circle-outline" size={20} color={dynamicStyles.previewInfoIcon.color} />
+        <Text style={[styles.previewInfoText, dynamicStyles.previewInfoText]}>
           This is how your FAQ template will appear in the library. Fans will receive the answer automatically when their message matches with high confidence.
         </Text>
       </View>
@@ -460,7 +583,7 @@ export const FAQEditor: FC<FAQEditorProps> = ({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, dynamicStyles.container]}>
         <KeyboardAvoidingView
           style={styles.keyboardAvoid}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -474,10 +597,10 @@ export const FAQEditor: FC<FAQEditorProps> = ({
   );
 };
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
   },
   keyboardAvoid: {
     flex: 1,
@@ -488,9 +611,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
   },
   closeButton: {
     padding: 4,
@@ -498,7 +619,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#000000',
   },
   saveButton: {
     paddingHorizontal: 12,
@@ -507,13 +627,10 @@ const styles = StyleSheet.create({
   saveButtonText: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#007AFF',
   },
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
   },
   tab: {
     flex: 1,
@@ -525,20 +642,19 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   tabActive: {
-    borderBottomColor: '#007AFF',
+    // borderBottomColor in dynamicStyles
   },
   tabText: {
     fontSize: 15,
     fontWeight: '500',
-    color: '#8E8E93',
     marginLeft: 6,
   },
   tabTextActive: {
-    color: '#007AFF',
+    // color in dynamicStyles
   },
   formContainer: {
     flex: 1,
-    padding: 16,
+    padding: 24,
   },
   fieldContainer: {
     marginBottom: 24,
@@ -546,25 +662,20 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#000000',
     marginBottom: 8,
   },
   hint: {
     fontSize: 13,
-    color: '#8E8E93',
     marginBottom: 8,
   },
   input: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 10,
     padding: 12,
     fontSize: 16,
-    color: '#000000',
     borderWidth: 1,
-    borderColor: '#E5E5EA',
   },
   inputError: {
-    borderColor: '#FF3B30',
+    // borderColor in dynamicStyles
   },
   textArea: {
     minHeight: 80,
@@ -581,11 +692,9 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 13,
-    color: '#FF3B30',
   },
   charCount: {
     fontSize: 13,
-    color: '#8E8E93',
   },
   categoryGrid: {
     flexDirection: 'row',
@@ -596,23 +705,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E5E5EA',
     marginRight: 8,
     marginBottom: 8,
   },
   categoryChipActive: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
+    // backgroundColor and borderColor in dynamicStyles
   },
   categoryChipText: {
     fontSize: 14,
-    color: '#007AFF',
     fontWeight: '500',
   },
   categoryChipTextActive: {
-    color: '#FFFFFF',
+    // color in dynamicStyles
   },
   toggleRow: {
     flexDirection: 'row',
@@ -623,12 +728,11 @@ const styles = StyleSheet.create({
     width: 51,
     height: 31,
     borderRadius: 16,
-    backgroundColor: '#E5E5EA',
     padding: 2,
     justifyContent: 'center',
   },
   toggleActive: {
-    backgroundColor: '#34C759',
+    // backgroundColor in dynamicStyles
   },
   toggleThumb: {
     width: 27,
@@ -646,18 +750,13 @@ const styles = StyleSheet.create({
   },
   previewContainer: {
     flex: 1,
-    padding: 16,
+    padding: 24,
   },
   previewCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    borderWidth: 1,
   },
   previewHeader: {
     flexDirection: 'row',
@@ -669,7 +768,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
-    backgroundColor: '#007AFF',
   },
   previewCategoryText: {
     fontSize: 11,
@@ -683,7 +781,6 @@ const styles = StyleSheet.create({
   },
   activeText: {
     fontSize: 14,
-    color: '#34C759',
     marginLeft: 4,
     fontWeight: '500',
   },
@@ -693,47 +790,40 @@ const styles = StyleSheet.create({
   },
   inactiveText: {
     fontSize: 14,
-    color: '#8E8E93',
     marginLeft: 4,
     fontWeight: '500',
   },
   previewQuestion: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#000000',
     marginBottom: 8,
   },
   previewAnswer: {
     fontSize: 15,
-    color: '#8E8E93',
     lineHeight: 20,
   },
   previewKeywords: {
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#E5E5EA',
   },
   previewKeywordsLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#8E8E93',
     marginBottom: 4,
   },
   previewKeywordsText: {
     fontSize: 14,
-    color: '#007AFF',
   },
   previewInfo: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
+    borderWidth: 1,
   },
   previewInfoText: {
     flex: 1,
     fontSize: 14,
-    color: '#8E8E93',
     lineHeight: 20,
     marginLeft: 12,
   },

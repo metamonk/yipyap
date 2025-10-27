@@ -1,74 +1,154 @@
 /**
- * DailySummaryWidget - Comprehensive overnight activity summary widget (Story 5.7)
+ * DailySummaryWidget - Meaningful 10 daily digest summary widget (Story 6.1)
  *
  * @remarks
- * Displays overnight activity metrics from all AI features:
- * - Message categorization (Story 5.2)
- * - Sentiment analysis and crisis detection (Story 5.3)
- * - FAQ detection and auto-responses (Story 5.4)
- * - Voice-matched suggestions (Story 5.5)
- * - Business opportunity scoring (Story 5.6)
+ * Displays priority-tiered digest summary focusing on top 10 most important messages:
+ * - High Priority (top 3): Respond today
+ * - Medium Priority (2-7): Respond this week
+ * - Auto-handled: FAQ + archived conversations
+ * - Capacity tracking and time estimates
  *
- * Shows total messages, category breakdown, sentiment trends, opportunities,
- * FAQ metrics, and comparison with previous day.
+ * Replaces old "Overnight Summary" with relationship-based prioritization (Epic 6).
  *
  * @example
  * ```tsx
  * <DailySummaryWidget
- *   summary={dashboardSummary}
  *   loading={false}
  *   error={null}
  *   onRefresh={() => fetchData()}
+ *   onViewDetails={() => router.push('/(tabs)/daily-digest')}
  * />
  * ```
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import type { DashboardSummary } from '@/types/dashboard';
+import { useTheme } from '@/contexts/ThemeContext';
+import { getMeaningful10Digest } from '@/services/dailyDigestService';
+import { getFirebaseAuth } from '@/services/firebase';
+import type { Meaningful10Digest } from '@/types/ai';
 
 /**
  * Props for DailySummaryWidget component
  */
 interface DailySummaryWidgetProps {
-  /** Dashboard summary with all overnight metrics */
-  summary: DashboardSummary;
-
   /** Loading state */
   loading?: boolean;
 
   /** Error message if data fetch failed */
   error?: string | null;
 
-  /** Optional title (default: "Overnight Summary") */
+  /** Optional title (default: "Your Meaningful 10 Today") */
   title?: string;
 
   /** Callback when refresh button is pressed */
   onRefresh?: () => void;
+
+  /** Callback when "View Details" is tapped */
+  onViewDetails?: () => void;
 }
 
 /**
  * DailySummaryWidget Component
  */
 export function DailySummaryWidget({
-  summary,
-  loading = false,
-  error = null,
-  title = 'Overnight Summary',
+  loading: externalLoading = false,
+  error: externalError = null,
+  title = 'Your Meaningful 10 Today',
   onRefresh,
+  onViewDetails,
 }: DailySummaryWidgetProps) {
-  const [showCategoryDetails, setShowCategoryDetails] = useState(false);
+  const { theme } = useTheme();
+  const auth = getFirebaseAuth();
+  const [digest, setDigest] = useState<Meaningful10Digest | null>(null);
+  const [internalLoading, setInternalLoading] = useState(true);
+  const [internalError, setInternalError] = useState<string | null>(null);
 
-  const { messagingMetrics, sentimentMetrics, faqMetrics, comparisonWithPrevious } = summary;
+  const loading = externalLoading || internalLoading;
+  const error = externalError || internalError;
+
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.borderLight,
+      ...theme.shadows.sm,
+    },
+    title: {
+      color: theme.colors.textPrimary,
+    },
+    loadingText: {
+      color: theme.colors.textSecondary,
+    },
+    errorText: {
+      color: theme.colors.error,
+    },
+    retryButton: {
+      backgroundColor: theme.colors.accent,
+    },
+    emptyText: {
+      color: theme.colors.textSecondary,
+    },
+    emptyHint: {
+      color: theme.colors.textTertiary,
+    },
+    priorityCard: {
+      backgroundColor: theme.colors.backgroundSecondary,
+      borderColor: theme.colors.borderLight,
+    },
+    priorityCount: {
+      color: theme.colors.textPrimary,
+    },
+    priorityLabel: {
+      color: theme.colors.textSecondary,
+    },
+    prioritySubtext: {
+      color: theme.colors.textTertiary,
+    },
+    capacityText: {
+      color: theme.colors.textSecondary,
+    },
+    viewDetailsText: {
+      color: theme.colors.accent,
+    },
+  });
+
+  /**
+   * Fetch Meaningful 10 digest on mount
+   */
+  useEffect(() => {
+    async function fetchDigest() {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        setInternalError('User not authenticated');
+        setInternalLoading(false);
+        return;
+      }
+
+      try {
+        setInternalLoading(true);
+        const meaningful10 = await getMeaningful10Digest(currentUser.uid);
+        setDigest(meaningful10);
+        setInternalError(null);
+      } catch (err) {
+        console.error('Error fetching Meaningful 10 digest:', err);
+        setInternalError('Failed to load digest');
+      } finally {
+        setInternalLoading(false);
+      }
+    }
+
+    fetchDigest();
+  }, [auth]);
 
   // Loading state
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, dynamicStyles.container]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3182CE" />
-          <Text style={styles.loadingText}>Loading overnight summary...</Text>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={[styles.loadingText, dynamicStyles.loadingText]}>Loading overnight summary...</Text>
         </View>
       </View>
     );
@@ -77,13 +157,13 @@ export function DailySummaryWidget({
   // Error state
   if (error) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, dynamicStyles.container]}>
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={48} color="#E53E3E" />
-          <Text style={styles.errorText}>{error}</Text>
+          <Ionicons name="alert-circle" size={48} color={theme.colors.error} />
+          <Text style={[styles.errorText, dynamicStyles.errorText]}>{error}</Text>
           {onRefresh && (
             <TouchableOpacity
-              style={styles.retryButton}
+              style={[styles.retryButton, dynamicStyles.retryButton]}
               onPress={onRefresh}
               accessibilityLabel="Retry loading dashboard"
               accessibilityRole="button"
@@ -96,209 +176,99 @@ export function DailySummaryWidget({
     );
   }
 
+  // Empty state (no digest)
+  if (!digest) {
+    return (
+      <View style={[styles.container, dynamicStyles.container]} accessibilityLabel="Daily summary widget">
+        <View style={styles.titleRow}>
+          <Text style={[styles.title, dynamicStyles.title]}>{title}</Text>
+        </View>
+        <View style={styles.emptyContainer}>
+          <Text style={[styles.emptyText, dynamicStyles.emptyText]}>No digest available yet</Text>
+          <Text style={[styles.emptyHint, dynamicStyles.emptyHint]}>Check back later or refresh</Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
-    <View style={styles.container} accessibilityRole="region" accessibilityLabel="Daily summary widget">
+    <View style={[styles.container, dynamicStyles.container]} accessibilityLabel="Meaningful 10 summary widget">
       {/* Title Row with Refresh */}
       <View style={styles.titleRow}>
-        <Text style={styles.title}>{title}</Text>
+        <Text style={[styles.title, dynamicStyles.title]}>{title}</Text>
         {onRefresh && (
           <TouchableOpacity
             onPress={onRefresh}
-            accessibilityLabel="Refresh dashboard data"
+            accessibilityLabel="Refresh digest data"
             accessibilityRole="button"
             style={styles.refreshButton}
           >
-            <Ionicons name="refresh-outline" size={20} color="#6B7280" />
+            <Ionicons name="refresh-outline" size={20} color={theme.colors.textSecondary} />
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Main Stats Row */}
-      <View style={styles.mainStatsRow}>
-        {/* Total Messages */}
-        <View style={styles.statCard}>
-          <Text style={styles.statValue} accessibilityLabel={`${messagingMetrics.totalMessages} messages`}>
-            {messagingMetrics.totalMessages}
-          </Text>
-          <Text style={styles.statLabel}>Messages</Text>
-          {comparisonWithPrevious.messageCountChange !== 0 && (
-            <View style={styles.changeIndicator}>
-              <Ionicons
-                name={comparisonWithPrevious.messageCountChange >= 0 ? 'trending-up' : 'trending-down'}
-                size={14}
-                color={comparisonWithPrevious.messageCountChange >= 0 ? '#38A169' : '#E53E3E'}
-              />
-              <Text
-                style={[
-                  styles.changeText,
-                  {
-                    color: comparisonWithPrevious.messageCountChange >= 0 ? '#38A169' : '#E53E3E',
-                  },
-                ]}
-              >
-                {Math.abs(comparisonWithPrevious.messageCountChange).toFixed(0)}%
-              </Text>
-            </View>
-          )}
+      {/* Priority Summary Cards - Simplified minimal design */}
+      <View style={styles.priorityCardsRow}>
+        {/* High Priority */}
+        <View style={[styles.priorityCard, dynamicStyles.priorityCard]}>
+          <Text style={[styles.priorityCount, dynamicStyles.priorityCount]}>{digest.highPriority.length}</Text>
+          <Text style={[styles.priorityLabel, dynamicStyles.priorityLabel]}>High</Text>
+          <Text style={[styles.prioritySubtext, dynamicStyles.prioritySubtext]}>Today</Text>
         </View>
 
-        {/* High-Value Opportunities */}
-        <View style={[styles.statCard, styles.opportunityCard]}>
-          <Text style={[styles.statValue, styles.opportunityValue]} accessibilityLabel={`${messagingMetrics.highValueOpportunities} high-value opportunities`}>
-            {messagingMetrics.highValueOpportunities}
-          </Text>
-          <Text style={styles.statLabel}>Opportunities</Text>
-          {comparisonWithPrevious.opportunityCountChange !== 0 && (
-            <View style={styles.changeIndicator}>
-              <Ionicons
-                name={comparisonWithPrevious.opportunityCountChange >= 0 ? 'trending-up' : 'trending-down'}
-                size={14}
-                color="#38A169"
-              />
-              <Text style={[styles.changeText, { color: '#38A169' }]}>
-                {Math.abs(comparisonWithPrevious.opportunityCountChange).toFixed(0)}%
-              </Text>
-            </View>
-          )}
+        {/* Medium Priority */}
+        <View style={[styles.priorityCard, dynamicStyles.priorityCard]}>
+          <Text style={[styles.priorityCount, dynamicStyles.priorityCount]}>{digest.mediumPriority.length}</Text>
+          <Text style={[styles.priorityLabel, dynamicStyles.priorityLabel]}>Medium</Text>
+          <Text style={[styles.prioritySubtext, dynamicStyles.prioritySubtext]}>This week</Text>
         </View>
 
-        {/* Crisis Messages */}
-        {messagingMetrics.crisisMessages > 0 && (
-          <View style={[styles.statCard, styles.crisisCard]}>
-            <Text style={[styles.statValue, styles.crisisValue]} accessibilityLabel={`${messagingMetrics.crisisMessages} crisis messages requiring immediate attention`}>
-              {messagingMetrics.crisisMessages}
-            </Text>
-            <Text style={styles.statLabel}>Crisis</Text>
-            <Ionicons name="alert-circle" size={16} color="#E53E3E" style={styles.crisisIcon} />
-          </View>
-        )}
+        {/* Auto-Handled */}
+        <View style={[styles.priorityCard, dynamicStyles.priorityCard]}>
+          <Text style={[styles.priorityCount, dynamicStyles.priorityCount]}>{digest.autoHandled.total}</Text>
+          <Text style={[styles.priorityLabel, dynamicStyles.priorityLabel]}>Auto</Text>
+          <Text style={[styles.prioritySubtext, dynamicStyles.prioritySubtext]}>Handled</Text>
+        </View>
       </View>
 
-      {/* Category Breakdown Section */}
-      <View style={styles.categorySection}>
+      {/* Capacity & Time Summary - Simplified */}
+      <View style={styles.capacityRow}>
+        <View style={styles.capacityItem}>
+          <Ionicons name="checkmark-circle-outline" size={14} color={theme.colors.success || theme.colors.accent} />
+          <Text style={[styles.capacityText, dynamicStyles.capacityText]}>{digest.capacityUsed} handled</Text>
+        </View>
+        <View style={styles.capacityItem}>
+          <Ionicons name="time-outline" size={14} color={theme.colors.textSecondary} />
+          <Text style={[styles.capacityText, dynamicStyles.capacityText]}>~{digest.estimatedTimeCommitment} min</Text>
+        </View>
+      </View>
+
+      {/* View Details Button - Minimal text-only design */}
+      {onViewDetails && (
         <TouchableOpacity
-          style={styles.categorySectionHeader}
-          onPress={() => setShowCategoryDetails(!showCategoryDetails)}
-          accessibilityLabel={showCategoryDetails ? 'Hide category breakdown' : 'Show category breakdown'}
+          style={styles.viewDetailsButton}
+          onPress={onViewDetails}
+          accessibilityLabel="View full daily digest"
           accessibilityRole="button"
         >
-          <Text style={styles.sectionTitle}>Categories</Text>
-          <Ionicons
-            name={showCategoryDetails ? 'chevron-up' : 'chevron-down'}
-            size={20}
-            color="#6B7280"
-          />
+          <Text style={[styles.viewDetailsText, dynamicStyles.viewDetailsText]}>View Full Digest</Text>
+          <Ionicons name="arrow-forward" size={14} color={theme.colors.accent} />
         </TouchableOpacity>
-
-        {showCategoryDetails && (
-          <View style={styles.categoryGrid}>
-            <CategoryBadge label="Fan" count={messagingMetrics.byCategory.fan_engagement} color="#3182CE" />
-            <CategoryBadge label="Business" count={messagingMetrics.byCategory.business_opportunity} color="#38A169" />
-            <CategoryBadge label="Urgent" count={messagingMetrics.byCategory.urgent} color="#DD6B20" />
-            <CategoryBadge label="Spam" count={messagingMetrics.byCategory.spam} color="#6B7280" />
-            <CategoryBadge label="General" count={messagingMetrics.byCategory.general} color="#9CA3AF" />
-          </View>
-        )}
-      </View>
-
-      {/* Sentiment & FAQ Row */}
-      <View style={styles.bottomRow}>
-        {/* Sentiment Indicators */}
-        <View style={styles.sentimentSection}>
-          <Text style={styles.sectionTitle}>Sentiment</Text>
-          <View style={styles.sentimentIndicators}>
-            <SentimentBadge type="positive" count={sentimentMetrics.positiveCount} />
-            <SentimentBadge type="negative" count={sentimentMetrics.negativeCount} />
-            <SentimentBadge type="neutral" count={sentimentMetrics.neutralCount} />
-          </View>
-          {sentimentMetrics.averageSentimentScore !== 0 && (
-            <Text style={styles.sentimentScore}>
-              Avg: {sentimentMetrics.averageSentimentScore >= 0 ? '+' : ''}
-              {sentimentMetrics.averageSentimentScore.toFixed(2)}
-            </Text>
-          )}
-        </View>
-
-        {/* FAQ Metrics */}
-        <View style={styles.faqSection}>
-          <Text style={styles.sectionTitle}>FAQs</Text>
-          <View style={styles.faqMetrics}>
-            <View style={styles.faqMetricItem}>
-              <Text style={styles.faqMetricValue} accessibilityLabel={`${faqMetrics.newQuestionsDetected} new FAQ questions detected`}>
-                {faqMetrics.newQuestionsDetected}
-              </Text>
-              <Text style={styles.faqMetricLabel}>New Q's</Text>
-            </View>
-            <View style={styles.faqMetricItem}>
-              <Text style={styles.faqMetricValue} accessibilityLabel={`${faqMetrics.autoResponsesSent} auto-responses sent`}>
-                {faqMetrics.autoResponsesSent}
-              </Text>
-              <Text style={styles.faqMetricLabel}>Auto-Sent</Text>
-            </View>
-          </View>
-        </View>
-      </View>
+      )}
     </View>
   );
 }
 
-/**
- * CategoryBadge - Displays message category count with colored badge
- */
-interface CategoryBadgeProps {
-  label: string;
-  count: number;
-  color: string;
-}
+// Removed old CategoryBadge and SentimentBadge components (Epic 5 → Epic 6 migration)
 
-function CategoryBadge({ label, count, color }: CategoryBadgeProps) {
-  return (
-    <View style={styles.categoryBadge} accessibilityLabel={`${label}: ${count} messages`}>
-      <View style={[styles.categoryDot, { backgroundColor: color }]} />
-      <Text style={styles.categoryLabel}>{label}</Text>
-      <Text style={styles.categoryCount}>{count}</Text>
-    </View>
-  );
-}
-
-/**
- * SentimentBadge - Displays sentiment count with colored indicator
- */
-interface SentimentBadgeProps {
-  type: 'positive' | 'negative' | 'neutral';
-  count: number;
-}
-
-function SentimentBadge({ type, count }: SentimentBadgeProps) {
-  const config = {
-    positive: { color: '#48BB78', icon: 'happy-outline' as const, label: 'Positive' },
-    negative: { color: '#F56565', icon: 'sad-outline' as const, label: 'Negative' },
-    neutral: { color: '#A0AEC0', icon: 'remove-outline' as const, label: 'Neutral' },
-  };
-
-  const { color, icon, label } = config[type];
-
-  return (
-    <View style={styles.sentimentBadge} accessibilityLabel={`${label}: ${count} messages`}>
-      <Ionicons name={icon} size={16} color={color} />
-      <Text style={[styles.sentimentCount, { color }]}>{count}</Text>
-    </View>
-  );
-}
-
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
   // Container
   container: {
-    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
     borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    padding: 20,
     marginBottom: 16,
   },
 
@@ -311,7 +281,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: '#6B7280',
   },
 
   // Error state
@@ -324,13 +293,11 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 16,
     fontSize: 14,
-    color: '#E53E3E',
     textAlign: 'center',
   },
   retryButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#3182CE',
     borderRadius: 8,
   },
   retryButtonText: {
@@ -339,179 +306,93 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
+  // Empty state
+  emptyContainer: {
+    paddingVertical: 24,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  emptyHint: {
+    fontSize: 12,
+  },
+
   // Title row
   titleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   title: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#1F2937',
   },
   refreshButton: {
     padding: 4,
   },
 
-  // Main stats row
-  mainStatsRow: {
+  // Priority Cards Row - Minimal clean design
+  priorityCardsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 20,
+    gap: 12,
   },
-  statCard: {
+  priorityCard: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 16,
     paddingHorizontal: 8,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    marginHorizontal: 4,
+    borderRadius: 12,
+    borderWidth: 1,
   },
-  opportunityCard: {
-    backgroundColor: '#F0FDF4',
-  },
-  crisisCard: {
-    backgroundColor: '#FEF2F2',
-  },
-  statValue: {
-    fontSize: 28,
+  priorityCount: {
+    fontSize: 32,
     fontWeight: '700',
-    color: '#1F2937',
     marginBottom: 4,
   },
-  opportunityValue: {
-    color: '#38A169',
-  },
-  crisisValue: {
-    color: '#E53E3E',
-  },
-  statLabel: {
+  priorityLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#6B7280',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    marginBottom: 2,
   },
-  changeIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-    gap: 2,
-  },
-  changeText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  crisisIcon: {
-    marginTop: 4,
+  prioritySubtext: {
+    fontSize: 10,
   },
 
-  // Category section
-  categorySection: {
+  // Capacity Row - Simplified, no borders
+  capacityRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 12,
     marginBottom: 16,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
   },
-  categorySectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#4B5563',
-  },
-  categoryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 8,
-    gap: 8,
-  },
-  categoryBadge: {
+  capacityItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
     gap: 6,
   },
-  categoryDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  categoryLabel: {
+  capacityText: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#4B5563',
-  },
-  categoryCount: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1F2937',
   },
 
-  // Bottom row (Sentiment & FAQ)
-  bottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    gap: 12,
-  },
-
-  // Sentiment section
-  sentimentSection: {
-    flex: 1,
-  },
-  sentimentIndicators: {
-    flexDirection: 'row',
-    marginTop: 8,
-    gap: 8,
-  },
-  sentimentBadge: {
+  // View Details Button - Minimal text-only design
+  viewDetailsButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
+    paddingVertical: 8,
+    gap: 6,
   },
-  sentimentCount: {
+  viewDetailsText: {
     fontSize: 13,
     fontWeight: '600',
-  },
-  sentimentScore: {
-    marginTop: 6,
-    fontSize: 11,
-    color: '#6B7280',
-  },
-
-  // FAQ section
-  faqSection: {
-    flex: 1,
-  },
-  faqMetrics: {
-    flexDirection: 'row',
-    marginTop: 8,
-    gap: 12,
-  },
-  faqMetricItem: {
-    alignItems: 'center',
-  },
-  faqMetricValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1F2937',
-  },
-  faqMetricLabel: {
-    fontSize: 10,
-    color: '#6B7280',
-    marginTop: 2,
   },
 });

@@ -28,8 +28,10 @@ import {
   FlatList,
   RefreshControl,
   ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/contexts/ThemeContext';
 import { PriorityMessageCard } from './PriorityMessageCard';
 import { dashboardService } from '@/services/dashboardService';
 import type { PriorityMessageFeedItem } from '@/types/dashboard';
@@ -49,6 +51,15 @@ interface PriorityFeedProps {
 
   /** Optional title (default: "Priority Messages") */
   title?: string;
+
+  /** Preview mode - show only top 3 items (default: true) */
+  previewMode?: boolean;
+
+  /** Callback when "View All" is pressed (only in preview mode) */
+  onViewAll?: () => void;
+
+  /** Callback when messages are loaded (passes message count) */
+  onMessagesLoaded?: (count: number) => void;
 }
 
 /**
@@ -59,11 +70,45 @@ export function PriorityFeed({
   maxResults = 20,
   onMessagePress,
   title = 'Priority Messages',
+  previewMode = true,
+  onViewAll,
+  onMessagesLoaded,
 }: PriorityFeedProps) {
+  const { theme } = useTheme();
   const [messages, setMessages] = useState<PriorityMessageFeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.borderLight,
+      ...theme.shadows.sm,
+    },
+    title: {
+      color: theme.colors.textPrimary,
+    },
+    badge: {
+      backgroundColor: theme.colors.accent,
+    },
+    loadingText: {
+      color: theme.colors.textSecondary,
+    },
+    errorText: {
+      color: theme.colors.error,
+    },
+    emptyStateTitle: {
+      color: theme.colors.textPrimary,
+    },
+    emptyStateDescription: {
+      color: theme.colors.textSecondary,
+    },
+    viewAllText: {
+      color: theme.colors.accent,
+    },
+  });
 
   /**
    * Fetch priority messages from service
@@ -79,6 +124,11 @@ export function PriorityFeed({
 
       const priorityMessages = await dashboardService.getPriorityMessages(userId, maxResults);
       setMessages(priorityMessages);
+
+      // Notify parent of message count
+      if (onMessagesLoaded) {
+        onMessagesLoaded(priorityMessages.length);
+      }
     } catch (err) {
       console.error('Error fetching priority messages:', err);
       setError('Failed to load priority messages');
@@ -125,9 +175,9 @@ export function PriorityFeed({
 
     return (
       <View style={styles.emptyState}>
-        <Ionicons name="checkmark-circle-outline" size={64} color="#9CA3AF" />
-        <Text style={styles.emptyStateTitle}>No Priority Messages</Text>
-        <Text style={styles.emptyStateDescription}>
+        <Ionicons name="checkmark-circle-outline" size={64} color={theme.colors.textTertiary} />
+        <Text style={[styles.emptyStateTitle, dynamicStyles.emptyStateTitle]}>No Priority Messages</Text>
+        <Text style={[styles.emptyStateDescription, dynamicStyles.emptyStateDescription]}>
           You're all caught up! No urgent or high-value messages at the moment.
         </Text>
       </View>
@@ -139,13 +189,13 @@ export function PriorityFeed({
    */
   if (loading && !refreshing) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, dynamicStyles.container]}>
         <View style={styles.header}>
-          <Text style={styles.title}>{title}</Text>
+          <Text style={[styles.title, dynamicStyles.title]}>{title}</Text>
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3182CE" />
-          <Text style={styles.loadingText}>Loading priority messages...</Text>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={[styles.loadingText, dynamicStyles.loadingText]}>Loading priority messages...</Text>
         </View>
       </View>
     );
@@ -156,77 +206,116 @@ export function PriorityFeed({
    */
   if (error && !refreshing) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, dynamicStyles.container]}>
         <View style={styles.header}>
-          <Text style={styles.title}>{title}</Text>
+          <Text style={[styles.title, dynamicStyles.title]}>{title}</Text>
         </View>
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={48} color="#E53E3E" />
-          <Text style={styles.errorText}>{error}</Text>
+          <Ionicons name="alert-circle" size={48} color={theme.colors.error} />
+          <Text style={[styles.errorText, dynamicStyles.errorText]}>{error}</Text>
         </View>
       </View>
     );
   }
 
-  return (
-    <View style={styles.container} accessibilityRole="region" accessibilityLabel="Priority message feed">
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>{title}</Text>
-        {messages.length > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{messages.length}</Text>
-          </View>
-        )}
-      </View>
+  // Get preview or full list
+  const displayMessages = previewMode ? messages.slice(0, 3) : messages;
+  const hasMore = messages.length > 3;
 
-      {/* Message List */}
-      <FlatList
-        data={messages}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        ListEmptyComponent={renderEmptyState}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor="#3182CE"
-            colors={['#3182CE']}
-          />
-        }
-        contentContainerStyle={messages.length === 0 ? styles.emptyListContainer : styles.listContainer}
-        showsVerticalScrollIndicator={false}
-        // Performance optimizations
-        removeClippedSubviews={true}
-        maxToRenderPerBatch={10}
-        updateCellsBatchingPeriod={50}
-        windowSize={10}
-      />
+  return (
+    <View style={previewMode ? [styles.container, dynamicStyles.container] : styles.modalContainer} accessibilityRole="region" accessibilityLabel="Priority message feed">
+      {/* Header */}
+      {previewMode && (
+        <View style={styles.header}>
+          <Text style={[styles.title, dynamicStyles.title]}>{title}</Text>
+          {messages.length > 0 && (
+            <View style={[styles.badge, dynamicStyles.badge]}>
+              <Text style={styles.badgeText}>{messages.length}</Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Message List - Preview or Full */}
+      {previewMode ? (
+        <View style={styles.previewContainer}>
+          {/* Preview List (no scrolling) */}
+          {displayMessages.map((item) => (
+            <PriorityMessageCard
+              key={item.id}
+              item={item}
+              onPress={() => onMessagePress(item.conversationId)}
+            />
+          ))}
+
+          {/* Empty State */}
+          {displayMessages.length === 0 && !loading && renderEmptyState()}
+
+          {/* View All Button */}
+          {hasMore && onViewAll && (
+            <TouchableOpacity
+              style={styles.viewAllButton}
+              onPress={onViewAll}
+              accessibilityRole="button"
+              accessibilityLabel={`View all ${messages.length} priority messages`}
+            >
+              <Text style={[styles.viewAllText, dynamicStyles.viewAllText]}>
+                View All {messages.length} Messages
+              </Text>
+              <Ionicons name="arrow-forward" size={16} color={theme.colors.accent} />
+            </TouchableOpacity>
+          )}
+        </View>
+      ) : (
+        <FlatList
+          data={messages}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          ListEmptyComponent={renderEmptyState}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={theme.colors.accent}
+              colors={[theme.colors.accent]}
+            />
+          }
+          contentContainerStyle={messages.length === 0 ? styles.emptyListContainer : styles.listContainer}
+          showsVerticalScrollIndicator={false}
+          // Performance optimizations
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          updateCellsBatchingPeriod={50}
+          windowSize={10}
+        />
+      )}
     </View>
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
   container: {
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  modalContainer: {
     flex: 1,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
   title: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#1F2937',
   },
   badge: {
-    backgroundColor: '#3182CE',
     borderRadius: 12,
     minWidth: 24,
     height: 24,
@@ -257,7 +346,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: '#6B7280',
   },
 
   // Error state
@@ -271,7 +359,6 @@ const styles = StyleSheet.create({
   errorText: {
     marginTop: 12,
     fontSize: 14,
-    color: '#E53E3E',
     textAlign: 'center',
   },
 
@@ -286,13 +373,28 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 18,
     fontWeight: '600',
-    color: '#4B5563',
   },
   emptyStateDescription: {
     marginTop: 8,
     fontSize: 14,
-    color: '#9CA3AF',
     textAlign: 'center',
     lineHeight: 20,
+  },
+
+  // Preview mode styles
+  previewContainer: {
+    padding: 16,
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 8,
+    marginTop: 8,
+  },
+  viewAllText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

@@ -21,7 +21,6 @@ jest.mock('@/services/bulkOperationsService', () => ({
   bulkOperationsService: {
     archiveAllRead: jest.fn(),
     markAllAsRead: jest.fn(),
-    batchApproveSuggestions: jest.fn(),
   },
 }));
 
@@ -64,7 +63,7 @@ describe('QuickActions', () => {
 
       expect(getByLabelText('Archive all read conversations')).toBeTruthy();
       expect(getByLabelText('Mark all messages as read')).toBeTruthy();
-      expect(getByLabelText('Batch approve AI suggestions')).toBeTruthy();
+      // 'Batch approve AI suggestions' button removed in Story 6.7 (Epic 5 cleanup)
     });
 
     it('should use custom title when provided', () => {
@@ -266,83 +265,6 @@ describe('QuickActions', () => {
     });
   });
 
-  describe('Batch Approve Suggestions action', () => {
-    it('should show confirmation dialog when approve button is pressed', () => {
-      const { getByLabelText } = render(<QuickActions userId="test-user-123" />);
-
-      fireEvent.press(getByLabelText('Batch approve AI suggestions'));
-
-      expect(Alert.alert).toHaveBeenCalledWith(
-        'Approve All Suggestions',
-        'Are you sure you want to approve all pending AI response suggestions?',
-        expect.any(Array)
-      );
-    });
-
-    it('should call batchApproveSuggestions when confirmed', async () => {
-      (bulkOperationsService.batchApproveSuggestions as jest.Mock).mockResolvedValue(
-        mockSuccessResult
-      );
-
-      const { getByLabelText } = render(<QuickActions userId="test-user-123" />);
-
-      fireEvent.press(getByLabelText('Batch approve AI suggestions'));
-
-      const alertCall = (Alert.alert as jest.Mock).mock.calls[0];
-      const confirmButton = alertCall[2][1];
-      await confirmButton.onPress();
-
-      await waitFor(() => {
-        expect(bulkOperationsService.batchApproveSuggestions).toHaveBeenCalledWith(
-          'test-user-123',
-          expect.any(Function)
-        );
-      });
-    });
-
-    it('should show success alert when approving succeeds', async () => {
-      (bulkOperationsService.batchApproveSuggestions as jest.Mock).mockResolvedValue(
-        mockSuccessResult
-      );
-
-      const { getByLabelText } = render(<QuickActions userId="test-user-123" />);
-
-      fireEvent.press(getByLabelText('Batch approve AI suggestions'));
-
-      const alertCall = (Alert.alert as jest.Mock).mock.calls[0];
-      const confirmButton = alertCall[2][1];
-      await confirmButton.onPress();
-
-      await waitFor(() => {
-        expect(Alert.alert).toHaveBeenCalledWith(
-          'Success',
-          'Approved 10 suggestions.'
-        );
-      });
-    });
-
-    it('should show error alert when approving fails', async () => {
-      (bulkOperationsService.batchApproveSuggestions as jest.Mock).mockRejectedValue(
-        new Error('Network error')
-      );
-
-      const { getByLabelText } = render(<QuickActions userId="test-user-123" />);
-
-      fireEvent.press(getByLabelText('Batch approve AI suggestions'));
-
-      const alertCall = (Alert.alert as jest.Mock).mock.calls[0];
-      const confirmButton = alertCall[2][1];
-      await confirmButton.onPress();
-
-      await waitFor(() => {
-        expect(Alert.alert).toHaveBeenCalledWith(
-          'Error',
-          'Failed to approve suggestions. Please try again.'
-        );
-      });
-    });
-  });
-
   describe('Progress tracking', () => {
     it('should show progress bar during operation', async () => {
       let progressCallback: any;
@@ -434,7 +356,6 @@ describe('QuickActions', () => {
 
       expect(getByLabelText('Archive all read conversations')).toBeTruthy();
       expect(getByLabelText('Mark all messages as read')).toBeTruthy();
-      expect(getByLabelText('Batch approve AI suggestions')).toBeTruthy();
     });
 
     it('should have button role', () => {

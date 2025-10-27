@@ -9,20 +9,20 @@
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "batch-analysis": "npm run build && node lib/scripts/historical-batch-analysis.js"
   },
   "engines": {
     "node": "20"
   },
   "main": "lib/index.js",
   "dependencies": {
-    "@ai-sdk/openai": "^2.0.53",
     "@pinecone-database/pinecone": "^6.1.2",
     "@upstash/redis": "^1.35.6",
-    "ai": "^5.0.77",
     "firebase-admin": "^13.0.1",
     "firebase-functions": "^6.3.0",
     "langfuse": "^3.38.6",
+    "openai": "^6.7.0",
     "react-native-gesture-handler": "^2.29.0"
   },
   "devDependencies": {

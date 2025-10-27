@@ -8,8 +8,10 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/hooks/useAuth';
 import { opportunityService } from '@/services/opportunityService';
+import { useTheme } from '@/contexts/ThemeContext';
 
 /**
  * Layout for main app tabs
@@ -17,6 +19,8 @@ import { opportunityService } from '@/services/opportunityService';
  */
 export default function TabsLayout() {
   const { user } = useAuth();
+  const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const [newOpportunityCount, setNewOpportunityCount] = useState<number>(0);
 
   /**
@@ -50,20 +54,21 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#007AFF',
-        tabBarInactiveTintColor: '#666',
+        tabBarActiveTintColor: theme.colors.accent,
+        tabBarInactiveTintColor: theme.colors.textTertiary,
+        tabBarShowLabel: false, // Robinhood-style: No labels, icons only
         tabBarStyle: {
           borderTopWidth: 1,
-          borderTopColor: '#e0e0e0',
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '500',
+          borderTopColor: theme.colors.borderLight,
+          backgroundColor: theme.colors.surface,
+          height: 60 + insets.bottom, // Add safe area inset to height
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 8, // Use safe area or default padding
+          paddingTop: 8,
         },
       }}
       screenListeners={{
         state: (e) => {
-          // Clear badge when Home tab is focused
+          // Clear badge when Dashboard tab is focused
           const state = e.data.state;
           const currentRoute = state?.routes[state.index];
           if (currentRoute?.name === 'index') {
@@ -75,8 +80,10 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
+          title: 'Dashboard',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'grid' : 'grid-outline'} size={26} color={color} />
+          ),
           tabBarBadge: newOpportunityCount > 0 ? newOpportunityCount : undefined,
         }}
       />
@@ -84,7 +91,9 @@ export default function TabsLayout() {
         name="daily-digest"
         options={{
           title: 'Daily',
-          tabBarIcon: ({ color, size }) => <Ionicons name="today" size={size} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'calendar' : 'calendar-outline'} size={26} color={color} />
+          ),
           headerShown: false,
         }}
       />
@@ -92,8 +101,8 @@ export default function TabsLayout() {
         name="conversations"
         options={{
           title: 'Messages',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="chatbubbles" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'chatbubble' : 'chatbubble-outline'} size={26} color={color} />
           ),
           headerShown: false,
         }}
@@ -102,7 +111,9 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'person' : 'person-outline'} size={26} color={color} />
+          ),
           headerShown: false,
         }}
       />

@@ -31,6 +31,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationHeader } from '../../_components/NavigationHeader';
+import { useTheme } from '@/contexts/ThemeContext';
 import { getFirebaseAuth } from '@/services/firebase';
 import {
   getDailyCosts,
@@ -48,6 +49,7 @@ type TimePeriod = 'daily' | 'monthly';
  */
 export default function AICostDashboardScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
   const [period, setPeriod] = useState<TimePeriod>('daily');
   const [dailyCosts, setDailyCosts] = useState<DailyCost[]>([]);
   const [monthlyCosts, setMonthlyCosts] = useState<MonthlyCost[]>([]);
@@ -57,6 +59,80 @@ export default function AICostDashboardScreen() {
 
   const auth = getFirebaseAuth();
   const userId = auth.currentUser?.uid || '';
+
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    title: {
+      color: theme.colors.textPrimary,
+    },
+    subtitle: {
+      color: theme.colors.textSecondary,
+    },
+    sectionHeader: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: theme.colors.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 12,
+      marginTop: 8,
+    },
+    periodToggle: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.borderLight,
+    },
+    periodButtonActive: {
+      backgroundColor: theme.colors.accent,
+    },
+    periodButtonText: {
+      color: theme.colors.textSecondary,
+    },
+    loadingText: {
+      color: theme.colors.textSecondary,
+    },
+    errorText: {
+      color: theme.colors.error,
+    },
+    retryButton: {
+      backgroundColor: theme.colors.accent,
+    },
+    card: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.borderLight,
+      ...theme.shadows.sm,
+    },
+    cardTitle: {
+      color: theme.colors.textPrimary,
+    },
+    budgetLabel: {
+      color: theme.colors.textSecondary,
+    },
+    budgetSubtext: {
+      color: theme.colors.textTertiary,
+    },
+    emptyChartText: {
+      color: theme.colors.textTertiary,
+    },
+    operationLabel: {
+      color: theme.colors.textPrimary,
+    },
+    operationCost: {
+      color: theme.colors.textPrimary,
+    },
+    operationPercent: {
+      color: theme.colors.textTertiary,
+    },
+    exportButton: {
+      backgroundColor: theme.colors.accent,
+    },
+    progressBarContainer: {
+      backgroundColor: theme.colors.borderLight,
+    },
+  });
 
   const fetchCostData = useCallback(async () => {
     try {
@@ -188,7 +264,7 @@ export default function AICostDashboardScreen() {
   ];
 
   return (
-    <View style={styles.container}>
+    <View style={dynamicStyles.container}>
       <NavigationHeader
         title="AI Cost Monitoring"
         variant="modal"
@@ -209,27 +285,34 @@ export default function AICostDashboardScreen() {
       />
 
       <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.contentContainer}>
+        {/* Page Header */}
+        <Text style={[styles.title, dynamicStyles.title]}>AI Cost Monitoring</Text>
+        <Text style={[styles.subtitle, dynamicStyles.subtitle]}>
+          Track daily and monthly AI costs with budget monitoring and operation-level breakdown
+        </Text>
+
         {/* Period Toggle */}
-        <View style={styles.periodToggle}>
+        <Text style={dynamicStyles.sectionHeader}>TIME PERIOD</Text>
+        <View style={[styles.periodToggle, dynamicStyles.periodToggle]}>
           <TouchableOpacity
-            style={[styles.periodButton, period === 'daily' && styles.periodButtonActive]}
+            style={[styles.periodButton, period === 'daily' && dynamicStyles.periodButtonActive]}
             onPress={() => setPeriod('daily')}
             accessibilityLabel="Show daily costs"
             accessibilityRole="button"
             accessibilityState={{ selected: period === 'daily' }}
           >
-            <Text style={[styles.periodButtonText, period === 'daily' && styles.periodButtonTextActive]}>
+            <Text style={[styles.periodButtonText, dynamicStyles.periodButtonText, period === 'daily' && styles.periodButtonTextActive]}>
               Daily
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.periodButton, period === 'monthly' && styles.periodButtonActive]}
+            style={[styles.periodButton, period === 'monthly' && dynamicStyles.periodButtonActive]}
             onPress={() => setPeriod('monthly')}
             accessibilityLabel="Show monthly costs"
             accessibilityRole="button"
             accessibilityState={{ selected: period === 'monthly' }}
           >
-            <Text style={[styles.periodButtonText, period === 'monthly' && styles.periodButtonTextActive]}>
+            <Text style={[styles.periodButtonText, dynamicStyles.periodButtonText, period === 'monthly' && styles.periodButtonTextActive]}>
               Monthly
             </Text>
           </TouchableOpacity>
@@ -237,34 +320,35 @@ export default function AICostDashboardScreen() {
 
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#3182CE" />
-            <Text style={styles.loadingText}>Loading cost data...</Text>
+            <ActivityIndicator size="large" color={theme.colors.accent} />
+            <Text style={[styles.loadingText, dynamicStyles.loadingText]}>Loading cost data...</Text>
           </View>
         ) : error ? (
           <View style={styles.errorContainer}>
-            <Ionicons name="alert-circle-outline" size={48} color="#E53E3E" />
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
+            <Ionicons name="alert-circle-outline" size={48} color={theme.colors.error} />
+            <Text style={[styles.errorText, dynamicStyles.errorText]}>{error}</Text>
+            <TouchableOpacity style={[styles.retryButton, dynamicStyles.retryButton]} onPress={handleRefresh}>
               <Text style={styles.retryButtonText}>Retry</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <>
             {/* Budget Progress */}
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Budget Progress</Text>
+            <Text style={dynamicStyles.sectionHeader}>BUDGET PROGRESS</Text>
+            <View style={[styles.card, dynamicStyles.card]}>
+              <Text style={[styles.cardTitle, dynamicStyles.cardTitle]}>Budget Progress</Text>
               <View style={styles.budgetContainer}>
                 <View style={styles.budgetHeader}>
-                  <Text style={styles.budgetLabel}>{period === 'daily' ? 'Today' : 'This Month'}</Text>
+                  <Text style={[styles.budgetLabel, dynamicStyles.budgetLabel]}>{period === 'daily' ? 'Today' : 'This Month'}</Text>
                   <Text style={[styles.budgetAmount, { color: budgetColor }]}>
                     ${currentSpend.toFixed(2)}
                   </Text>
                 </View>
-                <View style={styles.progressBarContainer}>
+                <View style={[styles.progressBarContainer, dynamicStyles.progressBarContainer]}>
                   <View style={[styles.progressBar, { width: `${Math.min(budgetProgress, 100)}%`, backgroundColor: budgetColor }]} />
                 </View>
                 <View style={styles.budgetFooter}>
-                  <Text style={styles.budgetSubtext}>
+                  <Text style={[styles.budgetSubtext, dynamicStyles.budgetSubtext]}>
                     ${(userBudget / 100).toFixed(2)} {period === 'daily' ? 'daily' : 'monthly'} budget
                   </Text>
                   <Text style={[styles.budgetPercent, { color: budgetColor }]}>
@@ -275,8 +359,9 @@ export default function AICostDashboardScreen() {
             </View>
 
             {/* Cost Chart */}
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>
+            <Text style={dynamicStyles.sectionHeader}>COST TRENDS</Text>
+            <View style={[styles.card, dynamicStyles.card]}>
+              <Text style={[styles.cardTitle, dynamicStyles.cardTitle]}>
                 {period === 'daily' ? 'Daily Costs (Last 14 Days)' : 'Monthly Costs (Last 6 Months)'}
               </Text>
               {chartData.labels.length > 0 ? (
@@ -289,14 +374,15 @@ export default function AICostDashboardScreen() {
                 />
               ) : (
                 <View style={styles.emptyChart}>
-                  <Text style={styles.emptyChartText}>No cost data available</Text>
+                  <Text style={[styles.emptyChartText, dynamicStyles.emptyChartText]}>No cost data available</Text>
                 </View>
               )}
             </View>
 
             {/* Operation Breakdown */}
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Cost Breakdown by Operation</Text>
+            <Text style={dynamicStyles.sectionHeader}>OPERATION BREAKDOWN</Text>
+            <View style={[styles.card, dynamicStyles.card]}>
+              <Text style={[styles.cardTitle, dynamicStyles.cardTitle]}>Cost Breakdown by Operation</Text>
               <View style={styles.operationsContainer}>
                 {operationLabels.map((op) => {
                   const cost = (operationBreakdown[op.key] || 0) / 100;
@@ -306,12 +392,12 @@ export default function AICostDashboardScreen() {
                     <View key={op.key} style={styles.operationRow}>
                       <View style={styles.operationLeft}>
                         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                        <Ionicons name={op.icon as any} size={20} color="#6B7280" />
-                        <Text style={styles.operationLabel}>{op.label}</Text>
+                        <Ionicons name={op.icon as any} size={20} color={theme.colors.textSecondary} />
+                        <Text style={[styles.operationLabel, dynamicStyles.operationLabel]}>{op.label}</Text>
                       </View>
                       <View style={styles.operationRight}>
-                        <Text style={styles.operationCost}>${cost.toFixed(4)}</Text>
-                        <Text style={styles.operationPercent}>({percentage.toFixed(0)}%)</Text>
+                        <Text style={[styles.operationCost, dynamicStyles.operationCost]}>${cost.toFixed(4)}</Text>
+                        <Text style={[styles.operationPercent, dynamicStyles.operationPercent]}>({percentage.toFixed(0)}%)</Text>
                       </View>
                     </View>
                   );
@@ -321,7 +407,7 @@ export default function AICostDashboardScreen() {
 
             {/* Export Button */}
             <TouchableOpacity
-              style={styles.exportButton}
+              style={[styles.exportButton, dynamicStyles.exportButton]}
               onPress={handleExport}
               accessibilityLabel="Export cost data as CSV"
               accessibilityRole="button"
@@ -336,23 +422,31 @@ export default function AICostDashboardScreen() {
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
   scrollContainer: {
     flex: 1,
   },
   contentContainer: {
-    padding: 16,
+    padding: 24,
+    paddingBottom: 32,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    marginBottom: 24,
   },
   periodToggle: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
     borderRadius: 8,
     padding: 4,
     marginBottom: 16,
+    borderWidth: 1,
   },
   periodButton: {
     flex: 1,
@@ -361,13 +455,9 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignItems: 'center',
   },
-  periodButtonActive: {
-    backgroundColor: '#3182CE',
-  },
   periodButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6B7280',
   },
   periodButtonTextActive: {
     color: '#FFFFFF',
@@ -381,7 +471,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 14,
-    color: '#6B7280',
   },
   errorContainer: {
     flex: 1,
@@ -392,14 +481,12 @@ const styles = StyleSheet.create({
   errorText: {
     marginTop: 16,
     fontSize: 14,
-    color: '#E53E3E',
     textAlign: 'center',
   },
   retryButton: {
     marginTop: 16,
     paddingVertical: 8,
     paddingHorizontal: 24,
-    backgroundColor: '#3182CE',
     borderRadius: 8,
   },
   retryButtonText: {
@@ -407,20 +494,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   card: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    borderWidth: 1,
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
     marginBottom: 16,
   },
   budgetContainer: {
@@ -433,7 +514,6 @@ const styles = StyleSheet.create({
   },
   budgetLabel: {
     fontSize: 14,
-    color: '#6B7280',
   },
   budgetAmount: {
     fontSize: 24,
@@ -441,7 +521,6 @@ const styles = StyleSheet.create({
   },
   progressBarContainer: {
     height: 8,
-    backgroundColor: '#E5E7EB',
     borderRadius: 4,
     overflow: 'hidden',
   },
@@ -456,7 +535,6 @@ const styles = StyleSheet.create({
   },
   budgetSubtext: {
     fontSize: 12,
-    color: '#9CA3AF',
   },
   budgetPercent: {
     fontSize: 14,
@@ -469,7 +547,6 @@ const styles = StyleSheet.create({
   },
   emptyChartText: {
     fontSize: 14,
-    color: '#9CA3AF',
   },
   operationsContainer: {
     gap: 12,
@@ -487,7 +564,6 @@ const styles = StyleSheet.create({
   },
   operationLabel: {
     fontSize: 14,
-    color: '#374151',
   },
   operationRight: {
     flexDirection: 'row',
@@ -497,18 +573,15 @@ const styles = StyleSheet.create({
   operationCost: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1F2937',
   },
   operationPercent: {
     fontSize: 12,
-    color: '#9CA3AF',
   },
   exportButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#3182CE',
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 8,

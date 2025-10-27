@@ -25,6 +25,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { getFirebaseDb } from './firebase';
+import { getOpportunityNotificationSettings } from './userService';
 import type { Message } from '@/types/models';
 import type { OpportunityAnalytics, DailySummary } from '@/types/dashboard';
 
@@ -214,9 +215,41 @@ class OpportunityService {
       console.log(`Found ${allOpportunities.length} opportunities across all conversations`);
 
       // Filter out user's own messages - they shouldn't see their own messages as opportunities
-      const opportunities = allOpportunities.filter(msg => msg.senderId !== userId);
-      
+      let opportunities = allOpportunities.filter(msg => msg.senderId !== userId);
+
       console.log(`Filtered to ${opportunities.length} opportunities (excluded user's own messages)`);
+
+      // BUG FIX: Filter by user's notifyByType settings (only show enabled types)
+      try {
+        const opportunitySettings = await getOpportunityNotificationSettings(userId);
+
+        if (opportunitySettings && opportunitySettings.notifyByType) {
+          const beforeFilter = opportunities.length;
+
+          opportunities = opportunities.filter(msg => {
+            const type = msg.metadata.opportunityType;
+
+            // If no type, default to showing it (backward compatibility)
+            if (!type) {
+              return true;
+            }
+
+            // Check if this type is enabled in user settings
+            const isTypeEnabled = opportunitySettings.notifyByType[type];
+
+            if (!isTypeEnabled) {
+              console.log(`Filtered out ${type} opportunity (disabled in settings): ${msg.id}`);
+            }
+
+            return isTypeEnabled;
+          });
+
+          console.log(`Filtered by notifyByType settings: ${beforeFilter} → ${opportunities.length} opportunities`);
+        }
+      } catch (error) {
+        console.error('Failed to load opportunity settings for filtering, showing all:', error);
+        // Fail open - if we can't load settings, show all opportunities
+      }
 
       // Sort by score DESC, then timestamp DESC, and return top N
       const sortedOpportunities = opportunities
@@ -363,6 +396,24 @@ class OpportunityService {
     // Track conversation subscriptions for cleanup
     const conversationUnsubscribes: Unsubscribe[] = [];
 
+    // BUG FIX: Load user's notifyByType settings once at subscription start
+    let enabledTypes: Record<string, boolean> | undefined;
+
+    // Load settings asynchronously (don't block subscription)
+    getOpportunityNotificationSettings(userId)
+      .then((settings) => {
+        if (settings && settings.notifyByType) {
+          enabledTypes = settings.notifyByType;
+          console.log('Opportunity subscription filtering by types:', enabledTypes);
+        } else {
+          console.log('No opportunity filter settings, showing all types');
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to load opportunity filter settings:', error);
+        // Continue without filtering
+      });
+
     // Subscribe to user's conversations
     const conversationsQuery = query(
       collection(this.db, 'conversations'),
@@ -395,6 +446,18 @@ class OpportunityService {
                   `New opportunity detected: ${message.id} (score: ${message.metadata.opportunityScore})`
                 );
 
+                // BUG FIX: Filter by type before calling callback
+                const type = message.metadata.opportunityType;
+
+                // If settings loaded and type is defined, check if it's enabled
+                if (enabledTypes && type) {
+                  if (!enabledTypes[type]) {
+                    console.log(`Filtered out ${type} opportunity (disabled in settings): ${message.id}`);
+                    return; // Skip this opportunity
+                  }
+                }
+
+                // Type is enabled or no filtering configured - show it
                 callback(message);
               }
             });

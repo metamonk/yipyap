@@ -11,6 +11,7 @@
 import React, { FC, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/contexts/ThemeContext';
 import type { Message } from '@/types/models';
 
 /**
@@ -55,6 +56,7 @@ export interface SuggestedFAQButtonProps {
  * @returns SuggestedFAQButton component or null if no suggestion
  */
 export const SuggestedFAQButton: FC<SuggestedFAQButtonProps> = ({ message, onSend }) => {
+  const { theme } = useTheme();
   const [isSending, setIsSending] = useState(false);
 
   // Only show button for messages with suggested FAQ
@@ -62,6 +64,28 @@ export const SuggestedFAQButton: FC<SuggestedFAQButtonProps> = ({ message, onSen
   if (!suggestedFAQ) {
     return null;
   }
+
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      backgroundColor: theme.colors.accentLight || '#E3F2FD',
+      borderColor: theme.colors.accent,
+    },
+    headerIcon: {
+      color: theme.colors.accent,
+    },
+    headerText: {
+      color: theme.colors.accent,
+    },
+    confidenceBadge: {
+      backgroundColor: theme.colors.accent,
+    },
+    question: {
+      color: theme.colors.textPrimary,
+    },
+    sendButton: {
+      backgroundColor: theme.colors.accent,
+    },
+  });
 
   const handleSend = async () => {
     setIsSending(true);
@@ -84,23 +108,23 @@ export const SuggestedFAQButton: FC<SuggestedFAQButtonProps> = ({ message, onSen
   const confidencePercentage = Math.round(suggestedFAQ.confidence * 100);
 
   return (
-    <View style={styles.container} testID="suggested-faq-button">
+    <View style={[styles.container, dynamicStyles.container]} testID="suggested-faq-button">
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Ionicons name="bulb" size={16} color="#007AFF" />
-          <Text style={styles.headerText}>Suggested FAQ</Text>
+          <Ionicons name="bulb" size={16} color={dynamicStyles.headerIcon.color} />
+          <Text style={[styles.headerText, dynamicStyles.headerText]}>Suggested FAQ</Text>
         </View>
-        <View style={styles.confidenceBadge}>
+        <View style={[styles.confidenceBadge, dynamicStyles.confidenceBadge]}>
           <Text style={styles.confidenceText}>{confidencePercentage}% match</Text>
         </View>
       </View>
 
-      <Text style={styles.question} numberOfLines={2}>
+      <Text style={[styles.question, dynamicStyles.question]} numberOfLines={2}>
         {suggestedFAQ.question}
       </Text>
 
       <TouchableOpacity
-        style={[styles.sendButton, isSending && styles.sendButtonDisabled]}
+        style={[styles.sendButton, dynamicStyles.sendButton, isSending && styles.sendButtonDisabled]}
         onPress={handleSend}
         disabled={isSending}
         testID="send-faq-button"
@@ -118,11 +142,10 @@ export const SuggestedFAQButton: FC<SuggestedFAQButtonProps> = ({ message, onSen
   );
 };
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#E3F2FD',
     borderWidth: 1,
-    borderColor: '#007AFF',
     borderRadius: 12,
     padding: 12,
     marginTop: 8,
@@ -142,11 +165,9 @@ const styles = StyleSheet.create({
   headerText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#007AFF',
     marginLeft: 6,
   },
   confidenceBadge: {
-    backgroundColor: '#007AFF',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 10,
@@ -158,7 +179,6 @@ const styles = StyleSheet.create({
   },
   question: {
     fontSize: 14,
-    color: '#1C1C1E',
     marginBottom: 12,
     lineHeight: 18,
   },
@@ -166,7 +186,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#007AFF',
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 8,

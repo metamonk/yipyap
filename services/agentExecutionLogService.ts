@@ -12,22 +12,21 @@
  * @module services/agentExecutionLogService
  */
 
+import type { AgentExecutionLog, DailyAgentExecution } from '@/types/ai'
 import {
   collection,
   doc,
-  getDoc,
-  query,
-  where,
-  orderBy,
-  getDocs,
-  limit as firestoreLimit,
   FirestoreError,
+  limit as firestoreLimit,
+  getDoc,
+  getDocs,
   onSnapshot,
+  orderBy,
+  query,
   Unsubscribe,
-  Timestamp,
-} from 'firebase/firestore';
-import { getFirebaseDb, getFirebaseAuth } from './firebase';
-import type { DailyAgentExecution, AgentExecutionLog } from '@/types/ai';
+  where
+} from 'firebase/firestore'
+import { getFirebaseAuth, getFirebaseDb } from './firebase'
 
 /**
  * Performance metrics calculated from execution data

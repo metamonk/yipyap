@@ -18,13 +18,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { onSnapshot, query, collection, orderBy, limit } from 'firebase/firestore';
-import { getFirebaseDb } from '@/services/firebase';
+import { useTheme } from '@/contexts/ThemeContext';
 import { typingService } from '@/services/typingService';
-import { ResponseSuggestions } from './ResponseSuggestions';
-import { voiceMatchingService } from '@/services/voiceMatchingService';
-import { useAuth } from '@/hooks/useAuth';
-import type { Message } from '@/types/models';
 
 /** Maximum allowed message length in characters */
 const MAX_MESSAGE_LENGTH = 1000;
@@ -44,6 +39,18 @@ export interface MessageInputProps {
 
   /** Whether the input should be disabled (optional) */
   disabled?: boolean;
+
+  /** Callback for generating AI draft (optional) */
+  onGenerateDraft?: () => void;
+
+  /** Whether AI draft is currently being generated (optional) */
+  isGeneratingDraft?: boolean;
+
+  /** Whether the generate draft button should be shown (optional) */
+  canGenerateDraft?: boolean;
+
+  /** Draft text to populate the input field (optional) */
+  draftText?: string;
 }
 
 /**
@@ -77,14 +84,14 @@ export const MessageInput: FC<MessageInputProps> = ({
   conversationId,
   userId,
   disabled = false,
+  onGenerateDraft,
+  isGeneratingDraft = false,
+  canGenerateDraft = false,
+  draftText,
 }) => {
-  const { userProfile } = useAuth();
+  const { theme } = useTheme();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
-
-  // Voice matching state
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [lastIncomingMessageId, setLastIncomingMessageId] = useState<string | null>(null);
 
   // Track typing state
   const isTypingRef = useRef(false);
@@ -98,9 +105,6 @@ export const MessageInput: FC<MessageInputProps> = ({
     setText(newText);
 
     // If user starts typing manually, hide AI suggestions (AC: IV1)
-    if (newText.length > 0 && showSuggestions) {
-      setShowSuggestions(false);
-    }
 
     // If text is empty, stop typing
     if (!newText.trim()) {
@@ -178,104 +182,6 @@ export const MessageInput: FC<MessageInputProps> = ({
     }
   };
 
-  /**
-   * Callback handlers for ResponseSuggestions component
-   */
-  const handleAcceptSuggestion = (suggestionText: string) => {
-    // Populate input field with accepted suggestion
-    setText(suggestionText);
-    setShowSuggestions(false);
-
-    // Track acceptance feedback for retraining (fire-and-forget with error handling)
-    voiceMatchingService.trackFeedback({
-      suggestion: suggestionText,
-      action: 'accepted',
-    }).catch((error) => {
-      console.error('[MessageInput] Failed to track suggestion feedback:', error);
-    });
-  };
-
-  const handleRejectSuggestion = (suggestionText: string) => {
-    // Track rejection feedback for retraining (fire-and-forget with error handling)
-    voiceMatchingService.trackFeedback({
-      suggestion: suggestionText,
-      action: 'rejected',
-    }).catch((error) => {
-      console.error('[MessageInput] Failed to track suggestion feedback:', error);
-    });
-  };
-
-  const handleEditSuggestion = (suggestionText: string) => {
-    // Populate input field for manual editing
-    setText(suggestionText);
-    setShowSuggestions(false);
-
-    // Track edit feedback for retraining (fire-and-forget with error handling)
-    voiceMatchingService.trackFeedback({
-      suggestion: suggestionText,
-      action: 'edited',
-    }).catch((error) => {
-      console.error('[MessageInput] Failed to track suggestion feedback:', error);
-    });
-  };
-
-  const handleSuggestionsComplete = () => {
-    // Hide suggestions when all processed
-    setShowSuggestions(false);
-  };
-
-  /**
-   * Subscribe to new incoming messages for AI suggestion generation
-   * Listens to the last message in the conversation and triggers suggestion loading
-   * when a new incoming message is detected (not from current user)
-   */
-  useEffect(() => {
-    // Skip if no conversation ID or voice matching disabled
-    if (!conversationId || !userProfile?.settings?.voiceMatching?.enabled) {
-      return;
-    }
-
-    // Subscribe to the last message in this conversation
-    const db = getFirebaseDb();
-    const messagesQuery = query(
-      collection(db, 'conversations', conversationId, 'messages'),
-      orderBy('timestamp', 'desc'),
-      limit(1)
-    );
-
-    const unsubscribe = onSnapshot(
-      messagesQuery,
-      (snapshot) => {
-        if (snapshot.empty) {
-          return;
-        }
-
-        const lastMessage = {
-          id: snapshot.docs[0].id,
-          ...snapshot.docs[0].data(),
-        } as Message;
-
-        // Only show suggestions for incoming messages (not sent by current user)
-        // Don't show if user is already typing (AC: IV1 - non-blocking UI)
-        if (
-          lastMessage.senderId !== userId &&
-          lastMessage.id !== lastIncomingMessageId &&
-          userProfile.settings?.voiceMatching?.autoShowSuggestions &&
-          !text.trim() // Don't show suggestions if user is already typing
-        ) {
-          setLastIncomingMessageId(lastMessage.id);
-          setShowSuggestions(true);
-        }
-      },
-      (error) => {
-        console.error('Error listening for messages:', error);
-      }
-    );
-
-    return () => {
-      unsubscribe();
-    };
-  }, [conversationId, userId, userProfile, lastIncomingMessageId, text]);
 
   /**
    * Cleanup typing state on unmount or navigation
@@ -294,52 +200,94 @@ export const MessageInput: FC<MessageInputProps> = ({
     };
   }, [conversationId, userId]);
 
+  /**
+   * Populate input field when draftText prop changes
+   */
+  useEffect(() => {
+    if (draftText) {
+      setText(draftText);
+    }
+  }, [draftText]);
+
   const isSendDisabled = !text.trim() || sending || disabled;
+
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      backgroundColor: theme.colors.surface,
+      borderTopColor: theme.colors.borderLight,
+    },
+    inputContainer: {
+      backgroundColor: theme.colors.backgroundSecondary,
+    },
+    input: {
+      color: theme.colors.textPrimary,
+    },
+    charCount: {
+      color: theme.colors.textSecondary,
+    },
+    charCountLimit: {
+      color: theme.colors.error,
+    },
+    sendButton: {
+      backgroundColor: theme.colors.accent,
+    },
+    sendButtonDisabled: {
+      backgroundColor: theme.colors.disabled,
+    },
+  });
 
   return (
     <View>
-      {/* AI Response Suggestions - displayed above input when available */}
-      {showSuggestions && lastIncomingMessageId && (
-        <View testID="response-suggestions-container">
-          <ResponseSuggestions
-            conversationId={conversationId}
-            incomingMessageId={lastIncomingMessageId}
-            onAccept={handleAcceptSuggestion}
-            onReject={handleRejectSuggestion}
-            onEdit={handleEditSuggestion}
-            suggestionCount={userProfile?.settings?.voiceMatching?.suggestionCount || 2}
-            visible={showSuggestions}
-            onComplete={handleSuggestionsComplete}
-          />
-        </View>
-      )}
-
       {/* Message Input Container */}
-      <View style={styles.container}>
-        <View style={styles.inputContainer}>
+      <View style={[styles.container, dynamicStyles.container]}>
+        <View style={[styles.inputContainer, dynamicStyles.inputContainer]}>
           <TextInput
-            style={styles.input}
+            style={[styles.input, dynamicStyles.input]}
             value={text}
             onChangeText={handleTextChange}
             placeholder="Type a message..."
-            placeholderTextColor="#8E8E93"
+            placeholderTextColor={theme.colors.textTertiary}
             multiline
             maxLength={MAX_MESSAGE_LENGTH}
             editable={!sending && !disabled}
             testID="message-input"
           />
 
-          {/* Character counter */}
-          <Text
-            style={[styles.charCount, text.length >= MAX_MESSAGE_LENGTH && styles.charCountLimit]}
-          >
-            {text.length}/{MAX_MESSAGE_LENGTH}
-          </Text>
+          {/* Bottom row with AI button and character counter */}
+          <View style={styles.bottomRow}>
+            {/* AI Draft button - shown when canGenerateDraft is true */}
+            {canGenerateDraft && (
+              <TouchableOpacity
+                style={styles.draftButton}
+                onPress={onGenerateDraft}
+                disabled={isGeneratingDraft || disabled}
+                testID="generate-draft-button"
+              >
+                {isGeneratingDraft ? (
+                  <ActivityIndicator size="small" color="#8B5CF6" />
+                ) : (
+                  <Ionicons name="sparkles" size={18} color="#8B5CF6" />
+                )}
+              </TouchableOpacity>
+            )}
+
+            {/* Character counter */}
+            <Text
+              style={[
+                styles.charCount,
+                dynamicStyles.charCount,
+                text.length >= MAX_MESSAGE_LENGTH && dynamicStyles.charCountLimit,
+              ]}
+            >
+              {text.length}/{MAX_MESSAGE_LENGTH}
+            </Text>
+          </View>
         </View>
 
         {/* Send button */}
         <TouchableOpacity
-          style={[styles.sendButton, isSendDisabled && styles.sendButtonDisabled]}
+          style={[styles.sendButton, dynamicStyles.sendButton, isSendDisabled && dynamicStyles.sendButtonDisabled]}
           onPress={handleSend}
           disabled={isSendDisabled}
           testID="send-button"
@@ -347,7 +295,7 @@ export const MessageInput: FC<MessageInputProps> = ({
           {sending ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
-            <Ionicons name="send" size={20} color={isSendDisabled ? '#8E8E93' : '#FFFFFF'} />
+            <Ionicons name="send" size={20} color={isSendDisabled ? theme.colors.textTertiary : '#FFFFFF'} />
           )}
         </TouchableOpacity>
       </View>
@@ -355,49 +303,57 @@ export const MessageInput: FC<MessageInputProps> = ({
   );
 };
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    padding: 12,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5EA',
+    padding: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
     alignItems: 'flex-end',
+    gap: 12,
   },
   inputContainer: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 8,
-    minHeight: 40,
-    maxHeight: 100,
+    borderRadius: 24,
+    paddingLeft: 16,
+    paddingRight: 16,
+    paddingTop: 12,
+    paddingBottom: 10,
+    minHeight: 44,
+    maxHeight: 150,
   },
   input: {
-    fontSize: 16,
-    color: '#000000',
-    maxHeight: 80,
+    fontSize: 17,
+    lineHeight: 22,
+    paddingBottom: 6,
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 10,
+    paddingTop: 6,
+    minHeight: 20,
   },
   charCount: {
     fontSize: 11,
-    color: '#8E8E93',
-    textAlign: 'right',
-    marginTop: 4,
+    fontWeight: '500',
   },
   charCountLimit: {
-    color: '#FF3B30', // Red when at limit
     fontWeight: '600',
   },
-  sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#007AFF',
+  draftButton: {
+    padding: 4,
     justifyContent: 'center',
     alignItems: 'center',
+    minWidth: 24,
+    minHeight: 24,
   },
-  sendButtonDisabled: {
-    backgroundColor: '#E5E5EA',
+  sendButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

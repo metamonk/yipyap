@@ -1334,3 +1334,542 @@ export interface ABTestConfig {
     };
   };
 }
+
+// =============================================
+// Epic 6: Meaningful 10 Daily Digest Types
+// =============================================
+
+/**
+ * Relationship context for a conversation (Epic 6)
+ *
+ * @remarks
+ * Provides conversation metadata for relationship scoring.
+ * Used to prioritize messages based on relationship depth.
+ */
+export interface RelationshipContext {
+  /** Days since conversation started */
+  conversationAge: number;
+
+  /** Timestamp of last interaction */
+  lastInteraction: any; // firebase.firestore.Timestamp
+
+  /** Total message count in conversation */
+  messageCount: number;
+
+  /** Whether this is a VIP relationship (>10 messages AND >30 days old) */
+  isVIP: boolean;
+}
+
+/**
+ * Meaningful 10 digest message (Epic 6, Story 6.1)
+ *
+ * @remarks
+ * Enhanced message summary with relationship scoring and time estimates.
+ * Replaces flat message list with priority-tiered digest.
+ *
+ * @example
+ * ```typescript
+ * const message: Meaningful10DigestMessage = {
+ *   id: 'msg123',
+ *   conversationId: 'conv456',
+ *   content: 'Interested in brand partnership...',
+ *   timestamp: Timestamp.now(),
+ *   relationshipScore: 85,
+ *   relationshipContext: {
+ *     conversationAge: 45,
+ *     lastInteraction: Timestamp.now(),
+ *     messageCount: 12,
+ *     isVIP: true
+ *   },
+ *   category: 'Business',
+ *   estimatedResponseTime: 5
+ * };
+ * ```
+ */
+export interface Meaningful10DigestMessage {
+  /** Message document ID */
+  id: string;
+
+  /** Conversation document ID */
+  conversationId: string;
+
+  /** Message content preview */
+  content: string;
+
+  /** Message timestamp */
+  timestamp: any; // firebase.firestore.Timestamp
+
+  /** Relationship score (0-100) */
+  relationshipScore: number;
+
+  /** Relationship context metadata */
+  relationshipContext: RelationshipContext;
+
+  /** AI-assigned category (from Story 5.2) */
+  category: string;
+
+  /** Estimated response time in minutes */
+  estimatedResponseTime: number;
+}
+
+/**
+ * Auto-handled messages summary (Epic 6, Story 6.1)
+ *
+ * @remarks
+ * Summarizes messages that were automatically handled via FAQ or archiving.
+ * Collapsible section in UI showing counts without requiring action.
+ */
+export interface AutoHandledSummary {
+  /** Count of FAQ auto-responses sent */
+  faqCount: number;
+
+  /** Count of low-priority messages archived (Story 6.4) */
+  archivedCount: number;
+
+  /** Total auto-handled messages (faqCount + archivedCount) - Story 6.4 */
+  total: number;
+
+  /** Whether a boundary message was sent to archived senders (Story 6.4) */
+  boundaryMessageSent: boolean;
+}
+
+/**
+ * Meaningful 10 digest structure (Epic 6, Story 6.1)
+ *
+ * @remarks
+ * Replaces flat message list with priority-tiered digest.
+ * Focuses creator attention on top 10 most important messages.
+ *
+ * Key changes from Story 5.8:
+ * - ❌ Removed: Bulk "Approve All" / "Reject All" buttons
+ * - ✅ Added: 3-tier priority system (High/Medium/Auto-handled)
+ * - ✅ Added: Relationship scoring for prioritization
+ * - ✅ Added: Time estimates and capacity tracking
+ */
+export interface Meaningful10Digest {
+  /** Top 3 highest priority messages (respond today) */
+  highPriority: Meaningful10DigestMessage[];
+
+  /** Next 2-7 messages based on capacity (respond this week) */
+  mediumPriority: Meaningful10DigestMessage[];
+
+  /** Auto-handled messages (FAQ + archived) */
+  autoHandled: AutoHandledSummary;
+
+  /** Number of messages handled today (includes high + medium + auto) */
+  capacityUsed: number;
+
+  /** Estimated total time commitment in minutes */
+  estimatedTimeCommitment: number;
+}
+
+/**
+ * Engagement metrics snapshot (Epic 6, Story 6.1)
+ *
+ * @remarks
+ * Provides creator insight into their engagement patterns.
+ * Used to detect burnout risk and guide capacity adjustments.
+ */
+export interface EngagementMetrics {
+  /** Percentage of messages the creator personally responds to (0.0-1.0) */
+  personalResponseRate: number;
+
+  /** Quality score based on response depth and timeliness (0-100) */
+  qualityScore: number;
+
+  /** Burnout risk level based on workload and response patterns */
+  burnoutRisk: 'low' | 'medium' | 'high';
+}
+
+/**
+ * Daily digest with Meaningful 10 structure (Epic 6, Story 6.1)
+ *
+ * @remarks
+ * Extends the original DailyDigest interface with Meaningful 10 fields.
+ * Dual-write strategy during migration: both old + new schemas present.
+ *
+ * Stored in Firestore at `/users/{userId}/daily_digests/{digestId}`.
+ *
+ * @example
+ * ```typescript
+ * const digest: Meaningful10DailyDigest = {
+ *   id: 'digest_2025-10-26_user123',
+ *   userId: 'user123',
+ *   executionId: 'exec_2025-10-26_user123',
+ *   executionDate: Timestamp.now(),
+ *   meaningful10: {
+ *     highPriority: [
+ *       // Top 3 messages
+ *     ],
+ *     mediumPriority: [
+ *       // Next 2-7 messages
+ *     ],
+ *     autoHandled: {
+ *       faqCount: 8,
+ *       archivedCount: 12,
+ *       boundaryMessageSent: true
+ *     },
+ *     capacityUsed: 5,
+ *     estimatedTimeCommitment: 20
+ *   },
+ *   engagementMetrics: {
+ *     personalResponseRate: 0.75,
+ *     qualityScore: 82,
+ *     burnoutRisk: 'low'
+ *   },
+ *   createdAt: Timestamp.now(),
+ *   updatedAt: Timestamp.now()
+ * };
+ * ```
+ */
+export interface Meaningful10DailyDigest {
+  /** Unique digest identifier */
+  id: string;
+
+  /** User ID this digest belongs to */
+  userId: string;
+
+  /** Reference to the DailyAgentExecution that generated this digest */
+  executionId: string;
+
+  /** Date of this digest */
+  executionDate: any; // firebase.firestore.Timestamp
+
+  /** NEW: Meaningful 10 structure with priority tiers */
+  meaningful10: Meaningful10Digest;
+
+  /** NEW: Engagement metrics snapshot */
+  engagementMetrics: EngagementMetrics;
+
+  /** Timestamp when digest was created */
+  createdAt: any; // firebase.firestore.Timestamp
+
+  /** Timestamp when digest was last updated */
+  updatedAt: any; // firebase.firestore.Timestamp
+}
+
+// =============================================
+// Epic 6: Draft-First Response Interface (Story 6.2)
+// =============================================
+
+/**
+ * Personalization suggestion for draft editing (Story 6.2)
+ *
+ * @remarks
+ * Provides specific prompts to help creators personalize AI-generated drafts.
+ * Displayed below draft text to guide authentic editing.
+ *
+ * @example
+ * ```typescript
+ * const suggestion: PersonalizationSuggestion = {
+ *   text: 'Add specific detail about their message',
+ *   type: 'context'
+ * };
+ * ```
+ */
+export interface PersonalizationSuggestion {
+  /** Suggestion text prompt */
+  text: string;
+
+  /** Suggestion category */
+  type: 'context' | 'callback' | 'question' | 'tone' | 'detail';
+}
+
+/**
+ * AI-generated response draft for creator editing (Story 6.2)
+ *
+ * @remarks
+ * Replaces approval-based interface with draft-first editing.
+ * Always presented in editable mode with personalization guidance.
+ *
+ * Key features:
+ * - Confidence scoring (0-100)
+ * - Personalization suggestions (3 prompts)
+ * - Time saved estimation
+ * - Requires editing enforcement for high-priority messages
+ *
+ * @example
+ * ```typescript
+ * const draft: ResponseDraft = {
+ *   text: 'Thanks for reaching out! I appreciate...',
+ *   confidence: 85,
+ *   requiresEditing: false,
+ *   personalizationSuggestions: [
+ *     { text: 'Add specific detail about their message', type: 'context' },
+ *     { text: 'Include personal callback to previous conversation', type: 'callback' },
+ *     { text: 'End with a question to continue dialogue', type: 'question' }
+ *   ],
+ *   timeSaved: 3,
+ *   messageId: 'msg123',
+ *   conversationId: 'conv456',
+ *   version: 1
+ * };
+ * ```
+ */
+export interface ResponseDraft {
+  /** Draft response text */
+  text: string;
+
+  /** AI confidence score (0-100) */
+  confidence: number;
+
+  /** Whether editing is required before sending (true for business/high-priority) */
+  requiresEditing: boolean;
+
+  /** Personalization suggestion prompts (3 hints) */
+  personalizationSuggestions: PersonalizationSuggestion[];
+
+  /** Estimated time saved in minutes */
+  timeSaved: number;
+
+  /** Message ID this draft responds to */
+  messageId: string;
+
+  /** Conversation ID */
+  conversationId: string;
+
+  /** Draft version number (for history) */
+  version: number;
+
+  /** Timestamp when draft was generated */
+  createdAt?: any; // firebase.firestore.Timestamp
+}
+
+/**
+ * Stored message draft in Firestore subcollection (Story 6.2)
+ *
+ * @remarks
+ * Stored in Firestore at `/conversations/{conversationId}/message_drafts/{draftId}`.
+ * Enables auto-save functionality and draft restoration.
+ * TTL: 7 days (cleared after send or explicit discard)
+ *
+ * @example
+ * ```typescript
+ * const messageDraft: MessageDraft = {
+ *   id: 'draft_abc123',
+ *   messageId: 'msg456',
+ *   conversationId: 'conv789',
+ *   draftText: 'Thanks for reaching out! I appreciate...',
+ *   confidence: 85,
+ *   createdAt: Timestamp.now(),
+ *   version: 1,
+ *   isActive: true,
+ *   expiresAt: Timestamp.now() // 7 days from now
+ * };
+ * ```
+ */
+export interface MessageDraft {
+  /** Unique draft identifier */
+  id: string;
+
+  /** Message ID this draft responds to */
+  messageId: string;
+
+  /** Conversation ID */
+  conversationId: string;
+
+  /** Current draft text (may be edited by user) */
+  draftText: string;
+
+  /** Original AI confidence score (0-100) */
+  confidence: number;
+
+  /** Timestamp when draft was created */
+  createdAt: any; // firebase.firestore.Timestamp
+
+  /** Timestamp when draft was last updated (for auto-save tracking) */
+  updatedAt?: any; // firebase.firestore.Timestamp
+
+  /** Draft version number (increments with each regeneration) */
+  version: number;
+
+  /** Whether this is the currently active draft */
+  isActive: boolean;
+
+  /** Expiration timestamp (7 days from creation) */
+  expiresAt: any; // firebase.firestore.Timestamp
+}
+
+/**
+ * Extended message metadata for draft tracking (Story 6.2)
+ *
+ * @remarks
+ * Extends existing message metadata to track draft editing behavior.
+ * Used for analytics and AI improvement.
+ *
+ * @example
+ * ```typescript
+ * const metadata: DraftMessageMetadata = {
+ *   // Existing fields from Story 5.5
+ *   isAIDraft: true,
+ *   confidence: 85,
+ *
+ *   // NEW: Draft tracking
+ *   wasEdited: true,
+ *   editCount: 3,
+ *   timeToEdit: 45000, // 45 seconds
+ *   requiresEditing: false,
+ *   draftSavedAt: Timestamp.now(),
+ *   draftVersion: 1,
+ *   overrideApplied: false
+ * };
+ * ```
+ */
+export interface DraftMessageMetadata {
+  /** Whether this message originated from AI draft */
+  isAIDraft?: boolean;
+
+  /** AI confidence score (0-100) */
+  confidence?: number;
+
+  /** Whether creator edited draft before sending */
+  wasEdited?: boolean;
+
+  /** Number of edits made to draft */
+  editCount?: number;
+
+  /** Time from draft generation to send (milliseconds) */
+  timeToEdit?: number;
+
+  /** Whether editing was required (true for business/high-priority) */
+  requiresEditing?: boolean;
+
+  /** Timestamp when draft was last auto-saved */
+  draftSavedAt?: any; // firebase.firestore.Timestamp
+
+  /** Draft version number (for history) */
+  draftVersion?: number;
+
+  /** Whether creator overrode "requires editing" enforcement */
+  overrideApplied?: boolean;
+
+  // =============================================
+  // Story 6.4: Auto-Archive Boundary Tracking
+  // =============================================
+
+  /** Whether this is an automated boundary message (Story 6.4) */
+  isAutoBoundary?: boolean;
+
+  /** Reason for boundary message: 'low_priority' | 'capacity_exceeded' (Story 6.4) */
+  boundaryReason?: string;
+
+  /** Reference to the original message that triggered this boundary (Story 6.4) */
+  originalMessageId?: string;
+}
+
+// =============================================
+// Story 6.4: Auto-Archive System Types
+// =============================================
+
+/**
+ * Result of auto-archive operation with kind boundary messages (Story 6.4)
+ *
+ * @remarks
+ * Returned by autoArchiveWithKindBoundary() to track archiving outcomes.
+ * Includes counts for archived messages, boundaries sent, rate-limited, and safety-blocked.
+ *
+ * @example
+ * ```typescript
+ * const result: AutoArchiveResult = {
+ *   archivedCount: 12,
+ *   boundariesSent: 8,
+ *   rateLimited: 4,
+ *   safetyBlocked: 3
+ * };
+ * ```
+ */
+export interface AutoArchiveResult {
+  /** Number of messages successfully archived */
+  archivedCount: number;
+
+  /** Number of boundary messages sent to fans */
+  boundariesSent: number;
+
+  /** Number of fans who already received a boundary this week (rate limited) */
+  rateLimited: number;
+
+  /** Number of messages blocked by safety checks (business/urgent/VIP/crisis) */
+  safetyBlocked: number;
+}
+
+/**
+ * Undo archive record (Story 6.4)
+ *
+ * @remarks
+ * Stored in Firestore at `/undo_archive/{undoId}`.
+ * Allows creator to undo auto-archive within 24 hours.
+ * Document expires automatically after 24 hours via TTL.
+ *
+ * @example
+ * ```typescript
+ * const undoRecord: UndoArchive = {
+ *   id: 'undo_abc123',
+ *   userId: 'user123',
+ *   conversationId: 'conv456',
+ *   messageId: 'msg789',
+ *   archivedAt: Timestamp.now(),
+ *   expiresAt: Timestamp.now() + 24h,
+ *   boundaryMessageSent: true,
+ *   canUndo: true
+ * };
+ * ```
+ */
+export interface UndoArchive {
+  /** Unique undo record identifier */
+  id: string;
+
+  /** User ID who owns this conversation */
+  userId: string;
+
+  /** Conversation ID that was archived */
+  conversationId: string;
+
+  /** Original message ID that triggered archiving */
+  messageId: string;
+
+  /** Timestamp when message was archived */
+  archivedAt: any; // firebase.firestore.Timestamp
+
+  /** Expiration timestamp (archivedAt + 24 hours) */
+  expiresAt: any; // firebase.firestore.Timestamp
+
+  /** Whether a boundary message was sent to the fan */
+  boundaryMessageSent: boolean;
+
+  /** Whether undo is still available (false after 24 hours or if already undone) */
+  canUndo: boolean;
+
+  /** Timestamp when undo was performed (undefined if not yet undone) */
+  undoneAt?: any; // firebase.firestore.Timestamp
+}
+
+/**
+ * Rate limit record for boundary messages (Story 6.4)
+ *
+ * @remarks
+ * Stored in Firestore at `/rate_limits/boundary_messages/{fanId}`.
+ * Tracks when the last boundary message was sent to prevent spam (max 1 per week).
+ *
+ * @example
+ * ```typescript
+ * const rateLimit: BoundaryRateLimit = {
+ *   fanId: 'fan123',
+ *   creatorId: 'user456',
+ *   lastBoundarySent: Timestamp.now(),
+ *   expiresAt: Timestamp.now() + 7days
+ * };
+ * ```
+ */
+export interface BoundaryRateLimit {
+  /** Fan user ID */
+  fanId: string;
+
+  /** Creator user ID who sent the boundary */
+  creatorId: string;
+
+  /** Timestamp when last boundary message was sent */
+  lastBoundarySent: any; // firebase.firestore.Timestamp
+
+  /** Expiration timestamp (lastBoundarySent + 7 days) */
+  expiresAt: any; // firebase.firestore.Timestamp
+}

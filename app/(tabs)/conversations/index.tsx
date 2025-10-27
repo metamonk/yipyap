@@ -30,6 +30,7 @@ import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { useAuth } from '@/hooks/useAuth';
 import { useAllConversationMessages } from '@/hooks/useAllConversationMessages';
 import { useMessageSearch } from '@/hooks/useMessageSearch';
+import { useTheme } from '@/contexts/ThemeContext';
 import { ConversationListItem } from '@/components/conversation/ConversationListItem';
 import { getUserProfile } from '@/services/userService';
 import {
@@ -42,15 +43,16 @@ import type { Conversation, Message, SearchResult, User } from '@/types/models';
 
 /**
  * Empty state component displayed when user has no conversations
- *
+ * Robinhood-style: Icon + clear message + generous spacing
  * @component
  */
-const EmptyState: React.FC = () => {
+const EmptyState: React.FC<{ theme: any }> = ({ theme }) => {
   return (
     <View style={styles.emptyState}>
-      <Text style={styles.emptyTitle}>Start your first conversation</Text>
-      <Text style={styles.emptySubtitle}>
-        Tap the &quot;New Message&quot; button to find users and start chatting
+      <Ionicons name="chatbubbles-outline" size={80} color={theme.colors.textTertiary} />
+      <Text style={[styles.emptyTitle, { color: theme.colors.textPrimary }]}>No conversations yet</Text>
+      <Text style={[styles.emptySubtitle, { color: theme.colors.textSecondary }]}>
+        Tap "New" to start your first conversation
       </Text>
     </View>
   );
@@ -75,6 +77,7 @@ const EmptyState: React.FC = () => {
 export default function ConversationListScreen() {
   // Get current user from auth context
   const { user } = useAuth();
+  const { theme } = useTheme();
   const currentUserId = user?.uid || '';
 
   // Load conversations using custom hook (Story 5.6 - Task 8: Priority sorting)
@@ -562,12 +565,12 @@ export default function ConversationListScreen() {
           onLongPress={() => enterSelectionMode(item.id)}
           onToggleSelect={() => toggleSelection(item.id)}
         />
-        {/* Priority separator (Story 5.6 - Task 8) */}
+        {/* Priority separator (Story 5.6 - Task 8) - Robinhood style */}
         {showSeparator && (
           <View style={styles.prioritySeparator}>
-            <View style={styles.separatorLine} />
-            <Text style={styles.separatorText}>Other Conversations</Text>
-            <View style={styles.separatorLine} />
+            <View style={[styles.separatorLine, { backgroundColor: theme.colors.divider }]} />
+            <Text style={dynamicStyles.separatorText}>Other Conversations</Text>
+            <View style={[styles.separatorLine, { backgroundColor: theme.colors.divider }]} />
           </View>
         )}
       </>
@@ -579,12 +582,117 @@ export default function ConversationListScreen() {
    */
   const keyExtractor = (item: Conversation) => item.id;
 
-  // Show loading spinner on initial load or when no user is authenticated
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    centerContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: theme.colors.background,
+    },
+    emptyTitle: {
+      fontSize: theme.typography.fontSize.xl,
+      fontWeight: theme.typography.fontWeight.bold,
+      marginBottom: theme.spacing.sm,
+      marginTop: theme.spacing.lg,
+      color: theme.colors.textPrimary,
+    },
+    emptySubtitle: {
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.textSecondary,
+      textAlign: 'center',
+      paddingHorizontal: theme.spacing['2xl'],
+    },
+    loadingText: {
+      marginTop: theme.spacing.md,
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.textSecondary,
+    },
+    errorText: {
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.error,
+      marginBottom: theme.spacing.base,
+      textAlign: 'center',
+      paddingHorizontal: theme.spacing.lg,
+    },
+    retryButton: {
+      backgroundColor: theme.colors.accent,
+      paddingHorizontal: theme.spacing.xl,
+      paddingVertical: theme.spacing.md,
+      borderRadius: theme.borderRadius.lg,
+    },
+    retryButtonText: {
+      color: '#FFFFFF',
+      fontSize: theme.typography.fontSize.base,
+      fontWeight: theme.typography.fontWeight.bold,
+    },
+    offlineText: {
+      fontSize: theme.typography.fontSize.sm,
+      color: '#856404',
+      textAlign: 'center',
+    },
+    archivedLink: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: theme.spacing.base,
+      paddingVertical: theme.spacing.md,
+      backgroundColor: theme.colors.backgroundSecondary,
+    },
+    archivedLinkText: {
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.accent,
+      marginLeft: theme.spacing.sm,
+      fontWeight: theme.typography.fontWeight.medium,
+    },
+    archiveButton: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.accent,
+      borderWidth: 1.5,
+    },
+    archiveButtonIcon: {
+      color: theme.colors.accent,
+    },
+    archiveButtonText: {
+      color: theme.colors.accent,
+      fontSize: theme.typography.fontSize.base,
+      fontWeight: theme.typography.fontWeight.semibold,
+    },
+    deleteButton: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.error,
+      borderWidth: 1.5,
+    },
+    deleteButtonIcon: {
+      color: theme.colors.error,
+    },
+    deleteButtonText: {
+      color: theme.colors.error,
+      fontSize: theme.typography.fontSize.base,
+      fontWeight: theme.typography.fontWeight.semibold,
+    },
+    bottomActionBar: {
+      backgroundColor: theme.colors.surface,
+      borderTopColor: theme.colors.borderLight,
+    },
+    separatorText: {
+      fontSize: theme.typography.fontSize.xs,
+      fontWeight: theme.typography.fontWeight.bold,
+      color: theme.colors.textSecondary,
+      marginHorizontal: theme.spacing.md,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+  });
 
+  // Show loading spinner on initial load or when no user is authenticated
   if ((loading && !refreshing) || !currentUserId) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+      <View style={dynamicStyles.centerContainer}>
+        <ActivityIndicator size="large" color={theme.colors.accent} />
       </View>
     );
   }
@@ -592,10 +700,10 @@ export default function ConversationListScreen() {
   // Show error message
   if (error) {
     return (
-      <View style={styles.centerContainer}>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={refresh}>
-          <Text style={styles.retryButtonText}>Retry</Text>
+      <View style={dynamicStyles.centerContainer}>
+        <Text style={dynamicStyles.errorText}>{error}</Text>
+        <TouchableOpacity style={dynamicStyles.retryButton} onPress={refresh}>
+          <Text style={dynamicStyles.retryButtonText}>Retry</Text>
         </TouchableOpacity>
       </View>
     );
@@ -605,7 +713,7 @@ export default function ConversationListScreen() {
   const searchResultsWithContext = buildSearchResults();
 
   return (
-    <View style={styles.container}>
+    <View style={dynamicStyles.container}>
       {/* Header: Normal mode vs Selection mode (Story 4.7) */}
       {isSelectionMode ? (
         <NavigationHeader
@@ -627,7 +735,7 @@ export default function ConversationListScreen() {
         <NavigationHeader
           title="Messages"
           rightAction={{
-            label: '+ New',
+            icon: 'create-outline',
             onPress: handleNewConversation,
           }}
           leftAction={{
@@ -650,7 +758,7 @@ export default function ConversationListScreen() {
       {/* Offline Indicator */}
       {isOffline && (
         <View style={styles.offlineBanner}>
-          <Text style={styles.offlineText}>
+          <Text style={dynamicStyles.offlineText}>
             {isSyncing
               ? 'Syncing messages...'
               : lastSyncTime
@@ -660,11 +768,11 @@ export default function ConversationListScreen() {
         </View>
       )}
 
-      {/* Archived Link (shown when not searching) */}
+      {/* Archived Link (shown when not searching) - Robinhood style */}
       {!showSearch && (
-        <TouchableOpacity style={styles.archivedLink} onPress={handleArchivedPress}>
-          <Ionicons name="archive-outline" size={20} color="#007AFF" />
-          <Text style={styles.archivedLinkText}>Archived</Text>
+        <TouchableOpacity style={dynamicStyles.archivedLink} onPress={handleArchivedPress}>
+          <Ionicons name="archive-outline" size={18} color={theme.colors.accent} />
+          <Text style={dynamicStyles.archivedLinkText}>Archived</Text>
         </TouchableOpacity>
       )}
 
@@ -672,9 +780,9 @@ export default function ConversationListScreen() {
       {showSearch && isSearching ? (
         // Show search results
         messagesLoading ? (
-          <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color="#007AFF" />
-            <Text style={styles.loadingText}>Searching messages...</Text>
+          <View style={dynamicStyles.centerContainer}>
+            <ActivityIndicator size="large" color={theme.colors.accent} />
+            <Text style={dynamicStyles.loadingText}>Searching messages...</Text>
           </View>
         ) : (
           <FlatList
@@ -692,9 +800,9 @@ export default function ConversationListScreen() {
             keyExtractor={(item) => item.message.id}
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <Ionicons name="search-outline" size={64} color="#C7C7CC" />
-                <Text style={styles.emptyTitle}>No messages found</Text>
-                <Text style={styles.emptySubtitle}>Try searching with different keywords</Text>
+                <Ionicons name="search-outline" size={80} color={theme.colors.textTertiary} />
+                <Text style={dynamicStyles.emptyTitle}>No messages found</Text>
+                <Text style={dynamicStyles.emptySubtitle}>Try searching with different keywords</Text>
               </View>
             }
             contentContainerStyle={searchResultsWithContext.length === 0 && styles.emptyListContent}
@@ -711,23 +819,23 @@ export default function ConversationListScreen() {
           maxToRenderPerBatch={10}
           updateCellsBatchingPeriod={50}
           windowSize={10}
-          // Pull to refresh
+          // Pull to refresh - Robinhood green
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor="#007AFF" />
+            <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={theme.colors.accent} />
           }
           // Empty state
-          ListEmptyComponent={<EmptyState />}
+          ListEmptyComponent={<EmptyState theme={theme} />}
           contentContainerStyle={conversations.length === 0 && styles.emptyListContent}
         />
       )}
 
-      {/* Bottom Action Bar (Story 4.7) - shown in selection mode */}
+      {/* Bottom Action Bar (Story 4.7) - shown in selection mode - Robinhood style */}
       {isSelectionMode && (
-        <View style={styles.bottomActionBar}>
+        <View style={[styles.bottomActionBar, dynamicStyles.bottomActionBar]}>
           <TouchableOpacity
             style={[
               styles.actionButton,
-              styles.archiveButton,
+              dynamicStyles.archiveButton,
               (selectedConversationIds.size === 0 || isBatchOperationInProgress) &&
                 styles.disabledButton,
             ]}
@@ -736,11 +844,11 @@ export default function ConversationListScreen() {
             activeOpacity={0.7}
           >
             {isBatchOperationInProgress ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <ActivityIndicator size="small" color={theme.colors.accent} />
             ) : (
               <>
-                <Ionicons name="archive-outline" size={20} color="#FFFFFF" />
-                <Text style={styles.actionButtonText}>
+                <Ionicons name="archive-outline" size={20} color={dynamicStyles.archiveButtonIcon.color} />
+                <Text style={dynamicStyles.archiveButtonText}>
                   Archive ({selectedConversationIds.size})
                 </Text>
               </>
@@ -749,7 +857,7 @@ export default function ConversationListScreen() {
           <TouchableOpacity
             style={[
               styles.actionButton,
-              styles.deleteButton,
+              dynamicStyles.deleteButton,
               (selectedConversationIds.size === 0 || isBatchOperationInProgress) &&
                 styles.disabledButton,
             ]}
@@ -758,11 +866,11 @@ export default function ConversationListScreen() {
             activeOpacity={0.7}
           >
             {isBatchOperationInProgress ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <ActivityIndicator size="small" color={theme.colors.error} />
             ) : (
               <>
-                <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
-                <Text style={styles.actionButtonText}>Delete ({selectedConversationIds.size})</Text>
+                <Ionicons name="trash-outline" size={20} color={dynamicStyles.deleteButtonIcon.color} />
+                <Text style={dynamicStyles.deleteButtonText}>Delete ({selectedConversationIds.size})</Text>
               </>
             )}
           </TouchableOpacity>
@@ -772,17 +880,8 @@ export default function ConversationListScreen() {
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-  },
   emptyListContent: {
     flexGrow: 1,
   },
@@ -792,39 +891,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
   },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: '#000000',
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#8E8E93',
-    textAlign: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#8E8E93',
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#FF3B30',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  retryButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
   offlineBanner: {
     backgroundColor: '#FFF3CD',
     paddingVertical: 8,
@@ -832,32 +898,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#FFE69C',
   },
-  offlineText: {
-    fontSize: 14,
-    color: '#856404',
-    textAlign: 'center',
-  },
-  archivedLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#F2F2F7',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
-  },
-  archivedLinkText: {
-    fontSize: 14,
-    color: '#007AFF',
-    marginLeft: 8,
-    fontWeight: '500',
-  },
   bottomActionBar: {
     flexDirection: 'row',
-    padding: 12,
-    backgroundColor: '#FFFFFF',
+    padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#E5E5E5',
     gap: 12,
   },
   actionButton: {
@@ -865,24 +909,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
     gap: 8,
   },
-  archiveButton: {
-    backgroundColor: '#007AFF',
-  },
-  deleteButton: {
-    backgroundColor: '#FF3B30',
-  },
   disabledButton: {
-    opacity: 0.4,
-  },
-  actionButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+    opacity: 0.3,
   },
   // Priority separator (Story 5.6 - Task 8)
   prioritySeparator: {
@@ -890,19 +923,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#F9FAFB',
   },
   separatorLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#E5E7EB',
-  },
-  separatorText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6B7280',
-    marginHorizontal: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
 });

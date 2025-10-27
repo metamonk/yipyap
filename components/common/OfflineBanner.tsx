@@ -1,7 +1,9 @@
 import React, { FC } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Platform, StatusBar } from 'react-native';
 import Animated, { SlideInUp, SlideOutUp } from 'react-native-reanimated';
-import { MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface OfflineBannerProps {
   /** Whether the app is currently offline */
@@ -19,15 +21,29 @@ interface OfflineBannerProps {
  * ```
  */
 export const OfflineBanner: FC<OfflineBannerProps> = ({ isOffline }) => {
+  const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+
   if (!isOffline) return null;
+
+  // Calculate padding for status bar
+  const topPadding = Platform.OS === 'android'
+    ? (StatusBar.currentHeight || 0) + 8
+    : insets.top + 4;
 
   return (
     <Animated.View
       entering={SlideInUp.duration(300)}
       exiting={SlideOutUp.duration(300)}
-      style={styles.banner}
+      style={[
+        styles.banner,
+        {
+          paddingTop: topPadding,
+          backgroundColor: theme.colors.warning,
+        }
+      ]}
     >
-      <MaterialIcons name="wifi-off" size={20} color="#fff" />
+      <Ionicons name="cloud-offline-outline" size={20} color="#fff" />
       <View style={styles.textContainer}>
         <Text style={styles.text}>You&apos;re offline</Text>
         <Text style={styles.subtext}>Messages will send when reconnected</Text>
@@ -42,9 +58,8 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#FF9500', // Orange warning color
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingBottom: 12,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     zIndex: 1000,

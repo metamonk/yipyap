@@ -12,6 +12,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { NavigationHeader } from '../../_components/NavigationHeader';
+import { useTheme } from '@/contexts/ThemeContext';
 import { FAQLibraryManager } from '@/components/faq/FAQLibraryManager';
 import { FAQEditor } from '@/components/faq/FAQEditor';
 import type { FAQTemplate } from '@/types/faq';
@@ -31,6 +32,7 @@ import type { FAQTemplate } from '@/types/faq';
  */
 export default function FAQLibraryScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
 
   const [showEditor, setShowEditor] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<FAQTemplate | undefined>(undefined);
@@ -68,8 +70,16 @@ export default function FAQLibraryScreen() {
     setSelectedTemplate(undefined);
   };
 
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+  });
+
   return (
-    <View style={styles.container}>
+    <View style={dynamicStyles.container}>
       <NavigationHeader
         title="FAQ Library"
         leftAction={{
@@ -78,7 +88,7 @@ export default function FAQLibraryScreen() {
         }}
         rightAction={{
           icon: 'stats-chart',
-          onPress: () => router.push('/profile/faq-analytics'),
+          onPress: () => router.push('/(tabs)/profile/faq-analytics'),
         }}
       />
 
@@ -93,10 +103,3 @@ export default function FAQLibraryScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F2F2F7',
-  },
-});

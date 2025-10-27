@@ -20,9 +20,10 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Slider from '@react-native-community/slider';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationHeader } from '../../_components/NavigationHeader';
+import { useTheme } from '@/contexts/ThemeContext';
 import { getFirebaseAuth } from '@/services/firebase';
 import {
   getDailyAgentConfig,
@@ -42,7 +43,19 @@ import { DailyAgentConfig } from '@/types/ai';
  */
 export default function DailyAgentSettingsScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
   const auth = getFirebaseAuth();
+  const searchParams = useLocalSearchParams();
+
+  // Check if we came from daily digest
+  const from = searchParams.from as string | undefined;
+  const handleBack = () => {
+    if (from === 'daily-digest') {
+      router.push('/(tabs)/daily-digest');
+    } else {
+      router.back();
+    }
+  };
 
   // Configuration state
   const [config, setConfig] = useState<DailyAgentConfig | null>(null);
@@ -264,13 +277,161 @@ export default function DailyAgentSettingsScreen() {
     setTimePickerVisible(false);
   };
 
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    title: {
+      color: theme.colors.textPrimary,
+    },
+    subtitle: {
+      color: theme.colors.textSecondary,
+    },
+    sectionHeader: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: theme.colors.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 12,
+      marginTop: 8,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    loadingText: {
+      marginTop: theme.spacing.base,
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.textSecondary,
+    },
+    errorContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: theme.spacing.lg,
+    },
+    errorText: {
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.error,
+      marginBottom: theme.spacing.base,
+    },
+    retryButton: {
+      backgroundColor: theme.colors.accent,
+      paddingHorizontal: theme.spacing.xl,
+      paddingVertical: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      minWidth: 120,
+      minHeight: 44,
+    },
+    retryButtonText: {
+      color: '#FFFFFF',
+      fontSize: theme.typography.fontSize.base,
+      fontWeight: theme.typography.fontWeight.semibold,
+      textAlign: 'center',
+    },
+    sectionTitle: {
+      fontSize: 20,
+      fontWeight: theme.typography.fontWeight.semibold,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.sm,
+    },
+    sectionDescription: {
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.base,
+    },
+    settingRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: theme.spacing.md,
+      minHeight: 44,
+    },
+    settingSection: {
+      paddingVertical: theme.spacing.base,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    settingLabel: {
+      fontSize: theme.typography.fontSize.base,
+      fontWeight: theme.typography.fontWeight.medium,
+      color: theme.colors.textPrimary,
+      marginBottom: 4,
+    },
+    settingHint: {
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.textSecondary,
+    },
+    timeButton: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      backgroundColor: theme.colors.backgroundSecondary,
+      borderRadius: theme.borderRadius.md,
+      paddingHorizontal: theme.spacing.base,
+      paddingVertical: 14,
+      minHeight: 50,
+      marginTop: theme.spacing.md,
+    },
+    timeButtonText: {
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.textPrimary,
+      flex: 1,
+    },
+    savingText: {
+      marginLeft: theme.spacing.sm,
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.textSecondary,
+    },
+    pickerModalContent: {
+      backgroundColor: theme.colors.surface,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    },
+    pickerHeader: {
+      paddingVertical: theme.spacing.base,
+      paddingHorizontal: theme.spacing.lg,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    pickerTitle: {
+      fontSize: 18,
+      fontWeight: theme.typography.fontWeight.semibold,
+      color: theme.colors.textPrimary,
+      textAlign: 'center',
+    },
+    pickerContainer: {
+      backgroundColor: theme.colors.surface,
+      paddingVertical: theme.spacing.sm,
+    },
+    pickerButtonCancel: {
+      backgroundColor: theme.colors.backgroundSecondary,
+    },
+    pickerButtonConfirm: {
+      backgroundColor: theme.colors.accent,
+    },
+    pickerButtonText: {
+      fontSize: theme.typography.fontSize.base,
+      fontWeight: theme.typography.fontWeight.semibold,
+      color: theme.colors.textPrimary,
+    },
+    pickerButtonTextConfirm: {
+      color: '#FFFFFF',
+    },
+  });
+
   if (isLoading) {
     return (
-      <View style={styles.container}>
-        <NavigationHeader title="Daily Agent Settings" showBack={true} />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading settings...</Text>
+      <View style={dynamicStyles.container}>
+        <NavigationHeader title="Daily Agent Settings" showBack={true} backAction={handleBack} />
+        <View style={dynamicStyles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={dynamicStyles.loadingText}>Loading settings...</Text>
         </View>
       </View>
     );
@@ -278,18 +439,18 @@ export default function DailyAgentSettingsScreen() {
 
   if (!config) {
     return (
-      <View style={styles.container}>
-        <NavigationHeader title="Daily Agent Settings" showBack={true} />
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Failed to load settings</Text>
+      <View style={dynamicStyles.container}>
+        <NavigationHeader title="Daily Agent Settings" showBack={true} backAction={handleBack} />
+        <View style={dynamicStyles.errorContainer}>
+          <Text style={dynamicStyles.errorText}>Failed to load settings</Text>
           <TouchableOpacity
-            style={styles.retryButton}
+            style={dynamicStyles.retryButton}
             onPress={() => {
               setIsLoading(true);
               // Reload config
             }}
           >
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={dynamicStyles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -297,20 +458,22 @@ export default function DailyAgentSettingsScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <NavigationHeader title="Daily Agent Settings" showBack={true} />
+    <View style={dynamicStyles.container}>
+      <NavigationHeader title="Daily Agent Settings" showBack={true} backAction={handleBack} />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {/* Enable/Disable Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Daily Workflow</Text>
-          <Text style={styles.sectionDescription}>
-            Automatically process overnight messages every morning
-          </Text>
+        {/* Page Header */}
+        <Text style={[styles.title, dynamicStyles.title]}>Daily Agent Settings</Text>
+        <Text style={[styles.subtitle, dynamicStyles.subtitle]}>
+          Configure automated workflow, schedule, and AI features for daily message processing
+        </Text>
 
-          <View style={styles.settingRow} accessible={true} accessibilityRole="switch">
+        {/* Enable/Disable Section */}
+        <Text style={dynamicStyles.sectionHeader}>DAILY WORKFLOW</Text>
+        <View style={styles.section}>
+          <View style={dynamicStyles.settingRow} accessible={true} accessibilityRole="switch">
             <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Enable Daily Agent</Text>
-              <Text style={styles.settingHint}>
+              <Text style={dynamicStyles.settingLabel}>Enable Daily Agent</Text>
+              <Text style={dynamicStyles.settingHint}>
                 Process messages and send auto-responses
               </Text>
             </View>
@@ -318,6 +481,9 @@ export default function DailyAgentSettingsScreen() {
               value={config.features.dailyWorkflowEnabled}
               onValueChange={(value) => handleFeatureToggle('dailyWorkflowEnabled', value)}
               disabled={isSaving}
+              trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+              thumbColor="#FFFFFF"
+              ios_backgroundColor={theme.colors.borderLight}
               accessibilityLabel="Enable daily agent workflow"
               style={styles.switch}
             />
@@ -326,43 +492,44 @@ export default function DailyAgentSettingsScreen() {
 
         {/* Schedule Settings */}
         {config.features.dailyWorkflowEnabled && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Schedule</Text>
-
-            <View style={styles.settingSection}>
-              <Text style={styles.settingLabel}>Daily Workflow Time</Text>
-              <Text style={styles.settingHint}>When to run daily processing</Text>
+          <>
+            <Text style={dynamicStyles.sectionHeader}>SCHEDULE</Text>
+            <View style={styles.section}>
+              <View style={dynamicStyles.settingSection}>
+              <Text style={dynamicStyles.settingLabel}>Daily Workflow Time</Text>
+              <Text style={dynamicStyles.settingHint}>When to run daily processing</Text>
               <TouchableOpacity
-                style={styles.timeButton}
+                style={dynamicStyles.timeButton}
                 onPress={() => setTimePickerVisible(true)}
                 accessible={true}
                 accessibilityLabel={`Daily workflow time: ${selectedTime}`}
                 accessibilityRole="button"
                 accessibilityHint="Opens time picker"
               >
-                <Text style={styles.timeButtonText}>{selectedTime}</Text>
-                <Ionicons name="chevron-down" size={20} color="#8E8E93" />
+                <Text style={dynamicStyles.timeButtonText}>{selectedTime}</Text>
+                <Ionicons name="chevron-down" size={20} color={theme.colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <View style={styles.settingRow}>
+            <View style={dynamicStyles.settingRow}>
               <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>Timezone</Text>
-                <Text style={styles.settingHint}>{config.workflowSettings.timezone}</Text>
+                <Text style={dynamicStyles.settingLabel}>Timezone</Text>
+                <Text style={dynamicStyles.settingHint}>{config.workflowSettings.timezone}</Text>
               </View>
             </View>
-          </View>
+            </View>
+          </>
         )}
 
         {/* Response Settings */}
         {config.features.dailyWorkflowEnabled && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Response Settings</Text>
-
-            <View style={styles.settingRow} accessible={true} accessibilityRole="switch">
+          <>
+            <Text style={dynamicStyles.sectionHeader}>RESPONSE SETTINGS</Text>
+            <View style={styles.section}>
+              <View style={dynamicStyles.settingRow} accessible={true} accessibilityRole="switch">
               <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>Require Approval</Text>
-                <Text style={styles.settingHint}>
+                <Text style={dynamicStyles.settingLabel}>Require Approval</Text>
+                <Text style={dynamicStyles.settingHint}>
                   Review responses before sending
                 </Text>
               </View>
@@ -372,17 +539,20 @@ export default function DailyAgentSettingsScreen() {
                   handleWorkflowSettingUpdate('requireApproval', value)
                 }
                 disabled={isSaving}
+                trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+                thumbColor="#FFFFFF"
+                ios_backgroundColor={theme.colors.borderLight}
                 accessibilityLabel="Require approval for auto-responses"
                 style={styles.switch}
               />
             </View>
 
-            <View style={styles.settingRow}>
+            <View style={dynamicStyles.settingRow}>
               <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>
+                <Text style={dynamicStyles.settingLabel}>
                   Max Auto-Responses: {config.workflowSettings.maxAutoResponses}
                 </Text>
-                <Text style={styles.settingHint}>Daily limit (1-100)</Text>
+                <Text style={dynamicStyles.settingHint}>Daily limit (1-100)</Text>
               </View>
             </View>
             <Slider
@@ -394,21 +564,21 @@ export default function DailyAgentSettingsScreen() {
               onSlidingComplete={(value) =>
                 handleWorkflowSettingUpdate('maxAutoResponses', Math.round(value))
               }
-              minimumTrackTintColor="#007AFF"
-              maximumTrackTintColor="#E5E5E5"
-              thumbTintColor="#007AFF"
+              minimumTrackTintColor={theme.colors.accent}
+              maximumTrackTintColor={theme.colors.borderLight}
+              thumbTintColor={theme.colors.accent}
               disabled={isSaving}
               accessible={true}
               accessibilityLabel={`Maximum auto-responses per day: ${config.workflowSettings.maxAutoResponses}`}
               accessibilityRole="adjustable"
             />
 
-            <View style={styles.settingRow}>
+            <View style={dynamicStyles.settingRow}>
               <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>
+                <Text style={dynamicStyles.settingLabel}>
                   Escalation Threshold: {Math.round(config.workflowSettings.escalationThreshold * 100)}%
                 </Text>
-                <Text style={styles.settingHint}>
+                <Text style={dynamicStyles.settingHint}>
                   Skip messages below this sentiment score
                 </Text>
               </View>
@@ -422,26 +592,27 @@ export default function DailyAgentSettingsScreen() {
               onSlidingComplete={(value) =>
                 handleWorkflowSettingUpdate('escalationThreshold', value)
               }
-              minimumTrackTintColor="#007AFF"
-              maximumTrackTintColor="#E5E5E5"
-              thumbTintColor="#007AFF"
+              minimumTrackTintColor={theme.colors.accent}
+              maximumTrackTintColor={theme.colors.borderLight}
+              thumbTintColor={theme.colors.accent}
               disabled={isSaving}
               accessible={true}
               accessibilityLabel={`Escalation threshold: ${Math.round(config.workflowSettings.escalationThreshold * 100)} percent`}
               accessibilityRole="adjustable"
             />
-          </View>
+            </View>
+          </>
         )}
 
         {/* AI Features */}
         {config.features.dailyWorkflowEnabled && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>AI Features</Text>
-
-            <View style={styles.settingRow} accessible={true} accessibilityRole="switch">
+          <>
+            <Text style={dynamicStyles.sectionHeader}>AI FEATURES</Text>
+            <View style={styles.section}>
+              <View style={dynamicStyles.settingRow} accessible={true} accessibilityRole="switch">
               <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>Message Categorization</Text>
-                <Text style={styles.settingHint}>AI-powered category tagging</Text>
+                <Text style={dynamicStyles.settingLabel}>Message Categorization</Text>
+                <Text style={dynamicStyles.settingHint}>AI-powered category tagging</Text>
               </View>
               <Switch
                 value={config.features.categorizationEnabled}
@@ -449,43 +620,52 @@ export default function DailyAgentSettingsScreen() {
                   handleFeatureToggle('categorizationEnabled', value)
                 }
                 disabled={isSaving}
+                trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+                thumbColor="#FFFFFF"
+                ios_backgroundColor={theme.colors.borderLight}
                 accessibilityLabel="Enable message categorization"
                 style={styles.switch}
               />
             </View>
 
-            <View style={styles.settingRow} accessible={true} accessibilityRole="switch">
+            <View style={dynamicStyles.settingRow} accessible={true} accessibilityRole="switch">
               <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>FAQ Detection</Text>
-                <Text style={styles.settingHint}>Auto-respond to common questions</Text>
+                <Text style={dynamicStyles.settingLabel}>FAQ Detection</Text>
+                <Text style={dynamicStyles.settingHint}>Auto-respond to common questions</Text>
               </View>
               <Switch
                 value={config.features.faqDetectionEnabled}
                 onValueChange={(value) => handleFeatureToggle('faqDetectionEnabled', value)}
                 disabled={isSaving}
+                trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+                thumbColor="#FFFFFF"
+                ios_backgroundColor={theme.colors.borderLight}
                 accessibilityLabel="Enable FAQ detection"
                 style={styles.switch}
               />
             </View>
 
-            <View style={styles.settingRow} accessible={true} accessibilityRole="switch">
+            <View style={dynamicStyles.settingRow} accessible={true} accessibilityRole="switch">
               <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>Voice Matching</Text>
-                <Text style={styles.settingHint}>Match your communication style</Text>
+                <Text style={dynamicStyles.settingLabel}>Voice Matching</Text>
+                <Text style={dynamicStyles.settingHint}>Match your communication style</Text>
               </View>
               <Switch
                 value={config.features.voiceMatchingEnabled}
                 onValueChange={(value) => handleFeatureToggle('voiceMatchingEnabled', value)}
                 disabled={isSaving}
+                trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+                thumbColor="#FFFFFF"
+                ios_backgroundColor={theme.colors.borderLight}
                 accessibilityLabel="Enable voice matching"
                 style={styles.switch}
               />
             </View>
 
-            <View style={styles.settingRow} accessible={true} accessibilityRole="switch">
+            <View style={dynamicStyles.settingRow} accessible={true} accessibilityRole="switch">
               <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>Sentiment Analysis</Text>
-                <Text style={styles.settingHint}>Detect message sentiment</Text>
+                <Text style={dynamicStyles.settingLabel}>Sentiment Analysis</Text>
+                <Text style={dynamicStyles.settingHint}>Detect message sentiment</Text>
               </View>
               <Switch
                 value={config.features.sentimentAnalysisEnabled}
@@ -493,18 +673,22 @@ export default function DailyAgentSettingsScreen() {
                   handleFeatureToggle('sentimentAnalysisEnabled', value)
                 }
                 disabled={isSaving}
+                trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+                thumbColor="#FFFFFF"
+                ios_backgroundColor={theme.colors.borderLight}
                 accessibilityLabel="Enable sentiment analysis"
                 style={styles.switch}
               />
             </View>
-          </View>
+            </View>
+          </>
         )}
 
         {/* Saving Indicator */}
         {isSaving && (
           <View style={styles.savingIndicator}>
-            <ActivityIndicator size="small" color="#007AFF" />
-            <Text style={styles.savingText}>Saving...</Text>
+            <ActivityIndicator size="small" color={theme.colors.accent} />
+            <Text style={dynamicStyles.savingText}>Saving...</Text>
           </View>
         )}
       </ScrollView>
@@ -523,25 +707,25 @@ export default function DailyAgentSettingsScreen() {
             onPress={() => setTimePickerVisible(false)}
           >
             <TouchableOpacity
-              style={styles.pickerModalContent}
+              style={dynamicStyles.pickerModalContent}
               activeOpacity={1}
               onPress={(e) => e.stopPropagation()}
             >
-              <View style={styles.pickerHeader}>
-                <Text style={styles.pickerTitle}>Set Daily Workflow Time</Text>
+              <View style={dynamicStyles.pickerHeader}>
+                <Text style={dynamicStyles.pickerTitle}>Set Daily Workflow Time</Text>
               </View>
-              <View style={styles.pickerContainer}>
+              <View style={dynamicStyles.pickerContainer}>
                 <DateTimePicker
                   value={pickerDate}
                   mode="time"
                   display="spinner"
                   onChange={handleTimeChange}
-                  textColor="#000000"
+                  textColor={theme.colors.textPrimary}
                 />
               </View>
               <View style={styles.pickerButtons}>
                 <TouchableOpacity
-                  style={[styles.pickerButton, styles.pickerButtonCancel]}
+                  style={[styles.pickerButton, dynamicStyles.pickerButtonCancel]}
                   onPress={() => {
                     setTimePickerVisible(false);
                     setPickerDate(timeStringToDate(config!.workflowSettings.dailyWorkflowTime));
@@ -550,16 +734,16 @@ export default function DailyAgentSettingsScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Cancel"
                 >
-                  <Text style={styles.pickerButtonText}>Cancel</Text>
+                  <Text style={dynamicStyles.pickerButtonText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.pickerButton, styles.pickerButtonConfirm]}
+                  style={[styles.pickerButton, dynamicStyles.pickerButtonConfirm]}
                   onPress={handleTimeConfirm}
                   accessible={true}
                   accessibilityRole="button"
                   accessibilityLabel="Confirm time"
                 >
-                  <Text style={[styles.pickerButtonText, styles.pickerButtonTextConfirm]}>
+                  <Text style={[dynamicStyles.pickerButtonText, dynamicStyles.pickerButtonTextConfirm]}>
                     Confirm
                   </Text>
                 </TouchableOpacity>
@@ -580,92 +764,31 @@ export default function DailyAgentSettingsScreen() {
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#666666',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#FF3B30',
-    marginBottom: 16,
-  },
-  retryButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-    minWidth: 120,
-    minHeight: 44,
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
+    padding: 24,
     paddingBottom: 32,
   },
-  section: {
-    marginBottom: 32,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#000000',
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
     marginBottom: 8,
   },
-  sectionDescription: {
-    fontSize: 14,
-    color: '#666666',
-    marginBottom: 16,
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    marginBottom: 32,
   },
-  settingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    minHeight: 44,
-  },
-  settingSection: {
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+  section: {
+    marginBottom: 24,
   },
   settingInfo: {
     flex: 1,
     marginRight: 16,
-  },
-  settingLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#000000',
-    marginBottom: 4,
-  },
-  settingHint: {
-    fontSize: 14,
-    color: '#666666',
   },
   switch: {
     transform: Platform.OS === 'ios' ? [] : [{ scaleX: 1.2 }, { scaleY: 1.2 }],
@@ -675,59 +798,16 @@ const styles = StyleSheet.create({
     height: 44,
     marginVertical: 8,
   },
-  timeButton: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#F2F2F7',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    minHeight: 50,
-    marginTop: 12,
-  },
-  timeButtonText: {
-    fontSize: 16,
-    color: '#000000',
-    flex: 1,
-  },
   savingIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
   },
-  savingText: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: '#666666',
-  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
-  },
-  pickerModalContent: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20, // Account for iOS safe area
-  },
-  pickerHeader: {
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
-  },
-  pickerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#000000',
-    textAlign: 'center',
-  },
-  pickerContainer: {
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 8,
   },
   pickerButtons: {
     flexDirection: 'row',
@@ -742,19 +822,5 @@ const styles = StyleSheet.create({
     minHeight: 48,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  pickerButtonCancel: {
-    backgroundColor: '#F2F2F7',
-  },
-  pickerButtonConfirm: {
-    backgroundColor: '#007AFF',
-  },
-  pickerButtonText: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#000000',
-  },
-  pickerButtonTextConfirm: {
-    color: '#FFFFFF',
   },
 });

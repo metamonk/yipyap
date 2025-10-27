@@ -24,6 +24,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/contexts/ThemeContext';
 import { FAQTemplateCard } from './FAQTemplateCard';
 import { subscribeFAQTemplates } from '@/services/faqService';
 import { getFirebaseAuth } from '@/services/firebase';
@@ -72,6 +73,7 @@ export const FAQLibraryManager: FC<FAQLibraryManagerProps> = ({
   onCreateFAQ,
   onEditFAQ,
 }) => {
+  const { theme } = useTheme();
   const auth = getFirebaseAuth();
   const currentUser = auth.currentUser;
 
@@ -81,6 +83,110 @@ export const FAQLibraryManager: FC<FAQLibraryManagerProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [sortOption, setSortOption] = useState<SortOption>('recent');
   const [showFilters, setShowFilters] = useState(false);
+
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      backgroundColor: theme.colors.background,
+    },
+    title: {
+      color: theme.colors.textPrimary,
+    },
+    subtitle: {
+      color: theme.colors.textSecondary,
+    },
+    centerContainer: {
+      backgroundColor: theme.colors.background,
+    },
+    loadingText: {
+      color: theme.colors.textSecondary,
+    },
+    searchContainer: {
+      backgroundColor: theme.colors.surface,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    searchInputContainer: {
+      backgroundColor: theme.colors.backgroundSecondary || '#F2F2F7',
+    },
+    searchIcon: {
+      color: theme.colors.textSecondary,
+    },
+    searchInput: {
+      color: theme.colors.textPrimary,
+    },
+    filterButtonIcon: {
+      color: theme.colors.accent,
+    },
+    filtersContainer: {
+      backgroundColor: theme.colors.surface,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    filterLabel: {
+      color: theme.colors.textSecondary,
+    },
+    categoryChip: {
+      backgroundColor: theme.colors.backgroundSecondary || '#F2F2F7',
+      borderColor: theme.colors.borderLight,
+    },
+    categoryChipActive: {
+      backgroundColor: theme.colors.accent,
+      borderColor: theme.colors.accent,
+    },
+    categoryChipText: {
+      color: theme.colors.accent,
+    },
+    categoryChipTextActive: {
+      color: '#FFFFFF',
+    },
+    sortOption: {
+      backgroundColor: theme.colors.backgroundSecondary || '#F2F2F7',
+      borderColor: theme.colors.borderLight,
+    },
+    sortOptionActive: {
+      backgroundColor: theme.colors.accent,
+      borderColor: theme.colors.accent,
+    },
+    sortOptionText: {
+      color: theme.colors.accent,
+    },
+    sortOptionTextActive: {
+      color: '#FFFFFF',
+    },
+    resultsHeader: {
+      backgroundColor: theme.colors.background,
+    },
+    resultsCount: {
+      color: theme.colors.textSecondary,
+    },
+    createButtonSmall: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.accent,
+    },
+    createButtonSmallText: {
+      color: theme.colors.accent,
+    },
+    emptyContainer: {
+      backgroundColor: theme.colors.background,
+    },
+    emptyIcon: {
+      color: theme.colors.disabled || '#C7C7CC',
+    },
+    emptyTitle: {
+      color: theme.colors.textPrimary,
+    },
+    emptyText: {
+      color: theme.colors.textSecondary,
+    },
+    createButton: {
+      backgroundColor: theme.colors.accent,
+    },
+    noResultsIcon: {
+      color: theme.colors.disabled || '#C7C7CC',
+    },
+    noResultsText: {
+      color: theme.colors.textSecondary,
+    },
+  });
 
   /**
    * Subscribe to FAQ templates on mount
@@ -161,19 +267,19 @@ export const FAQLibraryManager: FC<FAQLibraryManagerProps> = ({
    * Renders the search bar
    */
   const renderSearchBar = () => (
-    <View style={styles.searchContainer}>
-      <View style={styles.searchInputContainer}>
-        <Ionicons name="search" size={20} color="#8E8E93" style={styles.searchIcon} />
+    <View style={[styles.searchContainer, dynamicStyles.searchContainer]}>
+      <View style={[styles.searchInputContainer, dynamicStyles.searchInputContainer]}>
+        <Ionicons name="search" size={20} color={dynamicStyles.searchIcon.color} style={styles.searchIcon} />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, dynamicStyles.searchInput]}
           placeholder="Search FAQs..."
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholderTextColor="#C7C7CC"
+          placeholderTextColor={theme.colors.disabled || '#C7C7CC'}
         />
         {searchQuery.length > 0 && (
           <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={20} color="#8E8E93" />
+            <Ionicons name="close-circle" size={20} color={dynamicStyles.searchIcon.color} />
           </TouchableOpacity>
         )}
       </View>
@@ -185,7 +291,7 @@ export const FAQLibraryManager: FC<FAQLibraryManagerProps> = ({
         <Ionicons
           name={showFilters ? 'filter' : 'filter-outline'}
           size={22}
-          color="#007AFF"
+          color={dynamicStyles.filterButtonIcon.color}
         />
       </TouchableOpacity>
     </View>
@@ -198,22 +304,24 @@ export const FAQLibraryManager: FC<FAQLibraryManagerProps> = ({
     if (!showFilters) return null;
 
     return (
-      <View style={styles.filtersContainer}>
+      <View style={[styles.filtersContainer, dynamicStyles.filtersContainer]}>
         {/* Category Filter */}
         <View style={styles.filterSection}>
-          <Text style={styles.filterLabel}>Category</Text>
+          <Text style={[styles.filterLabel, dynamicStyles.filterLabel]}>Category</Text>
           <View style={styles.categoryChips}>
             <TouchableOpacity
               style={[
                 styles.categoryChip,
-                selectedCategory === 'all' && styles.categoryChipActive,
+                dynamicStyles.categoryChip,
+                selectedCategory === 'all' && dynamicStyles.categoryChipActive,
               ]}
               onPress={() => setSelectedCategory('all')}
             >
               <Text
                 style={[
                   styles.categoryChipText,
-                  selectedCategory === 'all' && styles.categoryChipTextActive,
+                  dynamicStyles.categoryChipText,
+                  selectedCategory === 'all' && dynamicStyles.categoryChipTextActive,
                 ]}
               >
                 All
@@ -225,14 +333,16 @@ export const FAQLibraryManager: FC<FAQLibraryManagerProps> = ({
                 key={category}
                 style={[
                   styles.categoryChip,
-                  selectedCategory === category && styles.categoryChipActive,
+                  dynamicStyles.categoryChip,
+                  selectedCategory === category && dynamicStyles.categoryChipActive,
                 ]}
                 onPress={() => setSelectedCategory(category)}
               >
                 <Text
                   style={[
                     styles.categoryChipText,
-                    selectedCategory === category && styles.categoryChipTextActive,
+                    dynamicStyles.categoryChipText,
+                    selectedCategory === category && dynamicStyles.categoryChipTextActive,
                   ]}
                 >
                   {category.charAt(0).toUpperCase() + category.slice(1)}
@@ -244,24 +354,26 @@ export const FAQLibraryManager: FC<FAQLibraryManagerProps> = ({
 
         {/* Sort Options */}
         <View style={styles.filterSection}>
-          <Text style={styles.filterLabel}>Sort By</Text>
+          <Text style={[styles.filterLabel, dynamicStyles.filterLabel]}>Sort By</Text>
           <View style={styles.sortOptions}>
             <TouchableOpacity
               style={[
                 styles.sortOption,
-                sortOption === 'recent' && styles.sortOptionActive,
+                dynamicStyles.sortOption,
+                sortOption === 'recent' && dynamicStyles.sortOptionActive,
               ]}
               onPress={() => setSortOption('recent')}
             >
               <Ionicons
                 name="time-outline"
                 size={18}
-                color={sortOption === 'recent' ? '#FFFFFF' : '#007AFF'}
+                color={sortOption === 'recent' ? '#FFFFFF' : dynamicStyles.sortOptionText.color}
               />
               <Text
                 style={[
                   styles.sortOptionText,
-                  sortOption === 'recent' && styles.sortOptionTextActive,
+                  dynamicStyles.sortOptionText,
+                  sortOption === 'recent' && dynamicStyles.sortOptionTextActive,
                 ]}
               >
                 Recent
@@ -271,19 +383,21 @@ export const FAQLibraryManager: FC<FAQLibraryManagerProps> = ({
             <TouchableOpacity
               style={[
                 styles.sortOption,
-                sortOption === 'usage' && styles.sortOptionActive,
+                dynamicStyles.sortOption,
+                sortOption === 'usage' && dynamicStyles.sortOptionActive,
               ]}
               onPress={() => setSortOption('usage')}
             >
               <Ionicons
                 name="repeat-outline"
                 size={18}
-                color={sortOption === 'usage' ? '#FFFFFF' : '#007AFF'}
+                color={sortOption === 'usage' ? '#FFFFFF' : dynamicStyles.sortOptionText.color}
               />
               <Text
                 style={[
                   styles.sortOptionText,
-                  sortOption === 'usage' && styles.sortOptionTextActive,
+                  dynamicStyles.sortOptionText,
+                  sortOption === 'usage' && dynamicStyles.sortOptionTextActive,
                 ]}
               >
                 Most Used
@@ -293,19 +407,21 @@ export const FAQLibraryManager: FC<FAQLibraryManagerProps> = ({
             <TouchableOpacity
               style={[
                 styles.sortOption,
-                sortOption === 'alphabetical' && styles.sortOptionActive,
+                dynamicStyles.sortOption,
+                sortOption === 'alphabetical' && dynamicStyles.sortOptionActive,
               ]}
               onPress={() => setSortOption('alphabetical')}
             >
               <Ionicons
                 name="text-outline"
                 size={18}
-                color={sortOption === 'alphabetical' ? '#FFFFFF' : '#007AFF'}
+                color={sortOption === 'alphabetical' ? '#FFFFFF' : dynamicStyles.sortOptionText.color}
               />
               <Text
                 style={[
                   styles.sortOptionText,
-                  sortOption === 'alphabetical' && styles.sortOptionTextActive,
+                  dynamicStyles.sortOptionText,
+                  sortOption === 'alphabetical' && dynamicStyles.sortOptionTextActive,
                 ]}
               >
                 A-Z
@@ -321,13 +437,13 @@ export const FAQLibraryManager: FC<FAQLibraryManagerProps> = ({
    * Renders empty state
    */
   const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
-      <Ionicons name="chatbubble-ellipses-outline" size={64} color="#C7C7CC" />
-      <Text style={styles.emptyTitle}>No FAQ Templates Yet</Text>
-      <Text style={styles.emptyText}>
+    <View style={[styles.emptyContainer, dynamicStyles.emptyContainer]}>
+      <Ionicons name="chatbubble-ellipses-outline" size={64} color={dynamicStyles.emptyIcon.color} />
+      <Text style={[styles.emptyTitle, dynamicStyles.emptyTitle]}>No FAQ Templates Yet</Text>
+      <Text style={[styles.emptyText, dynamicStyles.emptyText]}>
         Create your first FAQ template to start automatically responding to common questions.
       </Text>
-      <TouchableOpacity style={styles.createButton} onPress={onCreateFAQ}>
+      <TouchableOpacity style={[styles.createButton, dynamicStyles.createButton]} onPress={onCreateFAQ}>
         <Ionicons name="add-circle" size={24} color="#FFFFFF" />
         <Text style={styles.createButtonText}>Create FAQ</Text>
       </TouchableOpacity>
@@ -339,9 +455,9 @@ export const FAQLibraryManager: FC<FAQLibraryManagerProps> = ({
    */
   if (isLoading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Loading FAQs...</Text>
+      <View style={[styles.centerContainer, dynamicStyles.centerContainer]}>
+        <ActivityIndicator size="large" color={theme.colors.accent} />
+        <Text style={[styles.loadingText, dynamicStyles.loadingText]}>Loading FAQs...</Text>
       </View>
     );
   }
@@ -354,7 +470,15 @@ export const FAQLibraryManager: FC<FAQLibraryManagerProps> = ({
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, dynamicStyles.container]}>
+      {/* Page Header */}
+      <View style={styles.header}>
+        <Text style={[styles.title, dynamicStyles.title]}>FAQ Library</Text>
+        <Text style={[styles.subtitle, dynamicStyles.subtitle]}>
+          Manage and organize frequently asked questions with automatic responses
+        </Text>
+      </View>
+
       {/* Search Bar */}
       {renderSearchBar()}
 
@@ -362,21 +486,21 @@ export const FAQLibraryManager: FC<FAQLibraryManagerProps> = ({
       {renderFilters()}
 
       {/* Results Count */}
-      <View style={styles.resultsHeader}>
-        <Text style={styles.resultsCount}>
+      <View style={[styles.resultsHeader, dynamicStyles.resultsHeader]}>
+        <Text style={[styles.resultsCount, dynamicStyles.resultsCount]}>
           {filteredTemplates.length} {filteredTemplates.length === 1 ? 'FAQ' : 'FAQs'}
         </Text>
-        <TouchableOpacity style={styles.createButtonSmall} onPress={onCreateFAQ}>
-          <Ionicons name="add-circle" size={20} color="#007AFF" />
-          <Text style={styles.createButtonSmallText}>New FAQ</Text>
+        <TouchableOpacity style={[styles.createButtonSmall, dynamicStyles.createButtonSmall]} onPress={onCreateFAQ}>
+          <Ionicons name="add-circle" size={20} color={dynamicStyles.createButtonSmallText.color} />
+          <Text style={[styles.createButtonSmallText, dynamicStyles.createButtonSmallText]}>New FAQ</Text>
         </TouchableOpacity>
       </View>
 
       {/* FAQ List */}
       {filteredTemplates.length === 0 ? (
         <View style={styles.noResultsContainer}>
-          <Ionicons name="search-outline" size={48} color="#C7C7CC" />
-          <Text style={styles.noResultsText}>No FAQs match your search</Text>
+          <Ionicons name="search-outline" size={48} color={dynamicStyles.noResultsIcon.color} />
+          <Text style={[styles.noResultsText, dynamicStyles.noResultsText]}>No FAQs match your search</Text>
         </View>
       ) : (
         <FlatList
@@ -399,21 +523,33 @@ export const FAQLibraryManager: FC<FAQLibraryManagerProps> = ({
   );
 };
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+  },
+  header: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 16,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 20,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F2F2F7',
   },
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: '#8E8E93',
   },
   searchContainer: {
     flexDirection: 'row',
@@ -421,15 +557,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 12,
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
   },
   searchInputContainer: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F2F2F7',
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -441,17 +574,14 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#000000',
   },
   filterButton: {
     padding: 8,
   },
   filtersContainer: {
-    backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
   },
   filterSection: {
     marginBottom: 16,
@@ -459,7 +589,6 @@ const styles = StyleSheet.create({
   filterLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#8E8E93',
     marginBottom: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -473,23 +602,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: '#F2F2F7',
     marginRight: 8,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
   },
   categoryChipActive: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
+    // backgroundColor and borderColor in dynamicStyles
   },
   categoryChipText: {
     fontSize: 14,
-    color: '#007AFF',
     fontWeight: '500',
   },
   categoryChipTextActive: {
-    color: '#FFFFFF',
+    // color in dynamicStyles
   },
   sortOptions: {
     flexDirection: 'row',
@@ -501,23 +626,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#F2F2F7',
     marginRight: 8,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
   },
   sortOptionActive: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
+    // backgroundColor and borderColor in dynamicStyles
   },
   sortOptionText: {
     fontSize: 14,
-    color: '#007AFF',
     marginLeft: 6,
     fontWeight: '500',
   },
   sortOptionTextActive: {
-    color: '#FFFFFF',
+    // color in dynamicStyles
   },
   resultsHeader: {
     flexDirection: 'row',
@@ -525,12 +646,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#F2F2F7',
   },
   resultsCount: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#8E8E93',
   },
   createButtonSmall: {
     flexDirection: 'row',
@@ -538,13 +657,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#007AFF',
   },
   createButtonSmallText: {
     fontSize: 14,
-    color: '#007AFF',
     fontWeight: '600',
     marginLeft: 4,
   },
@@ -558,18 +674,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
-    backgroundColor: '#F2F2F7',
   },
   emptyTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#000000',
     marginTop: 16,
     marginBottom: 8,
   },
   emptyText: {
     fontSize: 16,
-    color: '#8E8E93',
     textAlign: 'center',
     marginBottom: 24,
     lineHeight: 22,
@@ -577,7 +690,6 @@ const styles = StyleSheet.create({
   createButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#007AFF',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 24,
@@ -596,7 +708,6 @@ const styles = StyleSheet.create({
   },
   noResultsText: {
     fontSize: 16,
-    color: '#8E8E93',
     marginTop: 16,
   },
 });

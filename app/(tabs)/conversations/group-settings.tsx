@@ -24,6 +24,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/contexts/ThemeContext';
 import { useGroupAdmin } from '@/hooks/useGroupAdmin';
 import {
   getConversation,
@@ -56,6 +57,7 @@ export default function GroupSettingsScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const conversationId = params.id;
   const { user } = useAuth();
+  const { theme } = useTheme();
 
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [creator, setCreator] = useState<User | null>(null);
@@ -357,36 +359,212 @@ export default function GroupSettingsScreen() {
     }
   };
 
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.backgroundSecondary,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: theme.colors.backgroundSecondary,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: theme.spacing.base,
+      paddingVertical: theme.spacing.md,
+      backgroundColor: theme.colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    headerTitle: {
+      fontSize: 18,
+      fontWeight: theme.typography.fontWeight.semibold,
+      color: theme.colors.textPrimary,
+      flex: 1,
+      textAlign: 'center',
+    },
+    saveButtonText: {
+      color: theme.colors.accent,
+      fontSize: theme.typography.fontSize.base,
+      fontWeight: theme.typography.fontWeight.semibold,
+    },
+    section: {
+      backgroundColor: theme.colors.surface,
+      marginTop: theme.spacing.lg,
+      paddingHorizontal: theme.spacing.base,
+      paddingVertical: theme.spacing.base,
+    },
+    sectionTitle: {
+      fontSize: theme.typography.fontSize.base,
+      fontWeight: theme.typography.fontWeight.semibold,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.md,
+    },
+    memberCount: {
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.textSecondary,
+    },
+    placeholderPhoto: {
+      width: 120,
+      height: 120,
+      borderRadius: 60,
+      backgroundColor: theme.colors.backgroundSecondary,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    photoButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: theme.spacing.base,
+      paddingVertical: theme.spacing.sm,
+      borderRadius: theme.borderRadius.md,
+      backgroundColor: theme.colors.backgroundSecondary,
+      gap: theme.spacing.sm,
+    },
+    photoButtonText: {
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.accent,
+      fontWeight: theme.typography.fontWeight.medium,
+    },
+    removeText: {
+      color: theme.colors.error,
+    },
+    input: {
+      fontSize: theme.typography.fontSize.base,
+      padding: theme.spacing.md,
+      borderWidth: 1,
+      borderColor: theme.colors.borderLight,
+      borderRadius: theme.borderRadius.md,
+      backgroundColor: theme.colors.surface,
+      color: theme.colors.textPrimary,
+    },
+    inputDisabled: {
+      backgroundColor: theme.colors.backgroundSecondary,
+      color: theme.colors.textSecondary,
+    },
+    helperText: {
+      fontSize: theme.typography.fontSize.xs,
+      color: theme.colors.textSecondary,
+      marginTop: theme.spacing.xs,
+    },
+    addMembersButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.base,
+      backgroundColor: theme.colors.accent,
+      borderRadius: theme.borderRadius.md,
+      marginBottom: theme.spacing.md,
+      gap: theme.spacing.sm,
+    },
+    addMembersButtonText: {
+      fontSize: theme.typography.fontSize.base,
+      color: '#FFF',
+      fontWeight: theme.typography.fontWeight.semibold,
+    },
+    manageButton: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.base,
+      backgroundColor: theme.colors.backgroundSecondary,
+      borderRadius: theme.borderRadius.md,
+    },
+    manageButtonText: {
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.accent,
+      fontWeight: theme.typography.fontWeight.medium,
+    },
+    leaveButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.base,
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.borderRadius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.error,
+      gap: theme.spacing.sm,
+    },
+    leaveButtonText: {
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.error,
+      fontWeight: theme.typography.fontWeight.semibold,
+    },
+    creatorPhotoPlaceholder: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: theme.colors.backgroundSecondary,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    creatorName: {
+      fontSize: theme.typography.fontSize.base,
+      fontWeight: theme.typography.fontWeight.semibold,
+      color: theme.colors.textPrimary,
+    },
+    creatorUsername: {
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.textSecondary,
+      marginTop: 2,
+    },
+    creatorBadge: {
+      backgroundColor: theme.colors.accent,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.xs,
+      borderRadius: theme.borderRadius.md,
+    },
+    creatorBadgeText: {
+      fontSize: theme.typography.fontSize.xs,
+      color: '#FFF',
+      fontWeight: theme.typography.fontWeight.semibold,
+    },
+    settingDescription: {
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.textSecondary,
+      lineHeight: 18,
+    },
+  });
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+      <SafeAreaView style={dynamicStyles.loadingContainer}>
+        <ActivityIndicator size="large" color={theme.colors.accent} />
       </SafeAreaView>
     );
   }
 
   if (!conversation) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <Text>Group not found</Text>
+      <SafeAreaView style={dynamicStyles.loadingContainer}>
+        <Text style={{ color: theme.colors.textPrimary }}>Group not found</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={dynamicStyles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={dynamicStyles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={28} color="#007AFF" />
+          <Ionicons name="chevron-back" size={28} color={theme.colors.accent} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Group Settings</Text>
+        <Text style={dynamicStyles.headerTitle}>Group Settings</Text>
         {hasChanges && isAdmin && (
           <TouchableOpacity onPress={handleSave} disabled={saving} style={styles.saveButton}>
             {saving ? (
-              <ActivityIndicator size="small" color="#007AFF" />
+              <ActivityIndicator size="small" color={theme.colors.accent} />
             ) : (
-              <Text style={styles.saveButtonText}>Save</Text>
+              <Text style={dynamicStyles.saveButtonText}>Save</Text>
             )}
           </TouchableOpacity>
         )}
@@ -395,28 +573,28 @@ export default function GroupSettingsScreen() {
 
       <ScrollView style={styles.content}>
         {/* Group Photo */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Group Photo</Text>
+        <View style={dynamicStyles.section}>
+          <Text style={dynamicStyles.sectionTitle}>Group Photo</Text>
           <View style={styles.photoContainer}>
             {groupPhotoURL ? (
               <Image source={{ uri: groupPhotoURL }} style={styles.groupPhoto} />
             ) : (
-              <View style={styles.placeholderPhoto}>
-                <Ionicons name="people" size={50} color="#999" />
+              <View style={dynamicStyles.placeholderPhoto}>
+                <Ionicons name="people" size={50} color={theme.colors.textSecondary} />
               </View>
             )}
             {isAdmin && (
               <View style={styles.photoButtons}>
-                <TouchableOpacity onPress={handleSelectPhoto} style={styles.photoButton}>
-                  <Ionicons name="camera" size={20} color="#007AFF" />
-                  <Text style={styles.photoButtonText}>
+                <TouchableOpacity onPress={handleSelectPhoto} style={dynamicStyles.photoButton}>
+                  <Ionicons name="camera" size={20} color={theme.colors.accent} />
+                  <Text style={dynamicStyles.photoButtonText}>
                     {groupPhotoURL ? 'Change' : 'Add Photo'}
                   </Text>
                 </TouchableOpacity>
                 {groupPhotoURL && (
-                  <TouchableOpacity onPress={handleRemovePhoto} style={styles.photoButton}>
-                    <Ionicons name="trash" size={20} color="#FF3B30" />
-                    <Text style={[styles.photoButtonText, styles.removeText]}>Remove</Text>
+                  <TouchableOpacity onPress={handleRemovePhoto} style={dynamicStyles.photoButton}>
+                    <Ionicons name="trash" size={20} color={theme.colors.error} />
+                    <Text style={[dynamicStyles.photoButtonText, dynamicStyles.removeText]}>Remove</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -426,25 +604,25 @@ export default function GroupSettingsScreen() {
 
         {/* Group Creator */}
         {creator && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Created By</Text>
+          <View style={dynamicStyles.section}>
+            <Text style={dynamicStyles.sectionTitle}>Created By</Text>
             <View style={styles.creatorContainer}>
               {creator.photoURL ? (
                 <Image source={{ uri: creator.photoURL }} style={styles.creatorPhoto} />
               ) : (
-                <View style={styles.creatorPhotoPlaceholder}>
-                  <Ionicons name="person" size={24} color="#999" />
+                <View style={dynamicStyles.creatorPhotoPlaceholder}>
+                  <Ionicons name="person" size={24} color={theme.colors.textSecondary} />
                 </View>
               )}
               <View style={styles.creatorInfo}>
-                <Text style={styles.creatorName}>{creator.displayName}</Text>
+                <Text style={dynamicStyles.creatorName}>{creator.displayName}</Text>
                 {creator.username && (
-                  <Text style={styles.creatorUsername}>@{creator.username}</Text>
+                  <Text style={dynamicStyles.creatorUsername}>@{creator.username}</Text>
                 )}
               </View>
               {isCreator && (
-                <View style={styles.creatorBadge}>
-                  <Text style={styles.creatorBadgeText}>You</Text>
+                <View style={dynamicStyles.creatorBadge}>
+                  <Text style={dynamicStyles.creatorBadgeText}>You</Text>
                 </View>
               )}
             </View>
@@ -452,27 +630,28 @@ export default function GroupSettingsScreen() {
         )}
 
         {/* Group Name */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Group Name</Text>
+        <View style={dynamicStyles.section}>
+          <Text style={dynamicStyles.sectionTitle}>Group Name</Text>
           <TextInput
-            style={[styles.input, !isAdmin && styles.inputDisabled]}
+            style={[dynamicStyles.input, !isAdmin && dynamicStyles.inputDisabled]}
             value={groupName}
             onChangeText={handleGroupNameChange}
             placeholder="Enter group name"
+            placeholderTextColor={theme.colors.textTertiary}
             editable={isAdmin}
           />
-          {!isAdmin && <Text style={styles.helperText}>Only admins can edit group name</Text>}
+          {!isAdmin && <Text style={dynamicStyles.helperText}>Only admins can edit group name</Text>}
         </View>
 
         {/* FAQ Auto-Response Settings (Story 5.4 - Task 13) */}
-        <View style={styles.section}>
+        <View style={dynamicStyles.section}>
           <View style={styles.settingRow}>
             <View style={styles.settingInfo}>
               <View style={styles.settingHeader}>
-                <Ionicons name="chatbubbles" size={20} color="#007AFF" style={styles.settingIcon} />
-                <Text style={styles.sectionTitle}>FAQ Auto-Response</Text>
+                <Ionicons name="chatbubbles" size={20} color={theme.colors.accent} style={styles.settingIcon} />
+                <Text style={dynamicStyles.sectionTitle}>FAQ Auto-Response</Text>
               </View>
-              <Text style={styles.settingDescription}>
+              <Text style={dynamicStyles.settingDescription}>
                 Automatically respond to frequently asked questions with saved templates
               </Text>
             </View>
@@ -480,42 +659,42 @@ export default function GroupSettingsScreen() {
               value={autoResponseEnabled}
               onValueChange={handleToggleAutoResponse}
               disabled={!isCreator || isTogglingAutoResponse}
-              trackColor={{ false: '#E5E5EA', true: '#34C759' }}
+              trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
               thumbColor={autoResponseEnabled ? '#FFF' : '#F4F3F4'}
-              ios_backgroundColor="#E5E5EA"
+              ios_backgroundColor={theme.colors.borderLight}
             />
           </View>
           {!isCreator && (
-            <Text style={styles.helperText}>Only the group creator can change this setting</Text>
+            <Text style={dynamicStyles.helperText}>Only the group creator can change this setting</Text>
           )}
         </View>
 
         {/* Members */}
-        <View style={styles.section}>
+        <View style={dynamicStyles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Members</Text>
-            <Text style={styles.memberCount}>{conversation.participantIds.length}</Text>
+            <Text style={dynamicStyles.sectionTitle}>Members</Text>
+            <Text style={dynamicStyles.memberCount}>{conversation.participantIds.length}</Text>
           </View>
           {isCreator && (
             <TouchableOpacity
               onPress={() => setShowAddParticipantsModal(true)}
-              style={styles.addMembersButton}
+              style={dynamicStyles.addMembersButton}
             >
-              <Ionicons name="person-add" size={20} color="#007AFF" />
-              <Text style={styles.addMembersButtonText}>Add Members</Text>
+              <Ionicons name="person-add" size={20} color="#FFF" />
+              <Text style={dynamicStyles.addMembersButtonText}>Add Members</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity onPress={handleManageMembers} style={styles.manageButton}>
-            <Text style={styles.manageButtonText}>View & Manage Members</Text>
-            <Ionicons name="chevron-forward" size={20} color="#007AFF" />
+          <TouchableOpacity onPress={handleManageMembers} style={dynamicStyles.manageButton}>
+            <Text style={dynamicStyles.manageButtonText}>View & Manage Members</Text>
+            <Ionicons name="chevron-forward" size={20} color={theme.colors.accent} />
           </TouchableOpacity>
         </View>
 
         {/* Actions */}
-        <View style={styles.section}>
-          <TouchableOpacity onPress={handleLeaveGroup} style={styles.leaveButton}>
-            <Ionicons name="exit-outline" size={20} color="#FF3B30" />
-            <Text style={styles.leaveButtonText}>Leave Group</Text>
+        <View style={dynamicStyles.section}>
+          <TouchableOpacity onPress={handleLeaveGroup} style={dynamicStyles.leaveButton}>
+            <Ionicons name="exit-outline" size={20} color={theme.colors.error} />
+            <Text style={dynamicStyles.leaveButtonText}>Leave Group</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -533,45 +712,14 @@ export default function GroupSettingsScreen() {
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8F9FA',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
   backButton: {
     padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#000',
-    flex: 1,
-    textAlign: 'center',
   },
   saveButton: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-  },
-  saveButtonText: {
-    color: '#007AFF',
-    fontSize: 16,
-    fontWeight: '600',
   },
   placeholder: {
     width: 60,
@@ -579,26 +727,10 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-  section: {
-    backgroundColor: '#FFF',
-    marginTop: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-    marginBottom: 12,
-  },
-  memberCount: {
-    fontSize: 14,
-    color: '#8E8E93',
   },
   photoContainer: {
     alignItems: 'center',
@@ -608,99 +740,10 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
   },
-  placeholderPhoto: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#E5E5EA',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   photoButtons: {
     flexDirection: 'row',
     marginTop: 16,
     gap: 16,
-  },
-  photoButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#F8F9FA',
-    gap: 8,
-  },
-  photoButtonText: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '500',
-  },
-  removeText: {
-    color: '#FF3B30',
-  },
-  input: {
-    fontSize: 16,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    borderRadius: 8,
-    backgroundColor: '#FFF',
-  },
-  inputDisabled: {
-    backgroundColor: '#F8F9FA',
-    color: '#8E8E93',
-  },
-  helperText: {
-    fontSize: 12,
-    color: '#8E8E93',
-    marginTop: 6,
-  },
-  addMembersButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    marginBottom: 12,
-    gap: 8,
-  },
-  addMembersButtonText: {
-    fontSize: 16,
-    color: '#FFF',
-    fontWeight: '600',
-  },
-  manageButton: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 8,
-  },
-  manageButtonText: {
-    fontSize: 16,
-    color: '#007AFF',
-    fontWeight: '500',
-  },
-  leaveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#FFF',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FF3B30',
-    gap: 8,
-  },
-  leaveButtonText: {
-    fontSize: 16,
-    color: '#FF3B30',
-    fontWeight: '600',
   },
   creatorContainer: {
     flexDirection: 'row',
@@ -712,37 +755,8 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 24,
   },
-  creatorPhotoPlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#E5E5EA',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   creatorInfo: {
     flex: 1,
-  },
-  creatorName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-  },
-  creatorUsername: {
-    fontSize: 14,
-    color: '#8E8E93',
-    marginTop: 2,
-  },
-  creatorBadge: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  creatorBadgeText: {
-    fontSize: 12,
-    color: '#FFF',
-    fontWeight: '600',
   },
   settingRow: {
     flexDirection: 'row',
@@ -760,10 +774,5 @@ const styles = StyleSheet.create({
   },
   settingIcon: {
     marginRight: 8,
-  },
-  settingDescription: {
-    fontSize: 14,
-    color: '#8E8E93',
-    lineHeight: 18,
   },
 });

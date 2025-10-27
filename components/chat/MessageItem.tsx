@@ -7,7 +7,7 @@
  * appear left-aligned with gray background and include sender info.
  */
 
-import React, { FC, memo, useEffect, useMemo, useState } from 'react';
+import React, { FC, memo, useEffect, useMemo, useState, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { Avatar } from '@/components/common/Avatar';
 import { MessageStatus } from '@/components/chat/MessageStatus';
@@ -17,6 +17,7 @@ import { SuggestedFAQButton } from '@/components/chat/SuggestedFAQButton';
 import { PresenceIndicator } from '@/components/PresenceIndicator';
 import { formatMessageTime } from '@/utils/dateHelpers';
 import { sendSuggestedFAQ } from '@/services/faqService';
+import { useTheme } from '@/contexts/ThemeContext';
 import type { Message } from '@/types/models';
 
 /**
@@ -99,11 +100,17 @@ export const MessageItem: FC<MessageItemProps> = memo(
     onRetry,
     isRetrying = false,
   }) => {
+    const { theme } = useTheme();
+
     // State for read receipt modal
     const [showReadReceiptModal, setShowReadReceiptModal] = useState(false);
 
     // Animation for retry indication
     const opacityAnim = useMemo(() => new Animated.Value(1), []);
+
+    // Robinhood-style entrance animation
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const slideAnim = useRef(new Animated.Value(10)).current;
 
     // Determine if sender attribution should be shown
     // For group chats: Show sender name and avatar for OTHER users only (not own messages)
@@ -124,6 +131,22 @@ export const MessageItem: FC<MessageItemProps> = memo(
       await sendSuggestedFAQ(message, templateId, answer);
       // Success feedback is shown by the service layer via message update
     };
+
+    // Robinhood-style entrance animation on mount
+    useEffect(() => {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: theme.animation.duration.fast,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: theme.animation.duration.fast,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, [fadeAnim, slideAnim, theme.animation.duration.fast]);
 
     useEffect(() => {
       if (isRetrying) {
@@ -156,12 +179,55 @@ export const MessageItem: FC<MessageItemProps> = memo(
       // eslint-disable-next-line react-hooks/exhaustive-deps -- opacityAnim is stable (created via useMemo)
     }, [isRetrying]);
 
+    // Dynamic styles based on theme
+    const dynamicStyles = StyleSheet.create({
+      senderName: {
+        fontSize: theme.typography.fontSize.xs,
+        color: theme.colors.textSecondary,
+        marginBottom: theme.spacing.xs,
+        marginLeft: theme.spacing.md,
+        fontWeight: theme.typography.fontWeight.bold, // Robinhood uses bold sender names
+      },
+      sentBubble: {
+        backgroundColor: theme.colors.messageSent, // Green in Robinhood theme
+        borderBottomRightRadius: theme.borderRadius.sm,
+        ...theme.shadows.sm, // Subtle shadow
+      },
+      receivedBubble: {
+        backgroundColor: theme.colors.messageReceived,
+        borderBottomLeftRadius: theme.borderRadius.sm,
+        ...theme.shadows.sm,
+      },
+      messageText: {
+        fontSize: theme.typography.fontSize.base,
+        lineHeight: theme.typography.fontSize.base * theme.typography.lineHeight.normal,
+      },
+      sentText: {
+        color: theme.colors.messageSentText,
+      },
+      receivedText: {
+        color: theme.colors.messageReceivedText,
+      },
+      timestamp: {
+        fontSize: theme.typography.fontSize.xs,
+        color: theme.colors.textTertiary,
+      },
+      syncingText: {
+        fontSize: theme.typography.fontSize.xs,
+        color: theme.colors.textTertiary,
+        fontStyle: 'italic',
+      },
+    });
+
     return (
       <Animated.View
         style={[
           styles.container,
           isOwnMessage ? styles.sentMessage : styles.receivedMessage,
-          { opacity: opacityAnim },
+          {
+            opacity: Animated.multiply(opacityAnim, fadeAnim),
+            transform: [{ translateY: slideAnim }],
+          },
         ]}
         testID="message-container"
         accessibilityLabel={isRetrying ? 'Message syncing' : undefined}
@@ -183,10 +249,10 @@ export const MessageItem: FC<MessageItemProps> = memo(
         {/* Message content */}
         <View style={styles.messageContent}>
           {/* Sender name - shown for received messages, hidden for own messages */}
-          {showSenderInfo && <Text style={styles.senderName}>{senderDisplayName}</Text>}
+          {showSenderInfo && <Text style={dynamicStyles.senderName}>{senderDisplayName}</Text>}
 
           {/* Message bubble with sentiment tint overlay */}
-          <View style={[styles.bubble, isOwnMessage ? styles.sentBubble : styles.receivedBubble]}>
+          <View style={[styles.bubble, isOwnMessage ? dynamicStyles.sentBubble : dynamicStyles.receivedBubble]}>
             {/* Sentiment tint overlay */}
             {message.metadata?.sentimentScore !== undefined && (
               <View
@@ -201,7 +267,7 @@ export const MessageItem: FC<MessageItemProps> = memo(
               />
             )}
             <Text
-              style={[styles.messageText, isOwnMessage ? styles.sentText : styles.receivedText]}
+              style={[dynamicStyles.messageText, isOwnMessage ? dynamicStyles.sentText : dynamicStyles.receivedText]}
             >
               {message.text}
             </Text>
@@ -210,11 +276,11 @@ export const MessageItem: FC<MessageItemProps> = memo(
           {/* Timestamp, status, and sync indicator */}
           <View style={styles.metadataContainer}>
             <View style={styles.timestampRow}>
-              <Text style={styles.timestamp}>{formatMessageTime(message.timestamp)}</Text>
+              <Text style={dynamicStyles.timestamp}>{formatMessageTime(message.timestamp)}</Text>
 
               {/* Syncing indicator */}
               {isRetrying && (
-                <Text style={styles.syncingText} accessibilityLiveRegion="polite">
+                <Text style={dynamicStyles.syncingText} accessibilityLiveRegion="polite">
                   {' • syncing'}
                 </Text>
               )}

@@ -238,24 +238,25 @@ export async function sendMessage(
       senderId
     );
 
-    // Auto-unarchive conversation for recipients who have it archived
+    // Auto-unarchive conversation for ALL participants who have it archived
     // This ensures users don't miss new messages in archived conversations
+    // AND when a creator sends a message to an archived conversation, it returns to their inbox
     try {
       const conversation = await getConversation(conversationId);
       if (conversation) {
         const unarchiveUpdates: Record<string, boolean> = {};
         let needsUpdate = false;
 
-        // Check each participant (excluding sender) for archive status
+        // Check each participant (including sender) for archive status
         for (const participantId of participantIds) {
-          if (participantId !== senderId && conversation.archivedBy[participantId]) {
+          if (conversation.archivedBy[participantId]) {
             // Participant has this conversation archived - unarchive it
             unarchiveUpdates[`archivedBy.${participantId}`] = false;
             needsUpdate = true;
           }
         }
 
-        // If any recipients had it archived, update the conversation
+        // If any participants had it archived, update the conversation
         if (needsUpdate) {
           const conversationRef = doc(db, 'conversations', conversationId);
           await updateDoc(conversationRef, {

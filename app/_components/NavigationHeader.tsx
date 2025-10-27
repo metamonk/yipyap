@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface NavigationHeaderProps {
   title: string;
@@ -50,6 +51,7 @@ export function NavigationHeader({
   variant = 'default',
 }: NavigationHeaderProps) {
   const router = useRouter();
+  const { theme } = useTheme();
 
   const handleBack = () => {
     if (backAction) {
@@ -64,9 +66,29 @@ export function NavigationHeader({
 
   const isModal = variant === 'modal';
 
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    safeArea: {
+      backgroundColor: theme.colors.surface,
+    },
+    container: {
+      backgroundColor: theme.colors.surface,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    title: {
+      color: theme.colors.textPrimary,
+    },
+    actionText: {
+      color: theme.colors.accent,
+    },
+    actionTextDisabled: {
+      color: theme.colors.textTertiary,
+    },
+  });
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={[styles.container, isModal && styles.modalContainer]}>
+    <SafeAreaView style={[styles.safeArea, dynamicStyles.safeArea]}>
+      <View style={[styles.container, dynamicStyles.container, isModal && styles.modalContainer]}>
         <View style={styles.leftSection}>
           {showBack && !leftAction && (
             <TouchableOpacity
@@ -74,7 +96,7 @@ export function NavigationHeader({
               style={styles.backButton}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Ionicons name="chevron-back" size={24} color="#007AFF" />
+              <Ionicons name="chevron-back" size={24} color={theme.colors.accent} />
             </TouchableOpacity>
           )}
           {leftAction && (
@@ -88,10 +110,10 @@ export function NavigationHeader({
                 <Ionicons
                   name={leftAction.icon}
                   size={24}
-                  color={leftAction.disabled ? '#999' : '#007AFF'}
+                  color={leftAction.disabled ? theme.colors.textTertiary : theme.colors.accent}
                 />
               ) : (
-                <Text style={[styles.actionText, leftAction.disabled && styles.actionTextDisabled]}>
+                <Text style={[styles.actionText, dynamicStyles.actionText, leftAction.disabled && dynamicStyles.actionTextDisabled]}>
                   {leftAction.label}
                 </Text>
               )}
@@ -100,7 +122,7 @@ export function NavigationHeader({
         </View>
 
         <View style={styles.titleSection}>
-          <Text style={styles.title} numberOfLines={1}>
+          <Text style={[styles.title, dynamicStyles.title]} numberOfLines={1}>
             {title}
           </Text>
         </View>
@@ -117,11 +139,11 @@ export function NavigationHeader({
                 <Ionicons
                   name={rightAction.icon}
                   size={24}
-                  color={rightAction.disabled ? '#999' : '#007AFF'}
+                  color={rightAction.disabled ? theme.colors.textTertiary : theme.colors.accent}
                 />
               ) : (
                 <Text
-                  style={[styles.actionText, rightAction.disabled && styles.actionTextDisabled]}
+                  style={[styles.actionText, dynamicStyles.actionText, rightAction.disabled && dynamicStyles.actionTextDisabled]}
                 >
                   {rightAction.label}
                 </Text>
@@ -134,9 +156,9 @@ export function NavigationHeader({
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: '#fff',
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   container: {
@@ -144,10 +166,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     height: 56,
-    paddingHorizontal: 16,
-    backgroundColor: '#fff',
+    paddingHorizontal: 20,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e0e0e0',
   },
   modalContainer: {
     borderBottomWidth: 0,
@@ -177,7 +197,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#000',
     textAlign: 'center',
   },
   backButton: {
@@ -188,10 +207,7 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontSize: 16,
-    color: '#007AFF',
     fontWeight: '500',
   },
-  actionTextDisabled: {
-    color: '#999',
-  },
+  actionTextDisabled: {},
 });

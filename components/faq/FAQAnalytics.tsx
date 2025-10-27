@@ -15,6 +15,7 @@
 import React, { FC } from 'react';
 import { View, Text, StyleSheet, ScrollView, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/contexts/ThemeContext';
 import type { FAQAnalytics as FAQAnalyticsData } from '@/types/faq';
 
 /**
@@ -52,47 +53,135 @@ export interface FAQAnalyticsProps {
  * @returns FAQAnalytics component
  */
 export const FAQAnalytics: FC<FAQAnalyticsProps> = ({ analytics }) => {
+  const { theme } = useTheme();
+
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      backgroundColor: theme.colors.background,
+    },
+    title: {
+      color: theme.colors.textPrimary,
+    },
+    subtitle: {
+      color: theme.colors.textSecondary,
+    },
+    sectionHeader: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: theme.colors.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 12,
+      marginTop: 8,
+    },
+    statCard: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.borderLight,
+      ...theme.shadows.sm,
+    },
+    statValue: {
+      color: theme.colors.textPrimary,
+    },
+    statLabel: {
+      color: theme.colors.textSecondary,
+    },
+    statSubtext: {
+      color: theme.colors.textTertiary || theme.colors.textSecondary,
+    },
+    sectionTitle: {
+      color: theme.colors.textPrimary,
+    },
+    list: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.borderLight,
+      ...theme.shadows.sm,
+    },
+    listItemBorder: {
+      borderBottomColor: theme.colors.borderLight,
+    },
+    rankBadge: {
+      backgroundColor: theme.colors.accent,
+    },
+    faqQuestion: {
+      color: theme.colors.textPrimary,
+    },
+    faqCategory: {
+      color: theme.colors.textSecondary,
+    },
+    usageCountValue: {
+      color: theme.colors.accent,
+    },
+    usageCountLabel: {
+      color: theme.colors.textSecondary,
+    },
+    categoryName: {
+      color: theme.colors.textPrimary,
+    },
+    categoryCountValue: {
+      color: theme.colors.accent,
+    },
+    categoryCountLabel: {
+      color: theme.colors.textSecondary,
+    },
+    emptyStateIcon: {
+      color: theme.colors.disabled || '#C7C7CC',
+    },
+    emptyStateTitle: {
+      color: theme.colors.textPrimary,
+    },
+    emptyStateText: {
+      color: theme.colors.textSecondary,
+    },
+  });
+
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, dynamicStyles.container]}
       showsVerticalScrollIndicator={false}
       testID="faq-analytics"
     >
+      {/* Page Header */}
+      <Text style={[styles.title, dynamicStyles.title]}>FAQ Analytics</Text>
+      <Text style={[styles.subtitle, dynamicStyles.subtitle]}>
+        Track FAQ performance, usage patterns, and time saved through automation
+      </Text>
+
       {/* Overview Stats */}
+      <Text style={dynamicStyles.sectionHeader}>OVERVIEW</Text>
       <View style={styles.statsGrid}>
         {/* Total Templates */}
-        <View style={styles.statCard}>
+        <View style={[styles.statCard, dynamicStyles.statCard]}>
           <View style={styles.statIconContainer}>
-            <Ionicons name="document-text" size={24} color="#007AFF" />
+            <Ionicons name="document-text" size={24} color={theme.colors.accent} />
           </View>
-          <Text style={styles.statValue}>{analytics.totalTemplates}</Text>
-          <Text style={styles.statLabel}>Total FAQs</Text>
-          <Text style={styles.statSubtext}>
+          <Text style={[styles.statValue, dynamicStyles.statValue]}>{analytics.totalTemplates}</Text>
+          <Text style={[styles.statLabel, dynamicStyles.statLabel]}>Total FAQs</Text>
+          <Text style={[styles.statSubtext, dynamicStyles.statSubtext]}>
             {analytics.activeTemplates} active
           </Text>
         </View>
 
         {/* Auto-Responses */}
-        <View style={styles.statCard}>
+        <View style={[styles.statCard, dynamicStyles.statCard]}>
           <View style={styles.statIconContainer}>
-            <Ionicons name="flash" size={24} color="#007AFF" />
+            <Ionicons name="flash" size={24} color={theme.colors.accent} />
           </View>
-          <Text style={styles.statValue}>{analytics.totalAutoResponses}</Text>
-          <Text style={styles.statLabel}>Auto-Responses</Text>
-          <Text style={styles.statSubtext}>Sent automatically</Text>
+          <Text style={[styles.statValue, dynamicStyles.statValue]}>{analytics.totalAutoResponses}</Text>
+          <Text style={[styles.statLabel, dynamicStyles.statLabel]}>Auto-Responses</Text>
+          <Text style={[styles.statSubtext, dynamicStyles.statSubtext]}>Sent automatically</Text>
         </View>
       </View>
 
       {/* Time Saved */}
-      <View style={[styles.statCard, styles.fullWidthCard]}>
+      <View style={[styles.statCard, dynamicStyles.statCard, styles.fullWidthCard]}>
         <View style={styles.statHeader}>
           <View style={[styles.statIconContainer, styles.successIcon]}>
-            <Ionicons name="time" size={24} color="#34C759" />
+            <Ionicons name="time" size={24} color={theme.colors.success || '#34C759'} />
           </View>
           <View style={styles.statTextContainer}>
-            <Text style={styles.statValue}>{analytics.timeSavedMinutes} min</Text>
-            <Text style={styles.statLabel}>Time Saved</Text>
-            <Text style={styles.statSubtext}>
+            <Text style={[styles.statValue, dynamicStyles.statValue]}>{analytics.timeSavedMinutes} min</Text>
+            <Text style={[styles.statLabel, dynamicStyles.statLabel]}>Time Saved</Text>
+            <Text style={[styles.statSubtext, dynamicStyles.statSubtext]}>
               ~{Math.round(analytics.timeSavedMinutes / 60)} hours of manual responses
             </Text>
           </View>
@@ -102,24 +191,25 @@ export const FAQAnalytics: FC<FAQAnalyticsProps> = ({ analytics }) => {
       {/* Top FAQs Section */}
       {analytics.topFAQs.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Top FAQs by Usage</Text>
-          <View style={styles.list}>
+          <Text style={dynamicStyles.sectionHeader}>TOP FAQs</Text>
+          <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>Most Used Questions</Text>
+          <View style={[styles.list, dynamicStyles.list]}>
             {analytics.topFAQs.map((faq, index) => (
-              <View key={faq.id} style={styles.listItem} testID={`top-faq-${index}`}>
+              <View key={faq.id} style={[styles.listItem, dynamicStyles.listItemBorder]} testID={`top-faq-${index}`}>
                 <View style={styles.listItemLeft}>
-                  <View style={styles.rankBadge}>
+                  <View style={[styles.rankBadge, dynamicStyles.rankBadge]}>
                     <Text style={styles.rankText}>{index + 1}</Text>
                   </View>
                   <View style={styles.listItemText}>
-                    <Text style={styles.faqQuestion} numberOfLines={2}>
+                    <Text style={[styles.faqQuestion, dynamicStyles.faqQuestion]} numberOfLines={2}>
                       {faq.question}
                     </Text>
-                    <Text style={styles.faqCategory}>{faq.category.toUpperCase()}</Text>
+                    <Text style={[styles.faqCategory, dynamicStyles.faqCategory]}>{faq.category.toUpperCase()}</Text>
                   </View>
                 </View>
                 <View style={styles.usageCount}>
-                  <Text style={styles.usageCountValue}>{faq.useCount}</Text>
-                  <Text style={styles.usageCountLabel}>
+                  <Text style={[styles.usageCountValue, dynamicStyles.usageCountValue]}>{faq.useCount}</Text>
+                  <Text style={[styles.usageCountLabel, dynamicStyles.usageCountLabel]}>
                     {faq.useCount === 1 ? 'use' : 'uses'}
                   </Text>
                 </View>
@@ -132,9 +222,9 @@ export const FAQAnalytics: FC<FAQAnalyticsProps> = ({ analytics }) => {
       {/* Empty State */}
       {analytics.topFAQs.length === 0 && (
         <View style={styles.emptyState}>
-          <Ionicons name="chatbubbles-outline" size={64} color="#C7C7CC" />
-          <Text style={styles.emptyStateTitle}>No FAQ usage yet</Text>
-          <Text style={styles.emptyStateText}>
+          <Ionicons name="chatbubbles-outline" size={64} color={dynamicStyles.emptyStateIcon.color} />
+          <Text style={[styles.emptyStateTitle, dynamicStyles.emptyStateTitle]}>No FAQ usage yet</Text>
+          <Text style={[styles.emptyStateText, dynamicStyles.emptyStateText]}>
             Create FAQ templates and they'll automatically respond to matching messages.
           </Text>
         </View>
@@ -143,16 +233,17 @@ export const FAQAnalytics: FC<FAQAnalyticsProps> = ({ analytics }) => {
       {/* Usage by Category */}
       {Object.keys(analytics.usageByCategory).length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Usage by Category</Text>
-          <View style={styles.list}>
+          <Text style={dynamicStyles.sectionHeader}>CATEGORY BREAKDOWN</Text>
+          <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>Usage by Category</Text>
+          <View style={[styles.list, dynamicStyles.list]}>
             {Object.entries(analytics.usageByCategory)
               .sort(([, a], [, b]) => b - a)
               .map(([category, count]) => (
-                <View key={category} style={styles.categoryItem}>
-                  <Text style={styles.categoryName}>{category.toUpperCase()}</Text>
+                <View key={category} style={[styles.categoryItem, dynamicStyles.listItemBorder]}>
+                  <Text style={[styles.categoryName, dynamicStyles.categoryName]}>{category.toUpperCase()}</Text>
                   <View style={styles.categoryCount}>
-                    <Text style={styles.categoryCountValue}>{count}</Text>
-                    <Text style={styles.categoryCountLabel}>
+                    <Text style={[styles.categoryCountValue, dynamicStyles.categoryCountValue]}>{count}</Text>
+                    <Text style={[styles.categoryCountLabel, dynamicStyles.categoryCountLabel]}>
                       {count === 1 ? 'use' : 'uses'}
                     </Text>
                   </View>
@@ -165,11 +256,22 @@ export const FAQAnalytics: FC<FAQAnalyticsProps> = ({ analytics }) => {
   );
 };
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
-    padding: 16,
+    padding: 24,
+    paddingBottom: 32,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    marginBottom: 24,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -178,15 +280,10 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: 1,
   },
   fullWidthCard: {
     marginBottom: 16,
@@ -216,17 +313,14 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#1C1C1E',
   },
   statLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#8E8E93',
     marginTop: 4,
   },
   statSubtext: {
     fontSize: 12,
-    color: '#A8A8A8',
     marginTop: 2,
   },
   section: {
@@ -235,18 +329,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1C1C1E',
     marginBottom: 12,
   },
   list: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: 1,
   },
   listItem: {
     flexDirection: 'row',
@@ -254,7 +342,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F2F2F7',
   },
   listItemLeft: {
     flexDirection: 'row',
@@ -266,7 +353,6 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#007AFF',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -282,13 +368,11 @@ const styles = StyleSheet.create({
   faqQuestion: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1C1C1E',
     lineHeight: 18,
   },
   faqCategory: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#8E8E93',
     marginTop: 4,
   },
   usageCount: {
@@ -297,11 +381,9 @@ const styles = StyleSheet.create({
   usageCountValue: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#007AFF',
   },
   usageCountLabel: {
     fontSize: 11,
-    color: '#8E8E93',
   },
   categoryItem: {
     flexDirection: 'row',
@@ -309,12 +391,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F2F2F7',
   },
   categoryName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1C1C1E',
   },
   categoryCount: {
     alignItems: 'flex-end',
@@ -322,11 +402,9 @@ const styles = StyleSheet.create({
   categoryCountValue: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#007AFF',
   },
   categoryCountLabel: {
     fontSize: 11,
-    color: '#8E8E93',
   },
   emptyState: {
     alignItems: 'center',
@@ -336,12 +414,10 @@ const styles = StyleSheet.create({
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1C1C1E',
     marginTop: 16,
   },
   emptyStateText: {
     fontSize: 14,
-    color: '#8E8E93',
     textAlign: 'center',
     marginTop: 8,
     maxWidth: 280,

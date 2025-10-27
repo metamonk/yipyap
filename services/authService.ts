@@ -216,8 +216,24 @@ export async function sendPasswordResetEmail(email: string): Promise<void> {
 
     // Send password reset email
     const auth = getFirebaseAuth();
+
+    if (__DEV__) {
+      console.log('[AuthService] Sending password reset email to:', email);
+      console.log('[AuthService] Firebase Auth Domain:', auth.config.authDomain);
+    }
+
     await firebaseSendPasswordResetEmail(auth, email);
+
+    if (__DEV__) {
+      console.log('[AuthService] Password reset email sent successfully');
+      console.log('[AuthService] NOTE: Firebase Auth will silently succeed even if user does not exist (security feature)');
+      console.log('[AuthService] Check spam folder if email not received');
+    }
   } catch (error: unknown) {
+    if (__DEV__) {
+      console.error('[AuthService] Password reset email failed:', error);
+    }
+
     // Handle Firebase Auth errors
     if (isFirebaseError(error)) {
       throw createAuthError(error.code, error.message);

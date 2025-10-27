@@ -21,6 +21,7 @@ import {
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/contexts/ThemeContext';
 import { getConversation, removeParticipant } from '@/services/conversationService';
 import { getUserProfiles } from '@/services/userService';
 import { ParticipantListItem } from '@/components/conversation/ParticipantListItem';
@@ -45,6 +46,7 @@ export default function GroupMembersScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const conversationId = params.id;
   const { user } = useAuth();
+  const { theme } = useTheme();
 
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [participants, setParticipants] = useState<User[]>([]);
@@ -134,32 +136,88 @@ export default function GroupMembersScreen() {
     );
   };
 
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.backgroundSecondary,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: theme.colors.backgroundSecondary,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: theme.spacing.base,
+      paddingVertical: theme.spacing.md,
+      backgroundColor: theme.colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    headerTitle: {
+      fontSize: 18,
+      fontWeight: theme.typography.fontWeight.semibold,
+      color: theme.colors.textPrimary,
+    },
+    headerSubtitle: {
+      fontSize: theme.typography.fontSize.xs,
+      color: theme.colors.textSecondary,
+      marginTop: 2,
+    },
+    groupInfo: {
+      paddingHorizontal: theme.spacing.base,
+      paddingVertical: theme.spacing.md,
+      backgroundColor: theme.colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    groupName: {
+      fontSize: theme.typography.fontSize.base,
+      fontWeight: theme.typography.fontWeight.semibold,
+      color: theme.colors.textPrimary,
+      marginBottom: 4,
+    },
+    creatorHint: {
+      fontSize: theme.typography.fontSize.xs,
+      color: theme.colors.textSecondary,
+    },
+    emptyText: {
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.textSecondary,
+      marginTop: theme.spacing.base,
+    },
+  });
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+      <SafeAreaView style={dynamicStyles.loadingContainer}>
+        <ActivityIndicator size="large" color={theme.colors.accent} />
       </SafeAreaView>
     );
   }
 
   if (!conversation) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <Text>Group not found</Text>
+      <SafeAreaView style={dynamicStyles.loadingContainer}>
+        <Text style={{ color: theme.colors.textPrimary }}>Group not found</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={dynamicStyles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={dynamicStyles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={28} color="#007AFF" />
+          <Ionicons name="chevron-back" size={28} color={theme.colors.accent} />
         </TouchableOpacity>
         <View style={styles.headerInfo}>
-          <Text style={styles.headerTitle}>Members</Text>
-          <Text style={styles.headerSubtitle}>
+          <Text style={dynamicStyles.headerTitle}>Members</Text>
+          <Text style={dynamicStyles.headerSubtitle}>
             {participants.length} {participants.length === 1 ? 'member' : 'members'}
           </Text>
         </View>
@@ -167,10 +225,10 @@ export default function GroupMembersScreen() {
       </View>
 
       {/* Group Info */}
-      <View style={styles.groupInfo}>
-        <Text style={styles.groupName}>{conversation.groupName}</Text>
+      <View style={dynamicStyles.groupInfo}>
+        <Text style={dynamicStyles.groupName}>{conversation.groupName}</Text>
         {isCreator && (
-          <Text style={styles.creatorHint}>
+          <Text style={dynamicStyles.creatorHint}>
             Tap the remove button to remove members from this group
           </Text>
         )}
@@ -184,8 +242,8 @@ export default function GroupMembersScreen() {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="people-outline" size={64} color="#C7C7CC" />
-            <Text style={styles.emptyText}>No members found</Text>
+            <Ionicons name="people-outline" size={80} color={theme.colors.textTertiary} />
+            <Text style={dynamicStyles.emptyText}>No members found</Text>
           </View>
         }
       />
@@ -193,27 +251,8 @@ export default function GroupMembersScreen() {
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8F9FA',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
   backButton: {
     padding: 4,
   },
@@ -221,35 +260,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#000',
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: '#8E8E93',
-    marginTop: 2,
-  },
   placeholder: {
     width: 36,
-  },
-  groupInfo: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  groupName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-    marginBottom: 4,
-  },
-  creatorHint: {
-    fontSize: 13,
-    color: '#8E8E93',
   },
   listContent: {
     paddingBottom: 20,
@@ -259,10 +271,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 64,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#8E8E93',
-    marginTop: 16,
   },
 });

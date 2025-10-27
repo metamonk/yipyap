@@ -24,6 +24,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/contexts/ThemeContext';
 import { dashboardService } from '@/services/dashboardService';
 import type { AIPerformanceMetrics } from '@/types/dashboard';
 import { MetricsChart, ChartData } from './MetricsChart';
@@ -60,11 +61,69 @@ export function AIMetricsDashboard({
   onRefresh,
   initiallyCollapsed = true,
 }: AIMetricsDashboardProps) {
+  const { theme } = useTheme();
   const [metrics, setMetrics] = useState<AIPerformanceMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>('7days');
   const [isCollapsed, setIsCollapsed] = useState(initiallyCollapsed);
+
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.borderLight,
+      ...theme.shadows.sm,
+    },
+    headerTitle: {
+      color: theme.colors.textPrimary,
+    },
+    previewLabel: {
+      color: theme.colors.textSecondary,
+    },
+    previewValue: {
+      color: theme.colors.textPrimary,
+    },
+    periodButton: {
+      borderColor: theme.colors.borderLight,
+      backgroundColor: theme.colors.surface,
+    },
+    periodButtonActive: {
+      backgroundColor: theme.colors.accent,
+      borderColor: theme.colors.accent,
+    },
+    periodButtonTextActive: {
+      color: '#FFFFFF',
+    },
+    periodButtonText: {
+      color: theme.colors.textSecondary,
+    },
+    metricCard: {
+      backgroundColor: theme.colors.backgroundSecondary,
+      borderColor: theme.colors.borderLight,
+    },
+    metricLabel: {
+      color: theme.colors.textSecondary,
+    },
+    metricValue: {
+      color: theme.colors.textPrimary,
+    },
+    metricSubtext: {
+      color: theme.colors.textTertiary,
+    },
+    sectionTitle: {
+      color: theme.colors.textPrimary,
+    },
+    loadingText: {
+      color: theme.colors.textSecondary,
+    },
+    errorText: {
+      color: theme.colors.error,
+    },
+    retryButton: {
+      backgroundColor: theme.colors.accent,
+    },
+  });
 
   // Fetch metrics on mount and when period changes
   useEffect(() => {
@@ -101,10 +160,10 @@ export function AIMetricsDashboard({
   // Loading state
   if (loading && !metrics) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, dynamicStyles.container]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3182CE" />
-          <Text style={styles.loadingText}>Loading AI metrics...</Text>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={[styles.loadingText, dynamicStyles.loadingText]}>Loading AI metrics...</Text>
         </View>
       </View>
     );
@@ -113,13 +172,13 @@ export function AIMetricsDashboard({
   // Error state
   if (error && !metrics) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, dynamicStyles.container]}>
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={48} color="#E53E3E" />
-          <Text style={styles.errorText}>{error}</Text>
+          <Ionicons name="alert-circle" size={48} color={theme.colors.error} />
+          <Text style={[styles.errorText, dynamicStyles.errorText]}>{error}</Text>
           {onRefresh && (
             <TouchableOpacity
-              style={styles.retryButton}
+              style={[styles.retryButton, dynamicStyles.retryButton]}
               onPress={handleRefresh}
               accessibilityLabel="Retry loading AI metrics"
               accessibilityRole="button"
@@ -183,7 +242,7 @@ export function AIMetricsDashboard({
   };
 
   return (
-    <View style={styles.container} accessibilityLabel="AI performance metrics widget">
+    <View style={[styles.container, dynamicStyles.container]} accessibilityLabel="AI performance metrics widget">
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -196,14 +255,14 @@ export function AIMetricsDashboard({
           <Ionicons
             name="bar-chart-outline"
             size={20}
-            color="#3182CE"
+            color={theme.colors.accent}
             style={styles.headerIcon}
           />
-          <Text style={styles.headerTitle}>{title}</Text>
+          <Text style={[styles.headerTitle, dynamicStyles.headerTitle]}>{title}</Text>
           <Ionicons
             name={isCollapsed ? 'chevron-down' : 'chevron-up'}
             size={20}
-            color="#6B7280"
+            color={theme.colors.textSecondary}
             style={styles.collapseIcon}
           />
         </TouchableOpacity>
@@ -214,7 +273,7 @@ export function AIMetricsDashboard({
             accessibilityLabel="Refresh AI metrics"
             accessibilityRole="button"
           >
-            <Ionicons name="refresh-outline" size={20} color="#6B7280" />
+            <Ionicons name="refresh-outline" size={20} color={theme.colors.textSecondary} />
           </TouchableOpacity>
         )}
       </View>
@@ -223,17 +282,17 @@ export function AIMetricsDashboard({
       {isCollapsed && (
         <View style={styles.collapsedPreview}>
           <View style={styles.previewRow}>
-            <Text style={styles.previewLabel}>Accuracy:</Text>
-            <Text style={styles.previewValue}>{categorizationMetrics.accuracy.toFixed(1)}%</Text>
+            <Text style={[styles.previewLabel, dynamicStyles.previewLabel]}>Accuracy:</Text>
+            <Text style={[styles.previewValue, dynamicStyles.previewValue]}>{categorizationMetrics.accuracy.toFixed(1)}%</Text>
           </View>
           <View style={styles.previewRow}>
-            <Text style={styles.previewLabel}>Time Saved:</Text>
-            <Text style={styles.previewValue}>{timeSavedMetrics.totalMinutesSaved} min</Text>
+            <Text style={[styles.previewLabel, dynamicStyles.previewLabel]}>Time Saved:</Text>
+            <Text style={[styles.previewValue, dynamicStyles.previewValue]}>{timeSavedMetrics.totalMinutesSaved} min</Text>
           </View>
           {showCostMetrics && (
             <View style={styles.previewRow}>
-              <Text style={styles.previewLabel}>Cost:</Text>
-              <Text style={styles.previewValue}>${costMetrics.totalCostUSD.toFixed(2)}</Text>
+              <Text style={[styles.previewLabel, dynamicStyles.previewLabel]}>Cost:</Text>
+              <Text style={[styles.previewValue, dynamicStyles.previewValue]}>${costMetrics.totalCostUSD.toFixed(2)}</Text>
             </View>
           )}
         </View>
@@ -245,123 +304,94 @@ export function AIMetricsDashboard({
           {/* Period Selector */}
           <View style={styles.periodSelector}>
             <TouchableOpacity
-              style={[styles.periodButton, period === '7days' && styles.periodButtonActive]}
+              style={[styles.periodButton, dynamicStyles.periodButton, period === '7days' && dynamicStyles.periodButtonActive]}
               onPress={() => handlePeriodChange('7days')}
               accessibilityRole="button"
               accessibilityLabel="View 7 days metrics"
               accessibilityState={{ selected: period === '7days' }}
             >
-              <Text style={[styles.periodButtonText, period === '7days' && styles.periodButtonTextActive]}>
+              <Text style={[styles.periodButtonText, dynamicStyles.periodButtonText, period === '7days' && dynamicStyles.periodButtonTextActive]}>
                 7 Days
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.periodButton, period === '30days' && styles.periodButtonActive]}
+              style={[styles.periodButton, dynamicStyles.periodButton, period === '30days' && dynamicStyles.periodButtonActive]}
               onPress={() => handlePeriodChange('30days')}
               accessibilityRole="button"
               accessibilityLabel="View 30 days metrics"
               accessibilityState={{ selected: period === '30days' }}
             >
-              <Text style={[styles.periodButtonText, period === '30days' && styles.periodButtonTextActive]}>
+              <Text style={[styles.periodButtonText, dynamicStyles.periodButtonText, period === '30days' && dynamicStyles.periodButtonTextActive]}>
                 30 Days
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.periodButton, period === '90days' && styles.periodButtonActive]}
+              style={[styles.periodButton, dynamicStyles.periodButton, period === '90days' && dynamicStyles.periodButtonActive]}
               onPress={() => handlePeriodChange('90days')}
               accessibilityRole="button"
               accessibilityLabel="View 90 days metrics"
               accessibilityState={{ selected: period === '90days' }}
             >
-              <Text style={[styles.periodButtonText, period === '90days' && styles.periodButtonTextActive]}>
+              <Text style={[styles.periodButtonText, dynamicStyles.periodButtonText, period === '90days' && dynamicStyles.periodButtonTextActive]}>
                 90 Days
               </Text>
             </TouchableOpacity>
           </View>
 
-          {/* Main Metrics Grid */}
+          {/* Main Metrics Grid - Simplified to 3 key metrics */}
           <View style={styles.metricsGrid}>
             {/* Categorization Accuracy */}
-            <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>Categorization Accuracy</Text>
+            <View style={[styles.metricCard, dynamicStyles.metricCard]}>
+              <Text style={[styles.metricLabel, dynamicStyles.metricLabel]}>Accuracy</Text>
               <Text
-                style={styles.metricValue}
+                style={[styles.metricValue, dynamicStyles.metricValue]}
                 accessibilityLabel={`Categorization accuracy ${categorizationMetrics.accuracy.toFixed(1)} percent`}
               >
                 {categorizationMetrics.accuracy.toFixed(1)}%
               </Text>
-              <Text style={styles.metricSubtext}>
-                {categorizationMetrics.totalCategorized} messages
+              <Text style={[styles.metricSubtext, dynamicStyles.metricSubtext]}>
+                {categorizationMetrics.totalCategorized} msgs
               </Text>
             </View>
 
-            {/* Time Saved */}
-            <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>Time Saved</Text>
+            {/* Time Saved - Simplified, removed breakdown */}
+            <View style={[styles.metricCard, dynamicStyles.metricCard]}>
+              <Text style={[styles.metricLabel, dynamicStyles.metricLabel]}>Time Saved</Text>
               <Text
-                style={styles.metricValue}
+                style={[styles.metricValue, dynamicStyles.metricValue]}
                 accessibilityLabel={`${timeSavedMetrics.totalMinutesSaved} minutes saved`}
               >
                 {timeSavedMetrics.totalMinutesSaved}
-                <Text style={styles.metricUnit}> min</Text>
+                <Text style={[styles.metricUnit, dynamicStyles.metricSubtext]}> min</Text>
               </Text>
-              <View style={styles.metricBreakdown}>
-                <Text style={styles.metricBreakdownItem}>
-                  Auto-responses: {timeSavedMetrics.fromAutoResponses}m
-                </Text>
-                <Text style={styles.metricBreakdownItem}>
-                  Suggestions: {timeSavedMetrics.fromSuggestions}m
-                </Text>
-              </View>
+              <Text style={[styles.metricSubtext, dynamicStyles.metricSubtext]}>
+                Automation
+              </Text>
             </View>
 
             {/* Cost Tracking (Conditional) */}
             {showCostMetrics && (
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>AI Cost</Text>
+              <View style={[styles.metricCard, dynamicStyles.metricCard]}>
+                <Text style={[styles.metricLabel, dynamicStyles.metricLabel]}>AI Cost</Text>
                 <Text
-                  style={styles.metricValue}
+                  style={[styles.metricValue, dynamicStyles.metricValue]}
                   accessibilityLabel={`Total cost ${costMetrics.totalCostUSD.toFixed(2)} dollars`}
                 >
                   ${costMetrics.totalCostUSD.toFixed(2)}
                 </Text>
-                <Text style={styles.metricSubtext}>
-                  ${costMetrics.averageCostPerMessage.toFixed(4)}/msg
+                <Text style={[styles.metricSubtext, dynamicStyles.metricSubtext]}>
+                  This period
                 </Text>
               </View>
             )}
-
-            {/* Voice Matching Acceptance */}
-            <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>Voice Matching</Text>
-              <Text
-                style={styles.metricValue}
-                accessibilityLabel={`Voice matching acceptance rate ${voiceMatchingAcceptance} percent`}
-              >
-                {voiceMatchingAcceptance}%
-              </Text>
-              <Text style={styles.metricSubtext}>Acceptance rate</Text>
-            </View>
-
-            {/* FAQ Auto-Response Rate */}
-            <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>FAQ Auto-Response</Text>
-              <Text
-                style={styles.metricValue}
-                accessibilityLabel={`FAQ match rate ${faqMatchRate} percent`}
-              >
-                {faqMatchRate}%
-              </Text>
-              <Text style={styles.metricSubtext}>Match rate</Text>
-            </View>
           </View>
 
           {/* Trend Charts */}
           {performanceTrends.length > 0 && (
             <View style={styles.chartsSection}>
-              <Text style={styles.sectionTitle}>Performance Trends</Text>
+              <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>Performance Trends</Text>
 
               {/* Accuracy Chart */}
               {accuracyChartData.datasets[0].data.length > 0 && (
@@ -402,19 +432,13 @@ export function AIMetricsDashboard({
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
     borderRadius: 12,
-    padding: 16,
+    padding: 20,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
   },
   header: {
     flexDirection: 'row',
@@ -431,9 +455,8 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#1F2937',
     flex: 1,
   },
   collapseIcon: {
@@ -449,12 +472,10 @@ const styles = StyleSheet.create({
   },
   previewLabel: {
     fontSize: 14,
-    color: '#6B7280',
   },
   previewValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1F2937',
   },
   content: {
     maxHeight: 600,
@@ -471,21 +492,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
   },
   periodButtonActive: {
-    backgroundColor: '#3182CE',
-    borderColor: '#3182CE',
+    // Colors in dynamicStyles
   },
   periodButtonText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#6B7280',
   },
   periodButtonTextActive: {
-    color: '#FFFFFF',
+    // Colors in dynamicStyles
   },
   metricsGrid: {
     flexDirection: 'row',
@@ -496,47 +513,35 @@ const styles = StyleSheet.create({
   metricCard: {
     flex: 1,
     minWidth: '45%',
-    backgroundColor: '#F9FAFB',
-    padding: 12,
-    borderRadius: 8,
+    padding: 16,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
   metricLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 4,
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
   },
   metricValue: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '700',
-    color: '#1F2937',
     marginBottom: 4,
   },
   metricUnit: {
     fontSize: 16,
     fontWeight: '400',
-    color: '#6B7280',
   },
   metricSubtext: {
     fontSize: 11,
-    color: '#9CA3AF',
-  },
-  metricBreakdown: {
-    marginTop: 4,
-  },
-  metricBreakdownItem: {
-    fontSize: 10,
-    color: '#6B7280',
-    marginBottom: 2,
   },
   chartsSection: {
     marginTop: 8,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#1F2937',
     marginBottom: 12,
   },
   loadingContainer: {
@@ -546,7 +551,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: '#6B7280',
   },
   errorContainer: {
     paddingVertical: 32,
@@ -556,13 +560,11 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 16,
     fontSize: 14,
-    color: '#E53E3E',
     textAlign: 'center',
   },
   retryButton: {
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: '#3182CE',
     borderRadius: 8,
   },
   retryButtonText: {

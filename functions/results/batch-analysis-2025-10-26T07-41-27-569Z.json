@@ -1,0 +1,20 @@
+{
+  "stats": {
+    "totalCreators": 0,
+    "totalMessages": 0,
+    "avgMessagesPerCreator": null,
+    "highPriorityDistribution": {
+      "total": 0,
+      "withBusiness": 0,
+      "withUrgent": 0,
+      "withCrisis": 0
+    },
+    "scoreDistribution": {
+      "high": 0,
+      "medium": 0,
+      "low": 0
+    }
+  },
+  "digests": [],
+  "sampleDigests": []
+}

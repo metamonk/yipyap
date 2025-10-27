@@ -23,6 +23,7 @@ import { View, Text, StyleSheet, Alert, ActivityIndicator, RefreshControl } from
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { doc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import { getFirebaseDb } from '@/services/firebase';
+import { useTheme } from '@/contexts/ThemeContext';
 import type { DashboardConfig, DashboardSummary } from '@/types/dashboard';
 import type { Message } from '@/types/models';
 
@@ -32,6 +33,8 @@ import { PriorityFeed } from './PriorityFeed';
 import { AIMetricsDashboard } from './AIMetricsDashboard';
 import { QuickActions } from './QuickActions';
 import { OpportunityFeed } from './OpportunityFeed';
+import { PriorityMessagesModal } from './PriorityMessagesModal';
+import { OpportunityMessagesModal } from './OpportunityMessagesModal';
 
 /**
  * Props for DashboardWidgetContainer component
@@ -43,7 +46,10 @@ export interface DashboardWidgetContainerProps {
   /** Callback when a priority message is pressed */
   onMessagePress: (conversationId: string) => void;
 
-  /** Optional dashboard summary data (if already fetched) */
+  /** Callback when "View Details" is tapped on daily summary widget (Story 6.1) */
+  onViewDigestDetails?: () => void;
+
+  /** Optional dashboard summary data (if already fetched) - DEPRECATED (Story 6.1: now fetched internally) */
   dashboardSummary?: DashboardSummary;
 
   /** Optional opportunities data (if already fetched) */
@@ -98,6 +104,7 @@ export const DEFAULT_DASHBOARD_CONFIG: Omit<DashboardConfig, 'userId' | 'updated
 export const DashboardWidgetContainer = memo(({
   userId,
   onMessagePress,
+  onViewDigestDetails,
   dashboardSummary,
   opportunities = [],
   loading = false,
@@ -106,9 +113,15 @@ export const DashboardWidgetContainer = memo(({
   refreshing = false,
   aiAvailable = true, // Default to true (optimistic)
 }: DashboardWidgetContainerProps) => {
+  const { theme } = useTheme();
   const [config, setConfig] = useState<DashboardConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
   const [widgetItems, setWidgetItems] = useState<WidgetItem[]>([]);
+
+  // Modal states
+  const [showPriorityModal, setShowPriorityModal] = useState(false);
+  const [showOpportunityModal, setShowOpportunityModal] = useState(false);
+  const [priorityMessageCount, setPriorityMessageCount] = useState(0);
 
   /**
    * Load dashboard configuration from Firestore
@@ -214,17 +227,17 @@ export const DashboardWidgetContainer = memo(({
         if (!dashboardSummary) {
           // Data not available yet - show loading or placeholder
           return (
-            <View style={styles.widgetPlaceholder}>
-              <Text style={styles.placeholderText}>Daily Summary - Loading...</Text>
+            <View style={[styles.widgetPlaceholder, dynamicStyles.widgetPlaceholder]}>
+              <Text style={[styles.placeholderText, dynamicStyles.placeholderText]}>Daily Summary - Loading...</Text>
             </View>
           );
         }
         return (
           <DailySummaryWidget
-            summary={dashboardSummary}
             loading={loading}
             error={error}
             onRefresh={onRefresh}
+            onViewDetails={onViewDigestDetails}
           />
         );
 
@@ -234,6 +247,9 @@ export const DashboardWidgetContainer = memo(({
             userId={userId}
             maxResults={20}
             onMessagePress={onMessagePress}
+            previewMode={true}
+            onViewAll={() => setShowPriorityModal(true)}
+            onMessagesLoaded={(count) => setPriorityMessageCount(count)}
           />
         );
 
@@ -258,6 +274,8 @@ export const DashboardWidgetContainer = memo(({
             opportunities={opportunities}
             onRefresh={onRefresh}
             loading={loading}
+            previewMode={true}
+            onViewAll={() => setShowOpportunityModal(true)}
           />
         );
 
@@ -265,6 +283,43 @@ export const DashboardWidgetContainer = memo(({
         return null;
     }
   }, [userId, onMessagePress, dashboardSummary, opportunities, loading, error, onRefresh, config]);
+
+  /**
+   * Dynamic styles based on theme
+   */
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      backgroundColor: theme.colors.background,
+    },
+    widgetPlaceholder: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.borderLight,
+    },
+    placeholderText: {
+      color: theme.colors.textSecondary,
+    },
+    loadingContainer: {
+      backgroundColor: theme.colors.background,
+    },
+    loadingText: {
+      color: theme.colors.textSecondary,
+    },
+    errorContainer: {
+      backgroundColor: theme.colors.background,
+    },
+    errorText: {
+      color: theme.colors.error,
+    },
+    emptyContainer: {
+      backgroundColor: theme.colors.background,
+    },
+    emptyText: {
+      color: theme.colors.textPrimary,
+    },
+    emptySubtext: {
+      color: theme.colors.textSecondary,
+    },
+  });
 
   /**
    * Render draggable widget item
@@ -316,9 +371,9 @@ export const DashboardWidgetContainer = memo(({
   // Loading state
   if (configLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3182CE" />
-        <Text style={styles.loadingText}>Loading dashboard...</Text>
+      <View style={[styles.loadingContainer, dynamicStyles.loadingContainer]}>
+        <ActivityIndicator size="large" color={theme.colors.accent} />
+        <Text style={[styles.loadingText, dynamicStyles.loadingText]}>Loading dashboard...</Text>
       </View>
     );
   }
@@ -326,8 +381,8 @@ export const DashboardWidgetContainer = memo(({
   // No config (shouldn't happen with fallback)
   if (!config) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Failed to load dashboard</Text>
+      <View style={[styles.errorContainer, dynamicStyles.errorContainer]}>
+        <Text style={[styles.errorText, dynamicStyles.errorText]}>Failed to load dashboard</Text>
       </View>
     );
   }
@@ -335,9 +390,9 @@ export const DashboardWidgetContainer = memo(({
   // Empty state (no visible widgets)
   if (widgetItems.length === 0) {
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>No widgets enabled</Text>
-        <Text style={styles.emptySubtext}>
+      <View style={[styles.emptyContainer, dynamicStyles.emptyContainer]}>
+        <Text style={[styles.emptyText, dynamicStyles.emptyText]}>No widgets enabled</Text>
+        <Text style={[styles.emptySubtext, dynamicStyles.emptySubtext]}>
           Go to Settings to customize your dashboard
         </Text>
       </View>
@@ -345,40 +400,62 @@ export const DashboardWidgetContainer = memo(({
   }
 
   return (
-    <View style={styles.container}>
-      <DraggableFlatList
-        data={widgetItems}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.key}
-        onDragEnd={handleDragEnd}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={true}
-        activationDistance={10}
-        refreshControl={
-          onRefresh ? (
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor="#3182CE"
-              colors={['#3182CE']}
-            />
-          ) : undefined
-        }
+    <>
+      <View style={[styles.container, dynamicStyles.container]}>
+        <DraggableFlatList
+          data={widgetItems}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.key}
+          onDragEnd={handleDragEnd}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={true}
+          activationDistance={10}
+          refreshControl={
+            onRefresh ? (
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={theme.colors.accent}
+                colors={[theme.colors.accent]}
+              />
+            ) : undefined
+          }
+        />
+      </View>
+
+      {/* Priority Messages Modal */}
+      <PriorityMessagesModal
+        visible={showPriorityModal}
+        onClose={() => setShowPriorityModal(false)}
+        userId={userId}
+        onMessagePress={(conversationId) => {
+          setShowPriorityModal(false);
+          onMessagePress(conversationId);
+        }}
+        messageCount={priorityMessageCount}
       />
-    </View>
+
+      {/* Opportunity Messages Modal */}
+      <OpportunityMessagesModal
+        visible={showOpportunityModal}
+        onClose={() => setShowOpportunityModal(false)}
+        opportunities={opportunities}
+        onRefresh={onRefresh}
+      />
+    </>
   );
 });
 
 DashboardWidgetContainer.displayName = 'DashboardWidgetContainer';
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
   },
   listContent: {
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+    paddingVertical: 24,
+    paddingHorizontal: 24,
   },
   widgetWrapper: {
     marginBottom: 16,
@@ -388,9 +465,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.02 }],
   },
   widgetPlaceholder: {
-    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
@@ -399,48 +474,40 @@ const styles = StyleSheet.create({
   },
   placeholderText: {
     fontSize: 14,
-    color: '#6B7280',
   },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F9FAFB',
     padding: 32,
   },
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: '#6B7280',
   },
   errorContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F9FAFB',
     padding: 32,
   },
   errorText: {
     fontSize: 16,
-    color: '#E53E3E',
     textAlign: 'center',
   },
   emptyContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F9FAFB',
     padding: 32,
   },
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#4A5568',
     marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#6B7280',
     textAlign: 'center',
   },
 });

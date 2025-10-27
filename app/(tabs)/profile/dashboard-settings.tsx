@@ -2,7 +2,7 @@
  * Dashboard Settings Screen - Story 5.7 Task 13
  *
  * @remarks
- * Allows users to customize their Command Center dashboard:
+ * Allows users to customize their Dashboard:
  * - Widget visibility toggles
  * - Widget reordering (up/down buttons)
  * - Refresh interval configuration
@@ -27,6 +27,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useTheme } from '@/contexts/ThemeContext';
 import { doc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import { getFirebaseDb } from '@/services/firebase';
 import { useAuth } from '@/hooks/useAuth';
@@ -62,10 +63,114 @@ const WIDGET_DESCRIPTIONS: Record<string, string> = {
 export default function DashboardSettingsScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const { theme } = useTheme();
   const [config, setConfig] = useState<DashboardConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    title: {
+      color: theme.colors.textPrimary,
+    },
+    subtitle: {
+      color: theme.colors.textSecondary,
+    },
+    sectionHeader: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: theme.colors.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 12,
+      marginTop: 8,
+    },
+    loadingText: {
+      color: theme.colors.textSecondary,
+    },
+    errorText: {
+      color: theme.colors.error,
+    },
+    retryButton: {
+      backgroundColor: theme.colors.accent,
+    },
+    section: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.borderLight,
+      ...theme.shadows.sm,
+    },
+    sectionTitle: {
+      color: theme.colors.textPrimary,
+    },
+    sectionDescription: {
+      color: theme.colors.textSecondary,
+    },
+    settingRow: {
+      borderBottomColor: theme.colors.borderLight,
+    },
+    settingLabel: {
+      color: theme.colors.textPrimary,
+    },
+    settingDescription: {
+      color: theme.colors.textSecondary,
+    },
+    orderRow: {
+      borderBottomColor: theme.colors.borderLight,
+    },
+    orderNumber: {
+      color: theme.colors.accent,
+    },
+    orderLabel: {
+      color: theme.colors.textPrimary,
+    },
+    orderButton: {
+      backgroundColor: theme.colors.backgroundSecondary || '#F3F4F6',
+    },
+    intervalButton: {
+      backgroundColor: theme.colors.backgroundSecondary || '#F3F4F6',
+    },
+    intervalButtonActive: {
+      backgroundColor: theme.colors.accentLight || '#DBEAFE',
+      borderColor: theme.colors.accent,
+    },
+    intervalButtonText: {
+      color: theme.colors.textSecondary,
+    },
+    intervalButtonTextActive: {
+      color: theme.colors.accent,
+    },
+    periodButton: {
+      backgroundColor: theme.colors.backgroundSecondary || '#F3F4F6',
+    },
+    periodButtonActive: {
+      backgroundColor: theme.colors.accentLight || '#DBEAFE',
+      borderColor: theme.colors.accent,
+    },
+    periodButtonText: {
+      color: theme.colors.textSecondary,
+    },
+    periodButtonTextActive: {
+      color: theme.colors.accent,
+    },
+    resetButton: {
+      backgroundColor: theme.colors.errorBackground || '#FEF2F2',
+      borderColor: theme.colors.errorBorder || '#FEE2E2',
+    },
+    resetButtonText: {
+      color: theme.colors.error,
+    },
+    saveButton: {
+      backgroundColor: theme.colors.accent,
+    },
+    saveButtonDisabled: {
+      backgroundColor: theme.colors.disabled || '#D1D5DB',
+    },
+  });
 
   /**
    * Load current dashboard configuration from Firestore
@@ -284,7 +389,7 @@ export default function DashboardSettingsScreen() {
   // Loading state
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={dynamicStyles.container}>
         <NavigationHeader
           title="Dashboard Settings"
           leftAction={{
@@ -293,8 +398,8 @@ export default function DashboardSettingsScreen() {
           }}
         />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3182CE" />
-          <Text style={styles.loadingText}>Loading settings...</Text>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={[styles.loadingText, dynamicStyles.loadingText]}>Loading settings...</Text>
         </View>
       </View>
     );
@@ -303,7 +408,7 @@ export default function DashboardSettingsScreen() {
   // No config (shouldn't happen with fallback)
   if (!config) {
     return (
-      <View style={styles.container}>
+      <View style={dynamicStyles.container}>
         <NavigationHeader
           title="Dashboard Settings"
           leftAction={{
@@ -312,8 +417,8 @@ export default function DashboardSettingsScreen() {
           }}
         />
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Failed to load settings</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadConfig}>
+          <Text style={[styles.errorText, dynamicStyles.errorText]}>Failed to load settings</Text>
+          <TouchableOpacity style={[styles.retryButton, dynamicStyles.retryButton]} onPress={loadConfig}>
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
@@ -322,7 +427,7 @@ export default function DashboardSettingsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={dynamicStyles.container}>
       <NavigationHeader
         title="Dashboard Settings"
         leftAction={{
@@ -332,59 +437,67 @@ export default function DashboardSettingsScreen() {
       />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {/* Page Header */}
+        <Text style={[styles.title, dynamicStyles.title]}>Dashboard Settings</Text>
+        <Text style={[styles.subtitle, dynamicStyles.subtitle]}>
+          Customize widget visibility, order, and display preferences for your Dashboard.
+        </Text>
+
         {/* Widget Visibility Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Widget Visibility</Text>
-          <Text style={styles.sectionDescription}>
+        <Text style={dynamicStyles.sectionHeader}>WIDGET VISIBILITY</Text>
+        <View style={[styles.section, dynamicStyles.section]}>
+          <Text style={[styles.sectionDescription, dynamicStyles.sectionDescription]}>
             Choose which widgets to display on your dashboard
           </Text>
 
           {Object.entries(config.widgetVisibility).map(([widgetId, isVisible]) => (
-            <View key={widgetId} style={styles.settingRow}>
+            <View key={widgetId} style={[styles.settingRow, dynamicStyles.settingRow]}>
               <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>{WIDGET_NAMES[widgetId]}</Text>
-                <Text style={styles.settingDescription}>
+                <Text style={[styles.settingLabel, dynamicStyles.settingLabel]}>{WIDGET_NAMES[widgetId]}</Text>
+                <Text style={[styles.settingDescription, dynamicStyles.settingDescription]}>
                   {WIDGET_DESCRIPTIONS[widgetId]}
                 </Text>
               </View>
               <Switch
                 value={isVisible}
                 onValueChange={() => toggleWidgetVisibility(widgetId as keyof typeof config.widgetVisibility)}
-                trackColor={{ false: '#D1D5DB', true: '#93C5FD' }}
-                thumbColor={isVisible ? '#3182CE' : '#F3F4F6'}
+                trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+                thumbColor="#FFFFFF"
+                ios_backgroundColor={theme.colors.borderLight}
               />
             </View>
           ))}
         </View>
 
         {/* Widget Order Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Widget Order</Text>
-          <Text style={styles.sectionDescription}>
+        <Text style={dynamicStyles.sectionHeader}>WIDGET ORDER</Text>
+        <View style={[styles.section, dynamicStyles.section]}>
+          <Text style={[styles.sectionDescription, dynamicStyles.sectionDescription]}>
             Arrange widgets in your preferred order (top to bottom)
           </Text>
 
           {config.widgetOrder.map((widgetId, index) => (
-            <View key={widgetId} style={styles.orderRow}>
+            <View key={widgetId} style={[styles.orderRow, dynamicStyles.orderRow]}>
               <View style={styles.orderInfo}>
-                <Text style={styles.orderNumber}>{index + 1}</Text>
-                <Text style={styles.orderLabel}>{WIDGET_NAMES[widgetId]}</Text>
+                <Text style={[styles.orderNumber, dynamicStyles.orderNumber]}>{index + 1}</Text>
+                <Text style={[styles.orderLabel, dynamicStyles.orderLabel]}>{WIDGET_NAMES[widgetId]}</Text>
               </View>
               <View style={styles.orderButtons}>
                 <TouchableOpacity
-                  style={[styles.orderButton, index === 0 && styles.orderButtonDisabled]}
+                  style={[styles.orderButton, dynamicStyles.orderButton, index === 0 && styles.orderButtonDisabled]}
                   onPress={() => moveWidgetUp(index)}
                   disabled={index === 0}
                 >
                   <Ionicons
                     name="chevron-up"
                     size={20}
-                    color={index === 0 ? '#D1D5DB' : '#3182CE'}
+                    color={index === 0 ? theme.colors.disabled || '#D1D5DB' : theme.colors.accent}
                   />
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[
                     styles.orderButton,
+                    dynamicStyles.orderButton,
                     index === config.widgetOrder.length - 1 && styles.orderButtonDisabled,
                   ]}
                   onPress={() => moveWidgetDown(index)}
@@ -393,7 +506,7 @@ export default function DashboardSettingsScreen() {
                   <Ionicons
                     name="chevron-down"
                     size={20}
-                    color={index === config.widgetOrder.length - 1 ? '#D1D5DB' : '#3182CE'}
+                    color={index === config.widgetOrder.length - 1 ? theme.colors.disabled || '#D1D5DB' : theme.colors.accent}
                   />
                 </TouchableOpacity>
               </View>
@@ -402,9 +515,9 @@ export default function DashboardSettingsScreen() {
         </View>
 
         {/* Refresh Interval Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Refresh Interval</Text>
-          <Text style={styles.sectionDescription}>
+        <Text style={dynamicStyles.sectionHeader}>REFRESH INTERVAL</Text>
+        <View style={[styles.section, dynamicStyles.section]}>
+          <Text style={[styles.sectionDescription, dynamicStyles.sectionDescription]}>
             How often to refresh dashboard data (in seconds)
           </Text>
 
@@ -414,14 +527,16 @@ export default function DashboardSettingsScreen() {
                 key={interval}
                 style={[
                   styles.intervalButton,
-                  config.refreshInterval === interval && styles.intervalButtonActive,
+                  dynamicStyles.intervalButton,
+                  config.refreshInterval === interval && dynamicStyles.intervalButtonActive,
                 ]}
                 onPress={() => updateRefreshInterval(interval)}
               >
                 <Text
                   style={[
                     styles.intervalButtonText,
-                    config.refreshInterval === interval && styles.intervalButtonTextActive,
+                    dynamicStyles.intervalButtonText,
+                    config.refreshInterval === interval && dynamicStyles.intervalButtonTextActive,
                   ]}
                 >
                   {interval}s
@@ -432,9 +547,9 @@ export default function DashboardSettingsScreen() {
         </View>
 
         {/* Metrics Display Period Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Metrics Display Period</Text>
-          <Text style={styles.sectionDescription}>
+        <Text style={dynamicStyles.sectionHeader}>METRICS DISPLAY PERIOD</Text>
+        <View style={[styles.section, dynamicStyles.section]}>
+          <Text style={[styles.sectionDescription, dynamicStyles.sectionDescription]}>
             Time period for AI performance metrics
           </Text>
 
@@ -448,14 +563,16 @@ export default function DashboardSettingsScreen() {
                 key={value}
                 style={[
                   styles.periodButton,
-                  config.metricsDisplayPeriod === value && styles.periodButtonActive,
+                  dynamicStyles.periodButton,
+                  config.metricsDisplayPeriod === value && dynamicStyles.periodButtonActive,
                 ]}
                 onPress={() => updateMetricsPeriod(value as '7days' | '30days' | '90days')}
               >
                 <Text
                   style={[
                     styles.periodButtonText,
-                    config.metricsDisplayPeriod === value && styles.periodButtonTextActive,
+                    dynamicStyles.periodButtonText,
+                    config.metricsDisplayPeriod === value && dynamicStyles.periodButtonTextActive,
                   ]}
                 >
                   {label}
@@ -466,24 +583,25 @@ export default function DashboardSettingsScreen() {
         </View>
 
         {/* Cost Metrics Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Cost Transparency</Text>
-          <Text style={styles.sectionDescription}>
+        <Text style={dynamicStyles.sectionHeader}>COST TRANSPARENCY</Text>
+        <View style={[styles.section, dynamicStyles.section]}>
+          <Text style={[styles.sectionDescription, dynamicStyles.sectionDescription]}>
             Show AI API costs in performance metrics
           </Text>
 
-          <View style={styles.settingRow}>
+          <View style={[styles.settingRow, dynamicStyles.settingRow]}>
             <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Show Cost Metrics</Text>
-              <Text style={styles.settingDescription}>
+              <Text style={[styles.settingLabel, dynamicStyles.settingLabel]}>Show Cost Metrics</Text>
+              <Text style={[styles.settingDescription, dynamicStyles.settingDescription]}>
                 Display estimated API costs for transparency
               </Text>
             </View>
             <Switch
               value={config.showCostMetrics}
               onValueChange={toggleCostMetrics}
-              trackColor={{ false: '#D1D5DB', true: '#93C5FD' }}
-              thumbColor={config.showCostMetrics ? '#3182CE' : '#F3F4F6'}
+              trackColor={{ false: theme.colors.borderLight, true: theme.colors.success || '#34C759' }}
+              thumbColor="#FFFFFF"
+              ios_backgroundColor={theme.colors.borderLight}
             />
           </View>
         </View>
@@ -491,15 +609,15 @@ export default function DashboardSettingsScreen() {
         {/* Action Buttons */}
         <View style={styles.actionsSection}>
           <TouchableOpacity
-            style={styles.resetButton}
+            style={[styles.resetButton, dynamicStyles.resetButton]}
             onPress={resetToDefault}
           >
-            <Ionicons name="refresh" size={18} color="#DC2626" />
-            <Text style={styles.resetButtonText}>Reset to Default</Text>
+            <Ionicons name="refresh" size={18} color={theme.colors.error} />
+            <Text style={[styles.resetButtonText, dynamicStyles.resetButtonText]}>Reset to Default</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.saveButton, (!hasChanges || saving) && styles.saveButtonDisabled]}
+            style={[styles.saveButton, dynamicStyles.saveButton, (!hasChanges || saving) && dynamicStyles.saveButtonDisabled]}
             onPress={saveConfig}
             disabled={!hasChanges || saving}
           >
@@ -520,17 +638,24 @@ export default function DashboardSettingsScreen() {
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
+    padding: 24,
     paddingBottom: 32,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    marginBottom: 32,
   },
   loadingContainer: {
     flex: 1,
@@ -541,7 +666,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: '#6B7280',
   },
   errorContainer: {
     flex: 1,
@@ -551,14 +675,12 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: '#E53E3E',
     textAlign: 'center',
     marginBottom: 16,
   },
   retryButton: {
     paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: '#3182CE',
     borderRadius: 8,
   },
   retryButtonText: {
@@ -567,31 +689,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   section: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    padding: 20,
+    marginBottom: 24,
+    borderWidth: 1,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
+    fontSize: 14,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
     marginBottom: 4,
   },
   sectionDescription: {
     fontSize: 14,
-    color: '#6B7280',
     marginBottom: 16,
   },
   settingRow: {
@@ -600,7 +711,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
   },
   settingInfo: {
     flex: 1,
@@ -609,12 +719,10 @@ const styles = StyleSheet.create({
   settingLabel: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#111827',
     marginBottom: 2,
   },
   settingDescription: {
     fontSize: 13,
-    color: '#6B7280',
   },
   orderRow: {
     flexDirection: 'row',
@@ -622,7 +730,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
   },
   orderInfo: {
     flexDirection: 'row',
@@ -632,13 +739,11 @@ const styles = StyleSheet.create({
   orderNumber: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#3182CE',
     width: 32,
   },
   orderLabel: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#111827',
   },
   orderButtons: {
     flexDirection: 'row',
@@ -649,7 +754,6 @@ const styles = StyleSheet.create({
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F3F4F6',
     borderRadius: 8,
   },
   orderButtonDisabled: {
@@ -662,24 +766,14 @@ const styles = StyleSheet.create({
   intervalButton: {
     flex: 1,
     paddingVertical: 12,
-    backgroundColor: '#F3F4F6',
     borderRadius: 8,
     alignItems: 'center',
     borderWidth: 2,
     borderColor: 'transparent',
   },
-  intervalButtonActive: {
-    backgroundColor: '#DBEAFE',
-    borderColor: '#3182CE',
-  },
   intervalButtonText: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#6B7280',
-  },
-  intervalButtonTextActive: {
-    color: '#3182CE',
-    fontWeight: '600',
   },
   periodContainer: {
     flexDirection: 'row',
@@ -688,24 +782,14 @@ const styles = StyleSheet.create({
   periodButton: {
     flex: 1,
     paddingVertical: 12,
-    backgroundColor: '#F3F4F6',
     borderRadius: 8,
     alignItems: 'center',
     borderWidth: 2,
     borderColor: 'transparent',
   },
-  periodButtonActive: {
-    backgroundColor: '#DBEAFE',
-    borderColor: '#3182CE',
-  },
   periodButtonText: {
     fontSize: 15,
     fontWeight: '500',
-    color: '#6B7280',
-  },
-  periodButtonTextActive: {
-    color: '#3182CE',
-    fontWeight: '600',
   },
   actionsSection: {
     marginTop: 8,
@@ -717,15 +801,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 14,
-    backgroundColor: '#FEF2F2',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#FEE2E2',
   },
   resetButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#DC2626',
   },
   saveButton: {
     flexDirection: 'row',
@@ -733,11 +814,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 14,
-    backgroundColor: '#3182CE',
     borderRadius: 8,
-  },
-  saveButtonDisabled: {
-    backgroundColor: '#D1D5DB',
   },
   saveButtonText: {
     fontSize: 16,

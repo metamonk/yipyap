@@ -611,9 +611,9 @@ export async function getUserConversations(
     // Filter out deleted and archived conversations
     const conversations: Conversation[] = [];
     snapshot.forEach((doc) => {
-      const data = doc.data() as Conversation;
+      const data = { ...doc.data(), id: doc.id } as Conversation;
       // Only include if not marked as deleted or archived by this user
-      if (!data.deletedBy[userId] && !data.archivedBy[userId]) {
+      if (!data.deletedBy?.[userId] && !data.archivedBy?.[userId]) {
         conversations.push(data);
       }
     });
@@ -793,9 +793,9 @@ export function subscribeToConversations(
       (snapshot) => {
         const conversations: Conversation[] = [];
         snapshot.forEach((doc) => {
-          const data = doc.data() as Conversation;
+          const data = { ...doc.data(), id: doc.id } as Conversation;
           // Only include if not marked as deleted or archived by this user
-          if (!data.deletedBy[userId] && !data.archivedBy[userId]) {
+          if (!data.deletedBy?.[userId] && !data.archivedBy?.[userId]) {
             conversations.push(data);
           }
         });
@@ -870,9 +870,9 @@ export function subscribeToArchivedConversations(
       (snapshot) => {
         const conversations: Conversation[] = [];
         snapshot.forEach((doc) => {
-          const data = doc.data() as Conversation;
+          const data = { ...doc.data(), id: doc.id } as Conversation;
           // Only include if marked as archived AND not deleted by this user
-          if (data.archivedBy[userId] && !data.deletedBy[userId]) {
+          if (data.archivedBy?.[userId] && !data.deletedBy?.[userId]) {
             conversations.push(data);
           }
         });

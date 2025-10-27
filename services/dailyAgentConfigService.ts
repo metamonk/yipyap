@@ -258,7 +258,9 @@ export async function updateDailyAgentConfig(
       updatedAt: serverTimestamp(),
     };
 
-    await updateDoc(configDoc, updatedConfig as any);
+    // Use setDoc with merge option instead of updateDoc to handle nested objects correctly
+    // This ensures serverTimestamp() and nested fields are properly handled
+    await setDoc(configDoc, updatedConfig, { merge: true });
 
     return {
       ...updatedConfig,

@@ -30,7 +30,11 @@ import {
   UsernameDocument,
   validateUsername,
   validateDisplayName,
+  validateCapacity,
+  validateBoundaryMessage,
   NotificationPreferences,
+  CapacitySettings,
+  DEFAULT_CAPACITY,
 } from '@/types/user';
 
 /**
@@ -719,6 +723,143 @@ export async function updateOpportunityNotificationSettings(
     }
 
     throw new Error('Failed to update opportunity notification settings. Please try again.');
+  }
+}
+
+/**
+ * Updates capacity settings for a user (Story 6.3)
+ * @param uid - Firebase Auth user ID
+ * @param dailyLimit - New daily capacity limit (5-20 messages)
+ * @throws Error if validation fails, user not found, or update fails
+ * @example
+ * ```typescript
+ * await updateCapacitySettings('uid123', 15);
+ * ```
+ */
+export async function updateCapacitySettings(
+  uid: string,
+  dailyLimit: number
+): Promise<void> {
+  // Validate capacity
+  const validation = validateCapacity(dailyLimit);
+  if (!validation.isValid) {
+    throw new Error(validation.error);
+  }
+
+  const db = getFirebaseDb();
+  const userDocRef = doc(db, 'users', uid);
+
+  try {
+    await updateDoc(userDocRef, {
+      'settings.capacity.dailyLimit': dailyLimit,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('Error updating capacity settings:', error);
+
+    const firestoreError = error as FirestoreError;
+    if (firestoreError.code === 'not-found') {
+      throw new Error('User profile not found.');
+    }
+
+    if (firestoreError.code === 'permission-denied') {
+      throw new Error('Permission denied. You can only update your own settings.');
+    }
+
+    throw new Error('Failed to update capacity settings. Please try again.');
+  }
+}
+
+/**
+ * Updates advanced capacity settings (Story 6.5)
+ * @param uid - User ID
+ * @param settings - Advanced capacity settings to update
+ * @throws Error if validation fails or update operation fails
+ */
+export async function updateAdvancedCapacitySettings(
+  uid: string,
+  settings: {
+    boundaryMessage?: string;
+    autoArchiveEnabled?: boolean;
+    requireEditingForBusiness?: boolean;
+    weeklyReportsEnabled?: boolean;
+  }
+): Promise<void> {
+  // Validate boundary message if provided
+  if (settings.boundaryMessage !== undefined) {
+    const validation = validateBoundaryMessage(settings.boundaryMessage);
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+  }
+
+  const db = getFirebaseDb();
+  const userDocRef = doc(db, 'users', uid);
+
+  try {
+    const updateData: { [key: string]: any } = {
+      updatedAt: serverTimestamp(),
+    };
+
+    if (settings.boundaryMessage !== undefined) {
+      updateData['settings.capacity.boundaryMessage'] = settings.boundaryMessage;
+    }
+    if (settings.autoArchiveEnabled !== undefined) {
+      updateData['settings.capacity.autoArchiveEnabled'] = settings.autoArchiveEnabled;
+    }
+    if (settings.requireEditingForBusiness !== undefined) {
+      updateData['settings.capacity.requireEditingForBusiness'] =
+        settings.requireEditingForBusiness;
+    }
+    if (settings.weeklyReportsEnabled !== undefined) {
+      updateData['settings.capacity.weeklyReportsEnabled'] = settings.weeklyReportsEnabled;
+    }
+
+    await updateDoc(userDocRef, updateData);
+  } catch (error) {
+    console.error('Error updating advanced capacity settings:', error);
+
+    const firestoreError = error as FirestoreError;
+    if (firestoreError.code === 'not-found') {
+      throw new Error('User profile not found.');
+    }
+
+    if (firestoreError.code === 'permission-denied') {
+      throw new Error('Permission denied. You can only update your own settings.');
+    }
+
+    throw new Error('Failed to update advanced capacity settings. Please try again.');
+  }
+}
+
+/**
+ * Gets capacity settings for a user (Story 6.3)
+ * @param uid - Firebase Auth user ID
+ * @returns Capacity settings or null if not set (defaults to 10)
+ * @throws Error if fetching fails
+ * @example
+ * ```typescript
+ * const settings = await getCapacitySettings('uid123');
+ * const limit = settings?.dailyLimit ?? DEFAULT_CAPACITY;
+ * ```
+ */
+export async function getCapacitySettings(
+  uid: string
+): Promise<CapacitySettings | null> {
+  try {
+    const db = getFirebaseDb();
+    const userDocRef = doc(db, 'users', uid);
+    const userDoc = await getDoc(userDocRef);
+
+    if (!userDoc.exists()) {
+      return null;
+    }
+
+    const userData = userDoc.data() as User;
+    return userData.settings?.capacity || null;
+  } catch (error) {
+    console.error('Error fetching capacity settings:', error);
+    throw new Error('Failed to fetch capacity settings. Please try again.');
   }
 }
 

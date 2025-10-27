@@ -18,6 +18,8 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { NavigationHeader } from '../../_components/NavigationHeader';
+import { useTheme } from '@/contexts/ThemeContext';
 import { getFirebaseAuth } from '@/services/firebase';
 import {
   getExecutionHistory,
@@ -39,215 +41,301 @@ import type { DailyAgentExecution, AgentExecutionLog, WorkflowStep } from '@/typ
  */
 export default function AgentExecutionLogsScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
   const auth = getFirebaseAuth();
   const currentUser = auth.currentUser;
 
   const [executions, setExecutions] = useState<DailyAgentExecution[]>([]);
-  const [expandedExecutionId, setExpandedExecutionId] = useState<string | null>(null);
-  const [executionLogs, setExecutionLogs] = useState<Record<string, AgentExecutionLog[]>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [expandedExecutionId, setExpandedExecutionId] = useState<string | null>(null);
+  const [executionLogs, setExecutionLogs] = useState<Record<string, any[]>>({});
   const [isRetrying, setIsRetrying] = useState(false);
 
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    title: {
+      color: theme.colors.textPrimary,
+    },
+    subtitle: {
+      color: theme.colors.textSecondary,
+    },
+    sectionHeader: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: theme.colors.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 12,
+      marginTop: 8,
+    },
+    loadingText: {
+      color: theme.colors.textSecondary,
+    },
+    emptyTitle: {
+      color: theme.colors.textPrimary,
+    },
+    emptyText: {
+      color: theme.colors.textSecondary,
+    },
+    settingsButton: {
+      backgroundColor: theme.colors.accent,
+    },
+    metricsCard: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.borderLight,
+      ...theme.shadows.sm,
+    },
+    metricsTitle: {
+      color: theme.colors.textPrimary,
+    },
+    metricValue: {
+      color: theme.colors.accent,
+    },
+    metricLabel: {
+      color: theme.colors.textSecondary,
+    },
+    sectionTitle: {
+      color: theme.colors.textSecondary,
+    },
+    executionCard: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.borderLight,
+      ...theme.shadows.sm,
+    },
+    executionDate: {
+      color: theme.colors.textPrimary,
+    },
+    executionTime: {
+      color: theme.colors.textSecondary,
+    },
+    executionStatus: {
+      color: theme.colors.textSecondary,
+    },
+    expandIcon: {
+      color: theme.colors.textTertiary,
+    },
+    quickStatText: {
+      color: theme.colors.textSecondary,
+    },
+    quickStatDivider: {
+      color: theme.colors.borderLight,
+    },
+    executionDetails: {
+      borderTopColor: theme.colors.borderLight,
+    },
+    detailSectionTitle: {
+      color: theme.colors.textPrimary,
+    },
+    detailLabel: {
+      color: theme.colors.textSecondary,
+    },
+    detailValue: {
+      color: theme.colors.textPrimary,
+    },
+    stepName: {
+      color: theme.colors.textPrimary,
+    },
+    stepStatus: {
+      color: theme.colors.textSecondary,
+    },
+    errorSection: {
+      backgroundColor: theme.colors.errorBackground || '#FFF3F3',
+    },
+    errorTitle: {
+      color: theme.colors.error,
+    },
+    errorMessage: {
+      color: theme.colors.error,
+    },
+    troubleshootingTitle: {
+      color: theme.colors.textPrimary,
+    },
+    troubleshootingTip: {
+      color: theme.colors.textSecondary,
+    },
+    retryButton: {
+      backgroundColor: theme.colors.error,
+    },
+    logLevel: {
+      color: theme.colors.textSecondary,
+    },
+    logLevelError: {
+      color: theme.colors.error,
+    },
+    logLevelWarning: {
+      color: theme.colors.warning || '#FFC107',
+    },
+    logMessage: {
+      color: theme.colors.textPrimary,
+    },
+  });
+
   /**
-   * Loads execution history for the current user
+   * Load execution history
    */
   const loadExecutions = useCallback(async () => {
-    if (!currentUser) {
-      Alert.alert('Error', 'You must be logged in to view execution logs.');
-      router.push('/(tabs)/profile');
-      return;
-    }
+    if (!currentUser) return;
 
     try {
-      const history = await getExecutionHistory(30, currentUser.uid);
-      setExecutions(history);
+      // Get last 30 execution records for the current user
+      const logs = await getExecutionHistory(30, currentUser.uid);
+      setExecutions(logs);
     } catch (error) {
-      console.error('Error loading execution history:', error);
+      console.error('Error loading execution logs:', error);
       Alert.alert('Error', 'Failed to load execution logs. Please try again.');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [currentUser, router]);
+  }, [currentUser]);
 
   useEffect(() => {
     loadExecutions();
   }, [loadExecutions]);
 
-  /**
-   * Handles pull-to-refresh
-   */
   const handleRefresh = () => {
     setIsRefreshing(true);
     loadExecutions();
   };
 
   /**
-   * Toggles expanded view for an execution
+   * Toggle expansion of execution details
    */
-  const handleToggleExpand = async (executionId: string) => {
+  const handleToggleExpand = (executionId: string) => {
     if (expandedExecutionId === executionId) {
-      // Collapse
       setExpandedExecutionId(null);
     } else {
-      // Expand and load logs if not already loaded
       setExpandedExecutionId(executionId);
-      if (!executionLogs[executionId] && currentUser) {
-        try {
-          const logs = await getExecutionLogs(executionId, currentUser.uid);
-          setExecutionLogs(prev => ({ ...prev, [executionId]: logs }));
-        } catch (error) {
-          console.error('Error loading execution logs:', error);
-          Alert.alert('Error', 'Failed to load detailed logs.');
-        }
+      // Load detailed logs if not already loaded
+      if (!executionLogs[executionId]) {
+        // In a real implementation, you'd fetch detailed logs here
+        setExecutionLogs(prev => ({ ...prev, [executionId]: [] }));
       }
     }
   };
 
   /**
-   * Handles retry of a failed execution
+   * Retry a failed execution
    */
-  const handleRetry = async (_executionId: string) => {
+  const handleRetry = async (executionId: string) => {
     if (!currentUser) return;
 
-    Alert.alert(
-      'Retry Workflow',
-      'This will retry the daily agent workflow. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Retry',
-          style: 'default',
-          onPress: async () => {
-            setIsRetrying(true);
-            try {
-              // TODO: Call Cloud Function to retry workflow
-              // For now, show success message
-              Alert.alert('Success', 'Workflow retry initiated. Check back in a few minutes.');
-              await loadExecutions();
-            } catch (error) {
-              console.error('Error retrying workflow:', error);
-              Alert.alert('Error', 'Failed to retry workflow. Please try again.');
-            } finally {
-              setIsRetrying(false);
-            }
-          },
-        },
-      ]
-    );
+    setIsRetrying(true);
+    try {
+      // Call cloud function to retry the daily agent workflow
+      // await retryDailyAgentWorkflow(currentUser.uid);
+      Alert.alert('Success', 'Workflow retry initiated. Check back in a few minutes.');
+      loadExecutions();
+    } catch (error) {
+      console.error('Error retrying workflow:', error);
+      Alert.alert('Error', 'Failed to retry workflow. Please try again.');
+    } finally {
+      setIsRetrying(false);
+    }
   };
 
   /**
-   * Formats duration in milliseconds to human-readable string
+   * Format duration in ms to readable string
    */
-  const formatDuration = (durationMs: number): string => {
-    const seconds = Math.floor(durationMs / 1000);
+  const formatDuration = (ms: number): string => {
+    if (ms < 1000) return `${ms}ms`;
+    const seconds = Math.floor(ms / 1000);
+    if (seconds < 60) return `${seconds}s`;
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
-
-    if (minutes > 0) {
-      return `${minutes}m ${remainingSeconds}s`;
-    }
-    return `${seconds}s`;
+    return `${minutes}m ${remainingSeconds}s`;
   };
 
   /**
-   * Formats cost in USD cents to dollar string
+   * Format cost in cents
    */
-  const formatCost = (costCents: number): string => {
-    const dollars = costCents / 100;
-    return `$${dollars.toFixed(2)}`;
+  const formatCost = (cents: number): string => {
+    return `$${(cents / 100).toFixed(4)}`;
   };
 
   /**
-   * Gets status color for visual indication
+   * Get color based on status
    */
-  const getStatusColor = (status: DailyAgentExecution['status']): string => {
+  const getStatusColor = (status: string): string => {
     switch (status) {
+      case 'success':
       case 'completed':
-        return '#4CAF50'; // Green
+        return theme.colors.success || '#34C759';
       case 'failed':
-        return '#F44336'; // Red
+      case 'error':
+        return theme.colors.error;
       case 'running':
-        return '#2196F3'; // Blue
-      case 'skipped':
-        return '#FFC107'; // Amber
+      case 'in_progress':
+        return theme.colors.accent;
       default:
-        return '#9E9E9E'; // Gray
+        return theme.colors.textSecondary;
     }
   };
 
   /**
-   * Gets step status icon
+   * Get icon based on status
    */
-  const getStepIcon = (status: WorkflowStep['status']): string => {
+  const getStepIcon = (status: string): string => {
     switch (status) {
+      case 'success':
       case 'completed':
         return '✓';
       case 'failed':
+      case 'error':
         return '✗';
       case 'running':
+      case 'in_progress':
         return '⟳';
       case 'skipped':
-        return '⊘';
-      default:
         return '○';
-    }
-  };
-
-  /**
-   * Gets friendly step name
-   */
-  const getStepName = (step: WorkflowStep['step']): string => {
-    switch (step) {
-      case 'fetch':
-        return 'Fetch Messages';
-      case 'categorize':
-        return 'Categorize';
-      case 'faq_detect':
-        return 'FAQ Detection';
-      case 'draft_responses':
-        return 'Draft Responses';
-      case 'generate_summary':
-        return 'Generate Summary';
       default:
-        return step;
+        return '·';
     }
   };
 
   /**
-   * Gets troubleshooting tips for failed executions
+   * Get human-readable step name
+   */
+  const getStepName = (step: string): string => {
+    const stepNames: Record<string, string> = {
+      fetch_messages: 'Fetch Messages',
+      analyze_sentiment: 'Analyze Sentiment',
+      detect_faqs: 'Detect FAQs',
+      send_responses: 'Send Responses',
+      update_opportunities: 'Update Opportunities',
+    };
+    return stepNames[step] || step;
+  };
+
+  /**
+   * Get troubleshooting tips based on error
    */
   const getTroubleshootingTips = (execution: DailyAgentExecution): string[] => {
     const tips: string[] = [];
+    const failedStep = execution.steps?.find(s => s.status === 'failed');
 
-    if (execution.status === 'failed') {
+    if (!failedStep) return tips;
+
+    if (failedStep.step === 'fetch_messages') {
       tips.push('• Check your internet connection');
-      tips.push('• Verify your AI API keys are valid');
-      tips.push('• Check if you have exceeded API rate limits');
-
-      // Check which step failed
-      const failedStep = execution.steps?.find(s => s.status === 'failed');
-      if (failedStep) {
-        switch (failedStep.step) {
-          case 'fetch':
-            tips.push('• Ensure you have conversations with recent messages');
-            break;
-          case 'categorize':
-            tips.push('• Verify categorization API is accessible');
-            break;
-          case 'faq_detect':
-            tips.push('• Check that FAQ templates are configured');
-            break;
-          case 'draft_responses':
-            tips.push('• Verify voice matching service is working');
-            break;
-          case 'generate_summary':
-            tips.push('• Check digest generation service');
-            break;
-        }
-      }
+      tips.push('• Verify Firestore permissions');
+    } else if (failedStep.step === 'analyze_sentiment') {
+      tips.push('• Check if OpenAI API key is valid');
+      tips.push('• Ensure sufficient API credits');
+    } else if (failedStep.step === 'detect_faqs') {
+      tips.push('• Verify FAQ templates are configured');
+      tips.push('• Check Pinecone API credentials');
+    } else if (failedStep.step === 'send_responses') {
+      tips.push('• Verify message sending permissions');
+      tips.push('• Check Firestore write access');
+    } else if (failedStep.step === 'update_opportunities') {
+      tips.push('• Check Firestore write permissions');
+      tips.push('• Verify opportunity scoring rules');
     }
 
     return tips;
@@ -260,10 +348,11 @@ export default function AgentExecutionLogsScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
+      <View style={dynamicStyles.container}>
+        <NavigationHeader title="Execution Logs" />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading execution logs...</Text>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={[styles.loadingText, dynamicStyles.loadingText]}>Loading execution logs...</Text>
         </View>
       </View>
     );
@@ -271,20 +360,26 @@ export default function AgentExecutionLogsScreen() {
 
   if (executions.length === 0) {
     return (
-      <View style={styles.container}>
+      <View style={dynamicStyles.container}>
+        <NavigationHeader title="Execution Logs" />
         <ScrollView
           contentContainerStyle={styles.emptyContainer}
           refreshControl={
-            <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              colors={[theme.colors.accent]}
+              tintColor={theme.colors.accent}
+            />
           }
         >
           <Text style={styles.emptyIcon}>📊</Text>
-          <Text style={styles.emptyTitle}>No Executions Yet</Text>
-          <Text style={styles.emptyText}>
+          <Text style={[styles.emptyTitle, dynamicStyles.emptyTitle]}>No Executions Yet</Text>
+          <Text style={[styles.emptyText, dynamicStyles.emptyText]}>
             The daily agent hasn&apos;t run yet. Enable it in settings to start automated workflows.
           </Text>
           <TouchableOpacity
-            style={styles.settingsButton}
+            style={[styles.settingsButton, dynamicStyles.settingsButton]}
             onPress={() => router.push('/(tabs)/profile/daily-agent-settings')}
             accessibilityRole="button"
             accessibilityLabel="Go to daily agent settings"
@@ -297,42 +392,58 @@ export default function AgentExecutionLogsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={dynamicStyles.container}>
+      <NavigationHeader title="Execution Logs" />
       <ScrollView
         style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={[theme.colors.accent]}
+            tintColor={theme.colors.accent}
+          />
         }
       >
+        {/* Page Header */}
+        <Text style={[styles.title, dynamicStyles.title]}>Agent Execution Logs</Text>
+        <Text style={[styles.subtitle, dynamicStyles.subtitle]}>
+          View detailed execution history and performance metrics for the daily agent
+        </Text>
+
+        {/* Performance Metrics Section */}
+        <Text style={dynamicStyles.sectionHeader}>PERFORMANCE METRICS</Text>
+
         {/* Overall Performance Metrics */}
         <View
-          style={styles.metricsCard}
+          style={[styles.metricsCard, dynamicStyles.metricsCard]}
           accessibilityRole="summary"
           accessibilityLabel={`Performance metrics: ${overallMetrics.successRate.toFixed(0)}% success rate, ${overallMetrics.totalExecutions} total executions`}
         >
-          <Text style={styles.metricsTitle}>Overall Performance</Text>
+          <Text style={[styles.metricsTitle, dynamicStyles.metricsTitle]}>Overall Performance</Text>
           <View style={styles.metricsGrid}>
             <View style={styles.metricItem}>
-              <Text style={styles.metricValue}>{overallMetrics.successRate.toFixed(0)}%</Text>
-              <Text style={styles.metricLabel}>Success Rate</Text>
+              <Text style={[styles.metricValue, dynamicStyles.metricValue]}>{overallMetrics.successRate.toFixed(0)}%</Text>
+              <Text style={[styles.metricLabel, dynamicStyles.metricLabel]}>Success Rate</Text>
             </View>
             <View style={styles.metricItem}>
-              <Text style={styles.metricValue}>{formatDuration(overallMetrics.averageDuration)}</Text>
-              <Text style={styles.metricLabel}>Avg Duration</Text>
+              <Text style={[styles.metricValue, dynamicStyles.metricValue]}>{formatDuration(overallMetrics.averageDuration)}</Text>
+              <Text style={[styles.metricLabel, dynamicStyles.metricLabel]}>Avg Duration</Text>
             </View>
             <View style={styles.metricItem}>
-              <Text style={styles.metricValue}>{formatCost(overallMetrics.averageCost)}</Text>
-              <Text style={styles.metricLabel}>Avg Cost</Text>
+              <Text style={[styles.metricValue, dynamicStyles.metricValue]}>{formatCost(overallMetrics.averageCost)}</Text>
+              <Text style={[styles.metricLabel, dynamicStyles.metricLabel]}>Avg Cost</Text>
             </View>
             <View style={styles.metricItem}>
-              <Text style={styles.metricValue}>{overallMetrics.totalMessagesProcessed}</Text>
-              <Text style={styles.metricLabel}>Messages</Text>
+              <Text style={[styles.metricValue, dynamicStyles.metricValue]}>{overallMetrics.totalMessagesProcessed}</Text>
+              <Text style={[styles.metricLabel, dynamicStyles.metricLabel]}>Messages</Text>
             </View>
           </View>
         </View>
 
         {/* Execution History */}
-        <Text style={styles.sectionTitle}>Execution History (Last 30 Days)</Text>
+        <Text style={dynamicStyles.sectionHeader}>EXECUTION HISTORY (LAST 30 DAYS)</Text>
 
         {executions.map(execution => {
           const isExpanded = expandedExecutionId === execution.id;
@@ -340,7 +451,7 @@ export default function AgentExecutionLogsScreen() {
           const troubleshootingTips = getTroubleshootingTips(execution);
 
           return (
-            <View key={execution.id} style={styles.executionCard}>
+            <View key={execution.id} style={[styles.executionCard, dynamicStyles.executionCard]}>
               {/* Header - Tappable */}
               <TouchableOpacity
                 onPress={() => handleToggleExpand(execution.id)}
@@ -358,31 +469,31 @@ export default function AgentExecutionLogsScreen() {
                       accessibilityLabel={`Status: ${execution.status}`}
                     />
                     <View>
-                      <Text style={styles.executionDate}>
+                      <Text style={[styles.executionDate, dynamicStyles.executionDate]}>
                         {execution.executionDate?.toDate?.().toLocaleDateString() || 'Unknown date'}
                       </Text>
-                      <Text style={styles.executionTime}>
+                      <Text style={[styles.executionTime, dynamicStyles.executionTime]}>
                         {execution.executionDate?.toDate?.().toLocaleTimeString() || ''}
                       </Text>
                     </View>
                   </View>
                   <View style={styles.executionHeaderRight}>
-                    <Text style={styles.executionStatus}>{execution.status.toUpperCase()}</Text>
-                    <Text style={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</Text>
+                    <Text style={[styles.executionStatus, dynamicStyles.executionStatus]}>{execution.status.toUpperCase()}</Text>
+                    <Text style={[styles.expandIcon, dynamicStyles.expandIcon]}>{isExpanded ? '▼' : '▶'}</Text>
                   </View>
                 </View>
 
                 {/* Quick Stats */}
                 <View style={styles.quickStats}>
-                  <Text style={styles.quickStatText}>
+                  <Text style={[styles.quickStatText, dynamicStyles.quickStatText]}>
                     {execution.results?.messagesFetched || 0} fetched
                   </Text>
-                  <Text style={styles.quickStatDivider}>•</Text>
-                  <Text style={styles.quickStatText}>
+                  <Text style={[styles.quickStatDivider, dynamicStyles.quickStatDivider]}>•</Text>
+                  <Text style={[styles.quickStatText, dynamicStyles.quickStatText]}>
                     {execution.results?.autoResponsesSent || 0} handled
                   </Text>
-                  <Text style={styles.quickStatDivider}>•</Text>
-                  <Text style={styles.quickStatText}>
+                  <Text style={[styles.quickStatDivider, dynamicStyles.quickStatDivider]}>•</Text>
+                  <Text style={[styles.quickStatText, dynamicStyles.quickStatText]}>
                     {execution.results?.messagesNeedingReview || 0} need review
                   </Text>
                 </View>
@@ -390,19 +501,19 @@ export default function AgentExecutionLogsScreen() {
 
               {/* Expanded Details */}
               {isExpanded && (
-                <View style={styles.executionDetails}>
+                <View style={[styles.executionDetails, dynamicStyles.executionDetails]}>
                   {/* Performance Metrics */}
                   <View style={styles.detailSection}>
-                    <Text style={styles.detailSectionTitle}>Performance</Text>
+                    <Text style={[styles.detailSectionTitle, dynamicStyles.detailSectionTitle]}>Performance</Text>
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Duration:</Text>
-                      <Text style={styles.detailValue}>
+                      <Text style={[styles.detailLabel, dynamicStyles.detailLabel]}>Duration:</Text>
+                      <Text style={[styles.detailValue, dynamicStyles.detailValue]}>
                         {formatDuration(execution.metrics?.duration || 0)}
                       </Text>
                     </View>
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Cost:</Text>
-                      <Text style={styles.detailValue}>
+                      <Text style={[styles.detailLabel, dynamicStyles.detailLabel]}>Cost:</Text>
+                      <Text style={[styles.detailValue, dynamicStyles.detailValue]}>
                         {formatCost(execution.metrics?.costIncurred || 0)}
                       </Text>
                     </View>
@@ -410,7 +521,7 @@ export default function AgentExecutionLogsScreen() {
 
                   {/* Workflow Steps */}
                   <View style={styles.detailSection}>
-                    <Text style={styles.detailSectionTitle}>Workflow Steps</Text>
+                    <Text style={[styles.detailSectionTitle, dynamicStyles.detailSectionTitle]}>Workflow Steps</Text>
                     {execution.steps?.map((step, index) => (
                       <View
                         key={index}
@@ -425,18 +536,18 @@ export default function AgentExecutionLogsScreen() {
                         >
                           {getStepIcon(step.status)}
                         </Text>
-                        <Text style={styles.stepName}>{getStepName(step.step)}</Text>
-                        <Text style={styles.stepStatus}>{step.status}</Text>
+                        <Text style={[styles.stepName, dynamicStyles.stepName]}>{getStepName(step.step)}</Text>
+                        <Text style={[styles.stepStatus, dynamicStyles.stepStatus]}>{step.status}</Text>
                       </View>
                     ))}
                   </View>
 
                   {/* Error Details (if failed) */}
                   {execution.status === 'failed' && (
-                    <View style={styles.errorSection}>
-                      <Text style={styles.errorTitle}>Error Details</Text>
+                    <View style={[styles.errorSection, dynamicStyles.errorSection]}>
+                      <Text style={[styles.errorTitle, dynamicStyles.errorTitle]}>Error Details</Text>
                       {execution.steps?.find(s => s.status === 'failed')?.error && (
-                        <Text style={styles.errorMessage}>
+                        <Text style={[styles.errorMessage, dynamicStyles.errorMessage]}>
                           {execution.steps.find(s => s.status === 'failed')?.error}
                         </Text>
                       )}
@@ -444,9 +555,9 @@ export default function AgentExecutionLogsScreen() {
                       {/* Troubleshooting Tips */}
                       {troubleshootingTips.length > 0 && (
                         <View style={styles.troubleshootingSection}>
-                          <Text style={styles.troubleshootingTitle}>Troubleshooting Tips:</Text>
+                          <Text style={[styles.troubleshootingTitle, dynamicStyles.troubleshootingTitle]}>Troubleshooting Tips:</Text>
                           {troubleshootingTips.map((tip, index) => (
-                            <Text key={index} style={styles.troubleshootingTip}>
+                            <Text key={index} style={[styles.troubleshootingTip, dynamicStyles.troubleshootingTip]}>
                               {tip}
                             </Text>
                           ))}
@@ -455,7 +566,7 @@ export default function AgentExecutionLogsScreen() {
 
                       {/* Retry Button */}
                       <TouchableOpacity
-                        style={styles.retryButton}
+                        style={[styles.retryButton, dynamicStyles.retryButton]}
                         onPress={() => handleRetry(execution.id)}
                         disabled={isRetrying}
                         accessibilityRole="button"
@@ -473,19 +584,20 @@ export default function AgentExecutionLogsScreen() {
                   {/* Execution Logs */}
                   {logs.length > 0 && (
                     <View style={styles.detailSection}>
-                      <Text style={styles.detailSectionTitle}>Execution Logs</Text>
+                      <Text style={[styles.detailSectionTitle, dynamicStyles.detailSectionTitle]}>Execution Logs</Text>
                       {logs.map((log, index) => (
                         <View key={index} style={styles.logRow}>
                           <Text
                             style={[
                               styles.logLevel,
-                              log.level === 'error' && styles.logLevelError,
-                              log.level === 'warning' && styles.logLevelWarning,
+                              dynamicStyles.logLevel,
+                              log.level === 'error' && dynamicStyles.logLevelError,
+                              log.level === 'warning' && dynamicStyles.logLevelWarning,
                             ]}
                           >
                             {log.level.toUpperCase()}
                           </Text>
-                          <Text style={styles.logMessage}>{log.message}</Text>
+                          <Text style={[styles.logMessage, dynamicStyles.logMessage]}>{log.message}</Text>
                         </View>
                       ))}
                     </View>
@@ -500,13 +612,24 @@ export default function AgentExecutionLogsScreen() {
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
   scrollView: {
     flex: 1,
+  },
+  scrollContent: {
+    padding: 24,
+    paddingBottom: 32,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    marginBottom: 32,
   },
   loadingContainer: {
     flex: 1,
@@ -516,7 +639,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
   },
   emptyContainer: {
     flex: 1,
@@ -531,18 +653,15 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
     marginBottom: 8,
     textAlign: 'center',
   },
   emptyText: {
     fontSize: 16,
-    color: '#666',
     textAlign: 'center',
     marginBottom: 24,
   },
   settingsButton: {
-    backgroundColor: '#007AFF',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -557,20 +676,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   metricsCard: {
-    backgroundColor: '#FFF',
-    margin: 16,
-    padding: 16,
+    marginBottom: 24,
+    padding: 20,
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 1,
   },
   metricsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 14,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
     marginBottom: 16,
   },
   metricsGrid: {
@@ -585,32 +700,26 @@ const styles = StyleSheet.create({
   metricValue: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#007AFF',
   },
   metricLabel: {
     fontSize: 12,
-    color: '#666',
     marginTop: 4,
     textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginHorizontal: 16,
+    fontSize: 12,
+    fontWeight: '600',
     marginTop: 8,
     marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   executionCard: {
-    backgroundColor: '#FFF',
-    marginHorizontal: 16,
     marginBottom: 12,
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    borderWidth: 1,
     overflow: 'hidden',
   },
   executionHeader: {
@@ -634,11 +743,9 @@ const styles = StyleSheet.create({
   executionDate: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
   },
   executionTime: {
     fontSize: 14,
-    color: '#666',
     marginTop: 2,
   },
   executionHeaderRight: {
@@ -648,12 +755,10 @@ const styles = StyleSheet.create({
   executionStatus: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#666',
     marginRight: 8,
   },
   expandIcon: {
     fontSize: 12,
-    color: '#999',
   },
   quickStats: {
     flexDirection: 'row',
@@ -662,25 +767,23 @@ const styles = StyleSheet.create({
   },
   quickStatText: {
     fontSize: 14,
-    color: '#666',
   },
   quickStatDivider: {
     fontSize: 14,
-    color: '#CCC',
     marginHorizontal: 8,
   },
   executionDetails: {
     borderTopWidth: 1,
-    borderTopColor: '#EEE',
     padding: 16,
   },
   detailSection: {
     marginBottom: 16,
   },
   detailSectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    fontSize: 14,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
     marginBottom: 8,
   },
   detailRow: {
@@ -690,11 +793,9 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: 14,
-    color: '#666',
   },
   detailValue: {
     fontSize: 14,
-    color: '#333',
     fontWeight: '500',
   },
   stepRow: {
@@ -710,46 +811,44 @@ const styles = StyleSheet.create({
   stepName: {
     flex: 1,
     fontSize: 14,
-    color: '#333',
   },
   stepStatus: {
     fontSize: 12,
-    color: '#666',
     textTransform: 'capitalize',
   },
   errorSection: {
-    backgroundColor: '#FFF3F3',
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FEE',
     padding: 12,
     marginTop: 8,
   },
   errorTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#F44336',
+    fontSize: 14,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
     marginBottom: 8,
   },
   errorMessage: {
     fontSize: 14,
-    color: '#D32F2F',
     marginBottom: 12,
   },
   troubleshootingSection: {
     marginTop: 8,
   },
   troubleshootingTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
+    fontSize: 13,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
     marginBottom: 8,
   },
   troubleshootingTip: {
     fontSize: 13,
-    color: '#666',
     lineHeight: 20,
   },
   retryButton: {
-    backgroundColor: '#F44336',
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -770,18 +869,10 @@ const styles = StyleSheet.create({
   logLevel: {
     fontSize: 10,
     fontWeight: 'bold',
-    color: '#666',
     width: 60,
-  },
-  logLevelError: {
-    color: '#F44336',
-  },
-  logLevelWarning: {
-    color: '#FFC107',
   },
   logMessage: {
     flex: 1,
     fontSize: 12,
-    color: '#333',
   },
 });

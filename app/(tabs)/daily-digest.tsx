@@ -17,7 +17,9 @@ import {
   RefreshControl,
   ScrollView,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/contexts/ThemeContext';
+import { useNavigation } from '@/hooks/useNavigation';
 import { NavigationHeader } from '../_components/NavigationHeader';
 import { getFirebaseAuth } from '@/services/firebase';
 import { getMeaningful10Digest } from '@/services/dailyDigestService';
@@ -33,13 +35,111 @@ import type { Meaningful10Digest, Meaningful10DigestMessage } from '@/types/ai';
  * ```
  */
 export default function DailyDigestScreen() {
-  const router = useRouter();
+  const { goToProfile, goToConversation, goToProfileSettings, ROUTES } = useNavigation();
   const auth = getFirebaseAuth();
   const currentUser = auth.currentUser;
+  const { theme } = useTheme();
 
   const [digest, setDigest] = useState<Meaningful10Digest | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [autoHandledExpanded, setAutoHandledExpanded] = useState(false); // Story 6.4: Collapsible auto-handled section
+
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      backgroundColor: theme.colors.background,
+    },
+    loadingText: {
+      color: theme.colors.textSecondary,
+    },
+    emptyTitle: {
+      color: theme.colors.textPrimary,
+    },
+    emptyText: {
+      color: theme.colors.textSecondary,
+    },
+    emptyHint: {
+      color: theme.colors.textTertiary,
+    },
+    settingsButton: {
+      backgroundColor: theme.colors.accent,
+    },
+    capacitySummary: {
+      backgroundColor: theme.colors.surface,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    capacityLabel: {
+      color: theme.colors.textPrimary,
+    },
+    capacityValue: {
+      color: theme.colors.textSecondary,
+    },
+    sectionTitle: {
+      color: theme.colors.textPrimary,
+    },
+    sectionSubtitle: {
+      color: theme.colors.textSecondary,
+    },
+    messageCard: {
+      backgroundColor: theme.colors.surface,
+      ...theme.shadows.sm,
+    },
+    scoreBadge: {
+      backgroundColor: theme.colors.accent,
+    },
+    categoryText: {
+      color: theme.colors.textSecondary,
+    },
+    messageContent: {
+      color: theme.colors.textPrimary,
+    },
+    contextText: {
+      color: theme.colors.textSecondary,
+    },
+    timeEstimateText: {
+      color: theme.colors.textTertiary,
+    },
+    autoHandledCard: {
+      backgroundColor: theme.colors.backgroundSecondary,
+    },
+    autoHandledText: {
+      color: theme.colors.textSecondary,
+    },
+    expandButton: {
+      backgroundColor: theme.colors.accent,
+    },
+    autoHandledExpandedCard: {
+      backgroundColor: theme.colors.backgroundSecondary,
+    },
+    autoHandledSectionTitle: {
+      color: theme.colors.textPrimary,
+    },
+    autoHandledSectionText: {
+      color: theme.colors.textSecondary,
+    },
+    viewArchivedButton: {
+      backgroundColor: theme.colors.accent,
+    },
+    collapseButton: {
+      borderTopColor: theme.colors.borderLight,
+    },
+    collapseButtonText: {
+      color: theme.colors.accent,
+    },
+    emptyListTitle: {
+      color: theme.colors.textPrimary,
+    },
+    emptyListText: {
+      color: theme.colors.textTertiary,
+    },
+    settingsLinkText: {
+      color: theme.colors.accent,
+    },
+    expandIcon: {
+      color: theme.colors.textSecondary,
+    },
+  });
 
   /**
    * Loads the most recent Meaningful 10 digest
@@ -47,7 +147,7 @@ export default function DailyDigestScreen() {
   const loadDigest = useCallback(async () => {
     if (!currentUser) {
       Alert.alert('Error', 'You must be logged in to view daily digest.');
-      router.push('/(tabs)/profile');
+      goToProfile();
       return;
     }
 
@@ -61,7 +161,7 @@ export default function DailyDigestScreen() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [currentUser, router]);
+  }, [currentUser, goToProfile]);
 
   useEffect(() => {
     loadDigest();
@@ -79,7 +179,7 @@ export default function DailyDigestScreen() {
    * Navigates to conversation for message response
    */
   const handleMessageTap = (message: Meaningful10DigestMessage) => {
-    router.push(`/(tabs)/conversations/${message.conversationId}`);
+    goToConversation(message.conversationId);
   };
 
   /**
@@ -90,7 +190,7 @@ export default function DailyDigestScreen() {
     const parts: string[] = [];
 
     if (relationshipContext.isVIP) {
-      parts.push('⭐ VIP');
+      parts.push('VIP');
     }
 
     parts.push(`${relationshipContext.messageCount} messages`);
@@ -110,7 +210,7 @@ export default function DailyDigestScreen() {
   const renderMessageItem = (message: Meaningful10DigestMessage) => (
     <TouchableOpacity
       key={message.id}
-      style={styles.messageCard}
+      style={[styles.messageCard, dynamicStyles.messageCard]}
       onPress={() => handleMessageTap(message)}
       accessible={true}
       accessibilityRole="button"
@@ -118,26 +218,26 @@ export default function DailyDigestScreen() {
     >
       {/* Relationship Score Badge */}
       <View style={styles.scoreContainer}>
-        <View style={styles.scoreBadge}>
+        <View style={[styles.scoreBadge, dynamicStyles.scoreBadge]}>
           <Text style={styles.scoreText}>{Math.round(message.relationshipScore)}</Text>
         </View>
-        <Text style={styles.categoryText}>{message.category}</Text>
+        <Text style={[styles.categoryText, dynamicStyles.categoryText]}>{message.category}</Text>
       </View>
 
       {/* Message Content */}
-      <Text style={styles.messageContent} numberOfLines={3}>
+      <Text style={[styles.messageContent, dynamicStyles.messageContent]} numberOfLines={3}>
         {message.content}
       </Text>
 
       {/* Relationship Context */}
       <View style={styles.contextRow}>
-        <Text style={styles.contextText}>{formatRelationshipContext(message)}</Text>
+        <Text style={[styles.contextText, dynamicStyles.contextText]}>{formatRelationshipContext(message)}</Text>
       </View>
 
       {/* Time Estimate */}
       <View style={styles.timeEstimateRow}>
-        <Text style={styles.timeEstimateIcon}>⏱</Text>
-        <Text style={styles.timeEstimateText}>~{message.estimatedResponseTime} min to respond</Text>
+        <Ionicons name="time-outline" size={14} color={theme.colors.textTertiary} style={{ marginRight: 4 }} />
+        <Text style={[styles.timeEstimateText, dynamicStyles.timeEstimateText]}>~{message.estimatedResponseTime} min to respond</Text>
       </View>
     </TouchableOpacity>
   );
@@ -145,11 +245,17 @@ export default function DailyDigestScreen() {
   // Loading state
   if (isLoading) {
     return (
-      <View style={styles.container}>
-        <NavigationHeader title="Daily Digest" />
+      <View style={[styles.container, dynamicStyles.container]}>
+        <NavigationHeader
+          title="Daily Digest"
+          rightAction={{
+            icon: 'settings-outline',
+            onPress: () => goToProfileSettings(ROUTES.PROFILE.DAILY_AGENT_SETTINGS),
+          }}
+        />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading digest...</Text>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={[styles.loadingText, dynamicStyles.loadingText]}>Loading digest...</Text>
         </View>
       </View>
     );
@@ -158,21 +264,27 @@ export default function DailyDigestScreen() {
   // Empty state
   if (!digest) {
     return (
-      <View style={styles.container}>
-        <NavigationHeader title="Meaningful 10" />
+      <View style={[styles.container, dynamicStyles.container]}>
+        <NavigationHeader
+          title="Meaningful 10"
+          rightAction={{
+            icon: 'settings-outline',
+            onPress: () => goToProfileSettings(ROUTES.PROFILE.DAILY_AGENT_SETTINGS),
+          }}
+        />
         <View style={styles.emptyContainer} accessible={true} accessibilityRole="text">
-          <Text style={styles.emptyIcon}>📭</Text>
-          <Text style={styles.emptyTitle}>No Messages Today</Text>
-          <Text style={styles.emptyText}>
+          <Ionicons name="mail-outline" size={64} color={theme.colors.textTertiary} style={{ marginBottom: 16 }} />
+          <Text style={[styles.emptyTitle, dynamicStyles.emptyTitle]}>No Messages Today</Text>
+          <Text style={[styles.emptyText, dynamicStyles.emptyText]}>
             Your daily digest will appear here each morning with your top 10 most important
             messages.
           </Text>
-          <Text style={styles.emptyHint}>
+          <Text style={[styles.emptyHint, dynamicStyles.emptyHint]}>
             Check back tomorrow or adjust your daily agent settings.
           </Text>
           <TouchableOpacity
-            style={styles.settingsButton}
-            onPress={() => router.push('/(tabs)/profile/daily-agent-settings')}
+            style={[styles.settingsButton, dynamicStyles.settingsButton]}
+            onPress={() => goToProfileSettings(ROUTES.PROFILE.DAILY_AGENT_SETTINGS)}
             accessible={true}
             accessibilityRole="button"
             accessibilityLabel="Go to daily agent settings"
@@ -185,19 +297,25 @@ export default function DailyDigestScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <NavigationHeader title="Meaningful 10" />
+    <View style={[styles.container, dynamicStyles.container]}>
+      <NavigationHeader
+        title="Meaningful 10"
+        rightAction={{
+          icon: 'settings-outline',
+          onPress: () => goToProfileSettings(ROUTES.PROFILE.DAILY_AGENT_SETTINGS + '?from=daily-digest'),
+        }}
+      />
 
       <ScrollView
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor="#007AFF" />
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={theme.colors.accent} />
         }
       >
         {/* Capacity Summary */}
-        <View style={styles.capacitySummary}>
+        <View style={[styles.capacitySummary, dynamicStyles.capacitySummary]}>
           <View style={styles.capacityRow}>
-            <Text style={styles.capacityLabel}>Today&apos;s Focus</Text>
-            <Text style={styles.capacityValue}>
+            <Text style={[styles.capacityLabel, dynamicStyles.capacityLabel]}>Today&apos;s Focus</Text>
+            <Text style={[styles.capacityValue, dynamicStyles.capacityValue]}>
               {digest.capacityUsed} messages • ~{digest.estimatedTimeCommitment} min
             </Text>
           </View>
@@ -207,12 +325,9 @@ export default function DailyDigestScreen() {
         {digest.highPriority.length > 0 && (
           <View style={styles.prioritySection}>
             <View style={styles.sectionHeader}>
-              <View style={[styles.priorityIcon, styles.priorityIconHigh]}>
-                <Text style={styles.priorityIconText}>🔥</Text>
-              </View>
               <View style={styles.sectionHeaderText}>
-                <Text style={styles.sectionTitle}>High Priority</Text>
-                <Text style={styles.sectionSubtitle}>
+                <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>High Priority</Text>
+                <Text style={[styles.sectionSubtitle, dynamicStyles.sectionSubtitle]}>
                   Respond today • Top {digest.highPriority.length}
                 </Text>
               </View>
@@ -225,12 +340,9 @@ export default function DailyDigestScreen() {
         {digest.mediumPriority.length > 0 && (
           <View style={styles.prioritySection}>
             <View style={styles.sectionHeader}>
-              <View style={[styles.priorityIcon, styles.priorityIconMedium]}>
-                <Text style={styles.priorityIconText}>📌</Text>
-              </View>
               <View style={styles.sectionHeaderText}>
-                <Text style={styles.sectionTitle}>Medium Priority</Text>
-                <Text style={styles.sectionSubtitle}>
+                <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>Medium Priority</Text>
+                <Text style={[styles.sectionSubtitle, dynamicStyles.sectionSubtitle]}>
                   Respond this week • {digest.mediumPriority.length} messages
                 </Text>
               </View>
@@ -239,32 +351,102 @@ export default function DailyDigestScreen() {
           </View>
         )}
 
-        {/* Auto-Handled Section */}
+        {/* Auto-Handled Section (Story 6.4: Collapsible) */}
         {(digest.autoHandled.faqCount > 0 || digest.autoHandled.archivedCount > 0) && (
           <View style={styles.prioritySection}>
-            <View style={styles.sectionHeader}>
-              <View style={[styles.priorityIcon, styles.priorityIconAuto]}>
-                <Text style={styles.priorityIconText}>✅</Text>
-              </View>
+            <TouchableOpacity
+              style={styles.sectionHeader}
+              onPress={() => setAutoHandledExpanded(!autoHandledExpanded)}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel={`Auto-handled section, ${autoHandledExpanded ? 'expanded' : 'collapsed'}, tap to ${autoHandledExpanded ? 'collapse' : 'expand'}`}
+            >
               <View style={styles.sectionHeaderText}>
-                <Text style={styles.sectionTitle}>Auto-Handled</Text>
-                <Text style={styles.sectionSubtitle}>
+                <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>Auto-Handled</Text>
+                <Text style={[styles.sectionSubtitle, dynamicStyles.sectionSubtitle]}>
                   {digest.autoHandled.faqCount} FAQ responses • {digest.autoHandled.archivedCount}{' '}
                   archived
                 </Text>
               </View>
-            </View>
-            <View style={styles.autoHandledCard}>
-              <Text style={styles.autoHandledText}>
-                {digest.autoHandled.faqCount} messages received automatic FAQ responses.{'\n'}
-                {digest.autoHandled.archivedCount} low-priority messages were archived.
-              </Text>
-              {digest.autoHandled.boundaryMessageSent && (
-                <Text style={styles.autoHandledHint}>
-                  ℹ️ Boundary message sent to archived senders
+              <Ionicons
+                name={autoHandledExpanded ? 'chevron-down' : 'chevron-forward'}
+                size={20}
+                color={theme.colors.textSecondary}
+              />
+            </TouchableOpacity>
+
+            {/* Collapsed Summary */}
+            {!autoHandledExpanded && (
+              <View style={[styles.autoHandledCard, dynamicStyles.autoHandledCard]}>
+                <Text style={[styles.autoHandledText, dynamicStyles.autoHandledText]}>
+                  {digest.autoHandled.total} messages auto-handled ({digest.autoHandled.faqCount}{' '}
+                  FAQ, {digest.autoHandled.archivedCount} archived)
                 </Text>
-              )}
-            </View>
+                <TouchableOpacity
+                  style={[styles.expandButton, dynamicStyles.expandButton]}
+                  onPress={() => setAutoHandledExpanded(true)}
+                  accessible={true}
+                  accessibilityRole="button"
+                  accessibilityLabel="Expand to review auto-handled messages"
+                >
+                  <Text style={styles.expandButtonText}>Expand to Review</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Expanded Details */}
+            {autoHandledExpanded && (
+              <View style={[styles.autoHandledExpandedCard, dynamicStyles.autoHandledExpandedCard]}>
+                {/* FAQ Auto-Responses */}
+                {digest.autoHandled.faqCount > 0 && (
+                  <View style={styles.autoHandledSection}>
+                    <Text style={[styles.autoHandledSectionTitle, dynamicStyles.autoHandledSectionTitle]}>
+                      FAQ Auto-Responses ({digest.autoHandled.faqCount})
+                    </Text>
+                    <Text style={[styles.autoHandledSectionText, dynamicStyles.autoHandledSectionText]}>
+                      Automatically responded with FAQ templates. No action needed.
+                    </Text>
+                  </View>
+                )}
+
+                {/* Auto-Archived Messages */}
+                {digest.autoHandled.archivedCount > 0 && (
+                  <View style={styles.autoHandledSection}>
+                    <Text style={[styles.autoHandledSectionTitle, dynamicStyles.autoHandledSectionTitle]}>
+                      Auto-Archived ({digest.autoHandled.archivedCount})
+                    </Text>
+                    <Text style={[styles.autoHandledSectionText, dynamicStyles.autoHandledSectionText]}>
+                      Low-priority messages beyond your daily capacity.
+                      {digest.autoHandled.archivedCount > 0 &&
+                        ' Kind boundary message sent to fans.'}
+                    </Text>
+
+                    {/* Link to Archived Messages / Undo */}
+                    <TouchableOpacity
+                      style={[styles.viewArchivedButton, dynamicStyles.viewArchivedButton]}
+                      onPress={() => goToProfileSettings(ROUTES.PROFILE.ARCHIVED_MESSAGES)}
+                      accessible={true}
+                      accessibilityRole="button"
+                      accessibilityLabel="View archived messages and undo if needed"
+                    >
+                      <Text style={styles.viewArchivedButtonText}>
+                        View Archived & Undo (24h window)
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={[styles.collapseButton, dynamicStyles.collapseButton]}
+                  onPress={() => setAutoHandledExpanded(false)}
+                  accessible={true}
+                  accessibilityRole="button"
+                  accessibilityLabel="Collapse auto-handled section"
+                >
+                  <Text style={[styles.collapseButtonText, dynamicStyles.collapseButtonText]}>Collapse</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
 
@@ -274,21 +456,21 @@ export default function DailyDigestScreen() {
           digest.autoHandled.faqCount === 0 &&
           digest.autoHandled.archivedCount === 0 && (
             <View style={styles.emptyListContainer}>
-              <Text style={styles.emptyListIcon}>🎉</Text>
-              <Text style={styles.emptyListTitle}>All Caught Up!</Text>
-              <Text style={styles.emptyListText}>No new messages to handle today.</Text>
+              <Ionicons name="checkmark-circle-outline" size={64} color={theme.colors.textTertiary} style={{ marginBottom: 16 }} />
+              <Text style={[styles.emptyListTitle, dynamicStyles.emptyListTitle]}>All Caught Up!</Text>
+              <Text style={[styles.emptyListText, dynamicStyles.emptyListText]}>No new messages to handle today.</Text>
             </View>
           )}
 
         {/* Settings Link */}
         <View style={styles.settingsLink}>
           <TouchableOpacity
-            onPress={() => router.push('/(tabs)/profile/daily-agent-settings')}
+            onPress={() => goToProfileSettings(ROUTES.PROFILE.DAILY_AGENT_SETTINGS)}
             accessible={true}
             accessibilityRole="button"
             accessibilityLabel="Adjust capacity settings"
           >
-            <Text style={styles.settingsLinkText}>⚙️ Adjust Capacity Settings</Text>
+            <Text style={[styles.settingsLinkText, dynamicStyles.settingsLinkText]}>Adjust Capacity Settings</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -296,10 +478,10 @@ export default function DailyDigestScreen() {
   );
 }
 
+// Static layout styles (theme-aware colors are in dynamicStyles)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
   },
   loadingContainer: {
     flex: 1,
@@ -309,7 +491,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666666',
   },
   emptyContainer: {
     flex: 1,
@@ -317,33 +498,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 32,
   },
-  emptyIcon: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
   emptyTitle: {
     fontSize: 24,
     fontWeight: '600',
-    color: '#000000',
     marginBottom: 8,
   },
   emptyText: {
     fontSize: 16,
-    color: '#666666',
     textAlign: 'center',
     marginBottom: 8,
   },
   emptyHint: {
     fontSize: 14,
-    color: '#8E8E93',
     textAlign: 'center',
     marginBottom: 24,
   },
   settingsButton: {
-    backgroundColor: '#007AFF',
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 12,
     minHeight: 44,
   },
   settingsButtonText: {
@@ -353,10 +526,8 @@ const styles = StyleSheet.create({
   },
   // Capacity Summary
   capacitySummary: {
-    backgroundColor: '#FFFFFF',
-    padding: 20,
+    padding: 24,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
   },
   capacityRow: {
     flexDirection: 'row',
@@ -364,68 +535,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   capacityLabel: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#000000',
   },
   capacityValue: {
     fontSize: 14,
-    color: '#666666',
   },
   // Priority Sections
   prioritySection: {
     marginTop: 24,
-    paddingHorizontal: 16,
+    paddingHorizontal: 24,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-  },
-  priorityIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  priorityIconHigh: {
-    backgroundColor: '#FFE5E5',
-  },
-  priorityIconMedium: {
-    backgroundColor: '#E5F0FF',
-  },
-  priorityIconAuto: {
-    backgroundColor: '#E5FFE5',
-  },
-  priorityIconText: {
-    fontSize: 20,
+    marginBottom: 16,
   },
   sectionHeaderText: {
     flex: 1,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
-    color: '#000000',
   },
   sectionSubtitle: {
     fontSize: 14,
-    color: '#666666',
-    marginTop: 2,
+    marginTop: 4,
   },
   // Message Cards
   messageCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 16,
+    padding: 20,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
   scoreContainer: {
     flexDirection: 'row',
@@ -433,7 +574,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   scoreBadge: {
-    backgroundColor: '#007AFF',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
@@ -446,12 +586,10 @@ const styles = StyleSheet.create({
   },
   categoryText: {
     fontSize: 12,
-    color: '#666666',
     textTransform: 'capitalize',
   },
   messageContent: {
     fontSize: 15,
-    color: '#000000',
     lineHeight: 22,
     marginBottom: 12,
   },
@@ -462,55 +600,96 @@ const styles = StyleSheet.create({
   },
   contextText: {
     fontSize: 13,
-    color: '#666666',
   },
   timeEstimateRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  timeEstimateIcon: {
-    fontSize: 14,
-    marginRight: 4,
-  },
   timeEstimateText: {
     fontSize: 13,
-    color: '#8E8E93',
   },
   // Auto-Handled Card
   autoHandledCard: {
-    backgroundColor: '#F9F9F9',
     borderRadius: 12,
-    padding: 16,
+    padding: 20,
     marginBottom: 12,
   },
   autoHandledText: {
     fontSize: 14,
-    color: '#666666',
     lineHeight: 20,
   },
   autoHandledHint: {
     fontSize: 12,
-    color: '#8E8E93',
     marginTop: 8,
+  },
+  // Story 6.4: Collapsible Auto-Handled Section
+  expandButton: {
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    minHeight: 40,
+  },
+  expandButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  autoHandledExpandedCard: {
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 12,
+  },
+  autoHandledSection: {
+    marginBottom: 16,
+  },
+  autoHandledSectionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  autoHandledSectionText: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  viewArchivedButton: {
+    marginTop: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    minHeight: 40,
+  },
+  viewArchivedButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  collapseButton: {
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    marginTop: 8,
+    paddingTop: 12,
+  },
+  collapseButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   // Empty List State
   emptyListContainer: {
     padding: 48,
     alignItems: 'center',
   },
-  emptyListIcon: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
   emptyListTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#000000',
     marginBottom: 8,
   },
   emptyListText: {
     fontSize: 16,
-    color: '#8E8E93',
     textAlign: 'center',
   },
   // Settings Link
@@ -520,7 +699,6 @@ const styles = StyleSheet.create({
   },
   settingsLinkText: {
     fontSize: 14,
-    color: '#007AFF',
     fontWeight: '500',
   },
 });

@@ -1,17 +1,21 @@
 /**
- * Voice-Matched Response Generation Cloud Function (Story 5.5)
+ * Voice-Matched Response Generation Cloud Function (Story 5.5, migrated to OpenAI SDK in Story 6.9)
  * @module functions/src/ai/voiceMatching
  *
  * @remarks
  * Generates personalized response suggestions that match the creator's communication style.
- * Uses GPT-4 Turbo for high-quality, context-aware suggestions.
+ * Uses GPT-4 Turbo for high-quality, context-aware suggestions via direct OpenAI SDK calls.
  * Target latency: <2 seconds for real-time UX.
+ *
+ * **Migration Notes (Story 6.9):**
+ * - Migrated from Vercel AI SDK to official OpenAI SDK
+ * - All prompts and parsing logic remain identical
+ * - Output parity maintained with original implementation
  */
 
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
-import { openai } from '@ai-sdk/openai';
-import { generateText } from 'ai';
+import OpenAI from 'openai';
 
 /**
  * GPT-4 Turbo model for high-quality response generation
@@ -315,10 +319,15 @@ ${Array.from({ length: validSuggestionCount }, (_, i) => `  { "text": "Response 
 
       console.log(`[VoiceMatching] Sending request to GPT-4 Turbo`);
 
-      // Generate response suggestions with timeout
-      const generationPromise = generateText({
-        model: openai(RESPONSE_GENERATION_MODEL),
-        prompt,
+      // Initialize OpenAI SDK
+      const openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+      });
+
+      // Generate response suggestions with timeout using OpenAI SDK (Story 6.9)
+      const generationPromise = openai.chat.completions.create({
+        model: RESPONSE_GENERATION_MODEL,
+        messages: [{ role: 'user', content: prompt }],
         temperature: 0.7, // Higher temperature for creative variety
       });
 
@@ -331,11 +340,19 @@ ${Array.from({ length: validSuggestionCount }, (_, i) => `  { "text": "Response 
 
       let aiResponse: string;
       try {
-        const { text } = await Promise.race([
+        const completion = await Promise.race([
           generationPromise,
           timeoutPromise,
         ]);
-        aiResponse = text;
+
+        aiResponse = completion.choices[0]?.message?.content || '';
+
+        if (!aiResponse) {
+          throw new functions.https.HttpsError(
+            'internal',
+            'No response from OpenAI API. Please try again.'
+          );
+        }
       } catch (error: any) {
         if (error.message === 'Response generation timeout') {
           console.error(

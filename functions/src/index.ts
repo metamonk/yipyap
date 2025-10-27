@@ -33,3 +33,9 @@ export * from './ai/daily-agent-scheduler';
 // Export budget monitoring functions (Story 5.9)
 export * from './ai/budget-monitor';
 export * from './ai/performance-monitor';
+
+// Export weekly capacity reports (Story 6.5)
+export * from './scheduled/weeklyCapacityReports';
+
+// Export engagement metrics aggregation (Story 6.6)
+export * from './scheduled/engagement-metrics-aggregation';

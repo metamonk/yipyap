@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   Modal,
   Platform,
+  ActionSheetIOS,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -84,12 +85,40 @@ export function SettingsPicker<T = any>({
     setShowPicker(false);
   };
 
+  // Use ActionSheet for small option sets (≤ 4 items)
+  const useActionSheet = Platform.OS === 'ios' && items.length <= 4;
+
+  const handlePress = () => {
+    if (disabled) return;
+
+    if (useActionSheet) {
+      // Show native iOS ActionSheet for small option sets
+      const options = [...items.map(item => item.label), 'Cancel'];
+      const cancelButtonIndex = options.length - 1;
+
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options,
+          cancelButtonIndex,
+        },
+        (buttonIndex) => {
+          if (buttonIndex !== cancelButtonIndex) {
+            onValueChange(items[buttonIndex].value);
+          }
+        }
+      );
+    } else {
+      // Show picker wheel for larger option sets
+      setShowPicker(true);
+    }
+  };
+
   if (Platform.OS === 'ios') {
     return (
       <>
         <TouchableOpacity
           style={[styles.iosPickerButton, disabled && styles.disabledButton]}
-          onPress={() => !disabled && setShowPicker(true)}
+          onPress={handlePress}
           disabled={disabled}
           testID={testID}
         >
@@ -103,18 +132,14 @@ export function SettingsPicker<T = any>({
           />
         </TouchableOpacity>
 
-        <Modal
-          visible={showPicker}
-          transparent
-          animationType="slide"
-          onRequestClose={handleCancel}
-        >
-          <View style={styles.modalOverlay}>
-            <TouchableOpacity
-              style={styles.modalBackdrop}
-              activeOpacity={1}
-              onPress={handleCancel}
-            />
+        {/* Only show picker modal for larger option sets */}
+        {!useActionSheet && (
+          <Modal
+            visible={showPicker}
+            animationType="slide"
+            presentationStyle="formSheet"
+            onRequestClose={handleCancel}
+          >
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <TouchableOpacity onPress={handleCancel} style={styles.modalButton}>
@@ -139,8 +164,8 @@ export function SettingsPicker<T = any>({
                 ))}
               </Picker>
             </View>
-          </View>
-        </Modal>
+          </Modal>
+        )}
       </>
     );
   }
@@ -190,18 +215,9 @@ const styles = StyleSheet.create({
   disabledText: {
     color: '#8E8E93',
   },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-  },
   modalContent: {
+    flex: 1,
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
   },
   modalHeader: {
     flexDirection: 'row',
